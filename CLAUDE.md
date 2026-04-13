@@ -1,8 +1,6 @@
-# StreamPilot - Gaming Session Manager
+# StreamPilot - Claude Context
 
-**Priority:** P1 - quick to build, immediately useful during gaming sessions
-
-Python CLI tool that runs in the background and auto-manages OBS streaming + SABnzbd when launching a known game.
+Python CLI daemon that auto-manages OBS streaming + SABnzbd when launching a known game.
 
 ## Problem It Solves
 
@@ -10,23 +8,23 @@ David manually changes two OBS settings each time he starts a game:
 1. **Game Capture source** - change target exe to the current game
 2. **Twitch category** - change to the matching game on Twitch
 
-Two equally primary use cases:
+Two primary use cases:
 1. **Fresh start** - launch a game, stream not running - StreamPilot starts the stream, sets Game Capture + category, pauses SABnzbd
-2. **Mid-session switch** - launch a new game while already streaming (e.g. Rivals then DbD) - StreamPilot swaps Game Capture + category without stopping the stream
+2. **Mid-session switch** - launch a new game while already streaming - StreamPilot swaps Game Capture + category without stopping the stream
 
 ## Current OBS Setup
 
 Single scene with two sources:
-- `Application Audio Output Capture` - captures audio from a list of exes (one-time setup per new game, no per-session changes needed)
+- `Application Audio Output Capture` - captures audio from a list of exes (one-time setup per new game)
 - `Game Capture` - target exe changes per game (StreamPilot automates this)
 
 ## Key Behaviour
 
 - Polls for known game exes every 2s via `psutil`
 - On game launch: updates Game Capture window target, sets Twitch category, starts stream if not live, pauses SABnzbd
-- On game switch (new game detected while another runs): updates capture + category, keeps stream running
+- On game switch: updates capture + category, keeps stream running
 - On game exit: stops stream, resumes SABnzbd
-- Unknown game detected: Windows toast notification - "Run 'streampilot config add-game'"
+- Unknown game: Windows toast notification - "Run 'streampilot config add-game'"
 - SABnzbd unreachable: logs warning + prints prompt to pause manually
 
 ## Stack
@@ -36,10 +34,6 @@ Single scene with two sources:
 - `psutil` - process detection
 - `requests` - Twitch API + SABnzbd API
 - `pywin32` - window title/class detection for Game Capture string (used in add-game wizard)
-
-## Repo
-
-`C:\Users\David\GitHubRepos\StreamPilot\`
 
 ## Config (`config/config.json`)
 
@@ -98,27 +92,19 @@ StreamPilot/
 ├── config/
 │   ├── config.example.json
 │   └── config.json          # gitignored
-├── scripts/run.bat
-├── data/logs/
+├── docs/
+│   ├── IDEAS.md
+│   └── HISTORY.md
+├── scripts/
+│   ├── run.bat
+│   └── run-tests.bat
 ├── tests/
-└── README.md
+└── data/logs/
 ```
 
-## Build Order
-
-1. Repo scaffold + requirements + config.example.json
-2. `config.py` + tests
-3. `obs_client.py` + tests
-4. `twitch_client.py` + tests
-5. `sabnzbd_client.py` + tests
-6. `daemon.py` + tests
-7. `streampilot.py` CLI
-8. `config add-game` wizard
-9. `run.bat` + README (OBS WebSocket setup + Twitch token guide)
-
-## First-Time Setup Required
+## First-Time Setup
 
 1. OBS: Tools > WebSocket Server Settings > enable, set port 4455 + password
 2. Twitch: `streampilot auth` to get and store OAuth token
-3. Fill `config.json` with passwords/keys
+3. Fill `config/config.json` with passwords/keys
 4. `streampilot config add-game` for each game (while game is running)
