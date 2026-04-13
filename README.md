@@ -1,5 +1,7 @@
 # StreamPilot
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/G2G31WKOCN)
+
 Auto-manages OBS streaming + SABnzbd when you launch a known game.
 
 - Detects game launch via process polling
