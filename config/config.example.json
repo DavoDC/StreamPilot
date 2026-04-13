@@ -1,0 +1,26 @@
+{
+  "obs": {
+    "host": "localhost",
+    "port": 4455,
+    "password": "YOUR_OBS_WEBSOCKET_PASSWORD",
+    "game_capture_source": "Game Capture"
+  },
+  "twitch": {
+    "client_id": "YOUR_TWITCH_CLIENT_ID",
+    "oauth_token": "YOUR_TWITCH_OAUTH_TOKEN"
+  },
+  "sabnzbd": {
+    "enabled": true,
+    "host": "localhost",
+    "port": 8080,
+    "api_key": "YOUR_SABNZBD_API_KEY"
+  },
+  "poll_interval_seconds": 2,
+  "games": {
+    "DeadByDaylight-Win64-Shipping.exe": {
+      "name": "Dead by Daylight",
+      "twitch_game_id": "17074",
+      "obs_window": "Dead by Daylight  [...]:UnrealWindow:DeadByDaylight-Win64-Shipping.exe"
+    }
+  }
+}

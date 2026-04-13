@@ -1,0 +1,121 @@
+"""StreamPilot polling daemon - detects game launches and drives OBS/Twitch/SABnzbd."""
+
+import logging
+import time
+import psutil
+
+from obs_client import OBSClient
+from twitch_client import TwitchClient
+from sabnzbd_client import SABnzbdClient
+
+log = logging.getLogger(__name__)
+
+
+class Daemon:
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+        self.poll_interval = cfg.get("poll_interval_seconds", 2)
+        self.games = cfg.get("games", {})
+
+        self.obs = OBSClient(
+            host=cfg["obs"]["host"],
+            port=cfg["obs"]["port"],
+            password=cfg["obs"]["password"],
+            game_capture_source=cfg["obs"]["game_capture_source"],
+        )
+        self.twitch = TwitchClient(
+            client_id=cfg["twitch"]["client_id"],
+            oauth_token=cfg["twitch"]["oauth_token"],
+        )
+
+        sab_cfg = cfg.get("sabnzbd", {})
+        self.sab_enabled = sab_cfg.get("enabled", False)
+        self.sab = SABnzbdClient(
+            host=sab_cfg.get("host", "localhost"),
+            port=sab_cfg.get("port", 8080),
+            api_key=sab_cfg.get("api_key", ""),
+        ) if self.sab_enabled else None
+
+        self._active_game_exe = None
+        self._running = False
+
+    def start(self):
+        log.info("StreamPilot daemon starting...")
+        if not self.obs.connect():
+            log.error("Could not connect to OBS. Is OBS running with WebSocket enabled?")
+            return
+
+        self.twitch.validate()
+        self._running = True
+
+        try:
+            self._loop()
+        except KeyboardInterrupt:
+            log.info("Daemon stopped by user.")
+        finally:
+            self._on_no_game()
+            self.obs.disconnect()
+
+    def stop(self):
+        self._running = False
+
+    def _loop(self):
+        log.info(f"Polling every {self.poll_interval}s for known games: {list(self.games.keys())}")
+        while self._running:
+            detected = self._detect_game()
+            if detected != self._active_game_exe:
+                if detected:
+                    self._on_game_launch(detected)
+                else:
+                    self._on_no_game()
+                self._active_game_exe = detected
+            time.sleep(self.poll_interval)
+
+    def _detect_game(self):
+        """Return exe name of first known running game, or None."""
+        running = {p.name() for p in psutil.process_iter(['name'])}
+        for exe in self.games:
+            if exe in running:
+                return exe
+        return None
+
+    def _on_game_launch(self, exe: str):
+        game = self.games[exe]
+        name = game["name"]
+        log.info(f"Game detected: {name} ({exe})")
+        print(f"[StreamPilot] {name} detected")
+
+        self.obs.set_game_capture_window(game["obs_window"])
+        self.twitch.set_game(game["twitch_game_id"])
+
+        if not self.obs.is_streaming():
+            self.obs.start_stream()
+            print(f"[StreamPilot] Stream started for {name}")
+        else:
+            print(f"[StreamPilot] Switched to {name} (stream already live)")
+
+        if self.sab_enabled and self.sab:
+            self.sab.pause()
+            print("[StreamPilot] SABnzbd paused")
+
+    def _on_no_game(self):
+        if self._active_game_exe is None:
+            return
+        log.info("No game detected - stopping stream")
+        print("[StreamPilot] Game exited - stopping stream")
+
+        if self.obs.is_streaming():
+            self.obs.stop_stream()
+
+        if self.sab_enabled and self.sab:
+            self.sab.resume()
+            print("[StreamPilot] SABnzbd resumed")
+
+    def get_status(self) -> dict:
+        streaming = self.obs.is_streaming() if self.obs._client else False
+        sab_paused = self.sab.is_paused() if (self.sab_enabled and self.sab) else None
+        return {
+            "active_game": self.games.get(self._active_game_exe, {}).get("name") if self._active_game_exe else None,
+            "streaming": streaming,
+            "sabnzbd_paused": sab_paused,
+        }
