@@ -2,7 +2,7 @@
 
 ## Pending
 
-1. **Automated tests** - unit tests for config.py, obs_client.py, twitch_client.py, sabnzbd_client.py, daemon.py. Mock external services (OBS WebSocket, Twitch API, SABnzbd API). Use pytest.
+1. **Add a `scripts/run-tests.bat`** - double-click test runner for easy local use
 
 ## Lower Priority
 
