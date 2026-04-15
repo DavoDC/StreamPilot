@@ -12,12 +12,10 @@ Auto-manages OBS streaming + SABnzbd when you launch a known game.
 
 ## How it works
 
-StreamPilot connects to OBS via WebSocket. **OBS must already be open** before you start StreamPilot.
-
 Typical session:
 
-1. Open OBS (StreamPilot needs it running to connect)
-2. Start StreamPilot (`scripts\run.bat` or `python src\streampilot.py start`)
+1. Start StreamPilot (`scripts\run.bat` or `python src\streampilot.py start`)
+2. StreamPilot auto-launches OBS if it is not already open, then connects via WebSocket
 3. Launch your game
 4. StreamPilot detects the game, sets your OBS Game Capture source, sets the Twitch category, and starts the stream automatically
 5. Exit the game - StreamPilot stops the stream and resumes SABnzbd
@@ -37,6 +35,8 @@ pip install -r config\requirements.txt
 ### 2. Configure OBS WebSocket
 
 OBS > Tools > WebSocket Server Settings > enable, set port 4455, set a password.
+
+Set `obs.exe_path` in `config.json` to your OBS executable (default: `C:\Program Files\obs-studio\bin\64bit\obs64.exe`). StreamPilot will auto-launch OBS on startup if it is not already running.
 
 ### 3. Create config
 

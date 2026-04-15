@@ -1,6 +1,7 @@
 """StreamPilot polling daemon - detects game launches and drives OBS/Twitch/SABnzbd."""
 
 import logging
+import subprocess
 import time
 import psutil
 
@@ -39,10 +40,39 @@ class Daemon:
         self._active_game_exe = None
         self._running = False
 
+    def _ensure_obs_running(self) -> bool:
+        """Launch OBS if not running, wait for WebSocket. Returns True if already connected."""
+        obs_running = any(p.name().lower() == "obs64.exe" for p in psutil.process_iter(['name']))
+        if obs_running:
+            log.info("OBS already running.")
+            return False  # not yet connected - caller will connect normally
+
+        exe_path = self.cfg["obs"].get("exe_path")
+        if not exe_path:
+            log.warning("OBS not running and obs.exe_path not set in config - cannot auto-launch.")
+            return False
+
+        print("[StreamPilot] OBS not running - launching OBS...")
+        log.info(f"Launching OBS: {exe_path}")
+        subprocess.Popen([exe_path])
+
+        # Wait up to 30s for WebSocket to become available
+        for attempt in range(15):
+            time.sleep(2)
+            if self.obs.connect():
+                print("[StreamPilot] OBS ready.")
+                log.info("OBS WebSocket connected after launch.")
+                return True  # already connected
+            log.info(f"Waiting for OBS WebSocket... (attempt {attempt + 1}/15)")
+
+        log.error("OBS did not become ready within 30s.")
+        return False
+
     def start(self):
         log.info("StreamPilot daemon starting...")
-        if not self.obs.connect():
-            log.error("Could not connect to OBS. Is OBS running with WebSocket enabled?")
+        already_connected = self._ensure_obs_running()
+        if not already_connected and not self.obs.connect():
+            log.error("Could not connect to OBS WebSocket. Is OBS running with WebSocket enabled?")
             return
 
         self.twitch.validate()

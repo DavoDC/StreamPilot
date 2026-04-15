@@ -2,6 +2,10 @@
 
 Python CLI daemon that auto-manages OBS streaming + SABnzbd when launching a known game.
 
+## Key Paths
+
+- OBS executable: `C:\Program Files\obs-studio\bin\64bit\obs64.exe`
+
 ## Problem It Solves
 
 David manually changes two OBS settings each time he starts a game:

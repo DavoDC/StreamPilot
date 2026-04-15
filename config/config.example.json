@@ -3,7 +3,8 @@
     "host": "localhost",
     "port": 4455,
     "password": "YOUR_OBS_WEBSOCKET_PASSWORD",
-    "game_capture_source": "Game Capture"
+    "game_capture_source": "Game Capture",
+    "exe_path": "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe"
   },
   "twitch": {
     "client_id": "YOUR_TWITCH_CLIENT_ID",
