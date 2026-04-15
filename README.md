@@ -10,12 +10,28 @@ Auto-manages OBS streaming + SABnzbd when you launch a known game.
 - Starts the stream (or swaps game mid-stream)
 - Pauses SABnzbd while gaming, resumes on exit
 
-## Quick Start
+## How it works
+
+StreamPilot connects to OBS via WebSocket. **OBS must already be open** before you start StreamPilot.
+
+Typical session:
+
+1. Open OBS (StreamPilot needs it running to connect)
+2. Start StreamPilot (`scripts\run.bat` or `python src\streampilot.py start`)
+3. Launch your game
+4. StreamPilot detects the game, sets your OBS Game Capture source, sets the Twitch category, and starts the stream automatically
+5. Exit the game - StreamPilot stops the stream and resumes SABnzbd
+
+If you switch to a different game mid-stream, StreamPilot swaps the capture source and Twitch category without interrupting the stream.
+
+> **Note:** "Application Audio Capture" in OBS is a one-time manual step per new game - add the game exe to that source yourself the first time. StreamPilot only automates the Game Capture source and Twitch category.
+
+## One-time setup
 
 ### 1. Install dependencies
 
 ```
-pip install -r requirements.txt
+pip install -r config\requirements.txt
 ```
 
 ### 2. Configure OBS WebSocket
@@ -44,15 +60,15 @@ Follow the prompts to generate and save an OAuth token.
 python src\streampilot.py config add-game
 ```
 
-Detects the game window, searches Twitch for the category, writes to config.
+Detects the running game window, searches Twitch for the category, and writes it to config. Repeat for each game.
 
-### 6. Start
+## Daily use
 
 ```
 python src\streampilot.py start
 ```
 
-Or double-click `scripts\run.bat`.
+Or double-click `scripts\run.bat`. Then just open OBS and launch your game - everything else is automatic.
 
 ## Commands
 
