@@ -16,3 +16,11 @@ ive reorgnised a bit, put pics at "C:\Users\David\GitHubRepos\StreamPilot\data\o
 
 
 IDEAS = auto start with windows !
+
+Add auto starting steam , so user workflow is just start pilot, start game , ntohing else manual! 
+
+
+btw played with collections in OBS only changes game capture doesnt game, doenst change Twich stream details (Category) , so that solution, scene switching wouldnt work , I think??
+
+C:\Users\David\GitHubRepos\StreamPilot\data\obs_screenshots\FullStreamInfo.png
+any reocmmendations for better stream settings? more tags etc?
