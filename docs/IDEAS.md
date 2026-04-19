@@ -9,7 +9,7 @@
 
 ### Add-game UX (batch together)
 - Replace numbered window list with arrow-key interactive selector - see RivalsVidMaker (`C:\Users\David\GitHubRepos\RivalsVidMaker`) for the pattern. Show list once only, selectable
-- Auto-detect game name from the window title column (2nd column in detected windows, e.g. "Marvel Rivals" from `Marvel-Win64-Shipping.exe | Marvel Rivals`). Use that to search Twitch automatically. Only ask user to confirm if auto-search fails; only fall back to manual Game ID entry as last resort
+- Auto-detect game name from the window title column (2nd column in detected windows, e.g. "Marvel Rivals" from `Marvel-Win64-Shipping.exe | Marvel Rivals`). Use that to search Twitch automatically. only fall back to manual Game ID entry as last resort. ALWAYS Only ask user to confirm before locking in.
 - Clarify the "Game name (for display)" prompt - user didn't understand it was used for Twitch search. Reword or show the intent inline
 - Fix Twitch game search - "Marvel Rivals" returned no results. Implement fuzzy/partial matching or use Twitch's search API more robustly
 - Document or surface where to get Twitch Game IDs when manual entry is needed
@@ -22,8 +22,13 @@
 - Make `status.bat` more robust when OBS or SABnzbd are not running (currently unclear output/errors)
 - Consider renaming `status` to `check` or `dry-run` - its value is as a no-stream diagnostic tool that validates detection logic without actually streaming
 
-1. **Add a `scripts/run-tests.bat`** - double-click test runner for easy local use
-2. **System tray icon** - run StreamPilot in the system tray instead of a CLI window. Show status (idle/streaming/game detected), right-click menu to stop, show notifications via tray balloon tips. Use `pystray` + `Pillow` for the icon.
+
+### System tray icon
+
+Run StreamPilot in the system tray instead of a CLI window, with right click exit menu, Use `pystray` + `Pillow` for the icon.
+
+FUTURE maybe ideas: 
+. Show status (idle/streaming/game detected), right-click menu to stop, show notifications via tray balloon tips. 
 
 ## Lower Priority
 
