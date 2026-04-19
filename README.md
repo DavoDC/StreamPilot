@@ -25,6 +25,12 @@ If you switch games mid-stream, StreamPilot swaps the capture source and Twitch 
 
 ---
 
+## Prerequisites
+
+- A Twitch account with **Two-Factor Authentication (2FA) enabled** - required by Twitch before you can register a developer application. Enable it at [twitch.tv/settings/security](https://www.twitch.tv/settings/security) under "Two-Factor Authentication"
+- [Python 3.8+](https://www.python.org/downloads/)
+- [OBS Studio](https://obsproject.com/download)
+
 ## Setup (one-time)
 
 ### Step 1 - Install dependencies
