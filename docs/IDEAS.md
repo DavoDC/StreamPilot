@@ -10,4 +10,6 @@
 - Windows toast notification for unknown game detected ("Run 'streampilot config add-game'")
 - `streampilot stop` command - send stop signal to running daemon process
 - Auto-start with Windows (Task Scheduler entry)
+- Auto-start Steam on daemon launch - full user workflow becomes: start StreamPilot, launch game, nothing else manual
 - Multi-scene support (different scene per game)
+- Set Twitch tags per game (currently tags are global - StreamPilot could update them alongside category)
