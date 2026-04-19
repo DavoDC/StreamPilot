@@ -24,17 +24,14 @@
 
 
 ### System tray icon
+- Run StreamPilot in the system tray instead of a CLI window, with right-click exit menu. Use `pystray` + `Pillow` for the icon
+- Possible extensions: show status (idle/streaming/game detected), balloon tip notifications, stop from tray
 
-Run StreamPilot in the system tray instead of a CLI window, with right click exit menu, Use `pystray` + `Pillow` for the icon.
+### Process / lifecycle
+- LOW PRIORITY: `streampilot stop` command - send stop signal to running daemon process
+- LOW PRIORITY: Auto-start with Windows (Task Scheduler entry)
+- MED PRIORITY: Auto-start Steam on daemon launch - full workflow becomes: start StreamPilot, launch game, nothing else manual
 
-FUTURE maybe ideas: 
-. Show status (idle/streaming/game detected), right-click menu to stop, show notifications via tray balloon tips. 
-
-## Lower Priority
-
-- Windows toast notification for unknown game detected ("Run 'streampilot config add-game'")
-- `streampilot stop` command - send stop signal to running daemon process
-- Auto-start with Windows (Task Scheduler entry)
-- Auto-start Steam on daemon launch - full user workflow becomes: start StreamPilot, launch game, nothing else manual
-- Multi-scene support (different scene per game)
-- Set Twitch tags per game (currently tags are global - StreamPilot could update them alongside category)
+### Game / streaming features
+- LOW PRIORITY: Set Twitch tags per game (currently tags are global) 
+- LOW PRIORITY: Windows toast notification for unknown game detected ("Run 'streampilot config add-game'")
