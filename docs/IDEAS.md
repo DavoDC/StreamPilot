@@ -4,7 +4,10 @@
 
 ### Quick wins
 
-- **Bug: SABnzbd not paused while streaming** - SABnzbd should be paused when a stream starts and resumed when it stops (bandwidth contention). SABnzbd has a REST API - use it to pause/resume.
+- **Bug: SABnzbd not paused while streaming** - SABnzbd should be paused when a stream starts and resumed when it stops (bandwidth contention). SABnzbd has a REST API - use it to pause/resume. Strategy: write a standalone pause/resume .bat first, test it in isolation, then integrate into main program once confirmed working.
+- **Bug: Twitch game category not changing** - during run.bat happy-path test with Marvel Rivals running, Twitch category did not update. Investigate and fix.
+- **Remove incorrect "streampilot start" message** - add-game.bat outputs "Added! Run 'streampilot start' to begin monitoring." but StreamPilot uses .bat scripts, not a CLI command. Replace with correct bat-script instruction or remove entirely.
+- **Investigate obs_window string format** - config contains `"Marvel Rivals  :UnrealWindow:Marvel-Win64-Shipping.exe"` (double space). Compare against OBS Game Capture dropdown text to confirm format is correct and will match.
 
 ### Logging overhaul (batch together)
 - Separate, timestamped log files per run - like SBS_Download (`data/logs/streampilot_YYYY-MM-DD_HH-MM-SS.log`), not all appended to one `streampilot.log`
@@ -30,6 +33,11 @@
 ### System tray icon
 - Run StreamPilot in the system tray instead of a CLI window, with right-click exit menu. Use `pystray` + `Pillow` for the icon
 - Possible extensions: show status (idle/streaming/game detected), balloon tip notifications, stop from tray
+
+### Robustness
+- **Pre-flight checks** - before connecting to OBS or SABnzbd, verify they are actually running. Currently program tries to connect regardless, causing silent failures or confusing errors. Check process list first; log a clear warning and skip if not found.
+- **Handle OBS closing while running** - if OBS exits mid-session, the program currently does not react. Should detect the process exit and respond gracefully (log it, attempt restart, or surface a clear error).
+- **Launch OBS as admin** - game capture of some titles (e.g. Marvel Rivals) requires OBS to run as Administrator. run.bat should launch OBS elevated so the child process inherits admin rights.
 
 ### Process / lifecycle
 - LOW PRIORITY: `streampilot stop` command - send stop signal to running daemon process
