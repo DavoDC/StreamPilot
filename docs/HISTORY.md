@@ -2,6 +2,12 @@
 
 ---
 
+## 2026-04-19 - OBS Auto-Launch Fix
+
+Fixed `daemon.py` `_ensure_obs_running()`: `subprocess.Popen` was called without `cwd`, defaulting to the script directory. OBS failed to find its plugins/DLLs. Fix: derive `cwd` from `os.path.dirname(os.path.abspath(exe_path))` so OBS launches with its own bin folder as working directory - matching Start Menu shortcut behaviour. Confirmed working in live test.
+
+---
+
 ## 2026-04-13 - Test Suite (40 tests)
 
 Added pytest test coverage for all five modules. Tests use `unittest.mock` to patch all external services (OBS WebSocket, Twitch API, SABnzbd, psutil process list) - no real connections needed to run them. `pytest.ini` sets `pythonpath = src` so imports resolve correctly.

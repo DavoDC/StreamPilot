@@ -4,7 +4,6 @@
 
 ### Quick wins
 
-- **Bug: OBS auto-start fails** - `daemon.py` already uses `subprocess.Popen([exe_path])` (direct binary). Study what the Start Menu shortcut at `C:\ProgramData\Microsoft\Windows\Start Menu\Programs\OBS Studio` does differently - it may set working directory to `C:\Program Files\obs-studio\bin\64bit\` or pass special args that the raw Popen call omits. Compare and align.
 - **Bug: SABnzbd not paused while streaming** - SABnzbd should be paused when a stream starts and resumed when it stops (bandwidth contention). SABnzbd has a REST API - use it to pause/resume.
 
 ### Logging overhaul (batch together)
