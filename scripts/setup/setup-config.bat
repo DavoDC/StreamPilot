@@ -1,6 +1,6 @@
 @echo off
 title StreamPilot - Create Config
-cd /d "%~dp0.."
+cd /d "%~dp0..\.."
 if exist config\config.json (
     echo config\config.json already exists. Skipping copy.
 ) else (
