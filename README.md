@@ -12,11 +12,12 @@ Auto-manages OBS streaming + SABnzbd when you launch a known game.
 
 ## How it works
 
-1. Start StreamPilot (`scripts\run.bat` or `python src\streampilot.py start`)
+1. Start StreamPilot by running `scripts\run.bat`.
 2. StreamPilot auto-launches OBS if not already open, then connects via WebSocket
 3. Launch your game
 4. StreamPilot detects the game, sets your OBS Game Capture source, sets the Twitch category, and starts the stream automatically
-5. Exit the game - StreamPilot stops the stream and resumes SABnzbd
+5. StreamPilot automatically monitors SABnzbd and pauses it if it is running to prevent it from affecting network performance in-game.
+6. Exit the game - StreamPilot stops the stream and resumes SABnzbd
 
 If you switch games mid-stream, StreamPilot swaps the capture source and Twitch category without interrupting the stream.
 
@@ -59,8 +60,8 @@ Open `config\config.json` and fill in:
 | Field | What it is | How to get it |
 |---|---|---|
 | `obs.password` | OBS WebSocket password | The password you set in Step 2 |
-| `obs.exe_path` | Path to obs64.exe | Usually `C:\Program Files\obs-studio\bin\64bit\obs64.exe` |
 | `obs.game_capture_source` | Exact name of your Game Capture source in OBS | Check your OBS Sources panel |
+| `obs.exe_path` | Path to obs64.exe | Usually `C:\Program Files\obs-studio\bin\64bit\obs64.exe` |
 | `twitch.client_id` | Your Twitch app ID | See Step 4 below |
 | `twitch.oauth_token` | Token proving you can edit your channel | Generated in Step 5 below |
 | `sabnzbd.api_key` | SABnzbd API key | SABnzbd > Config > General > API Key |
@@ -75,8 +76,9 @@ StreamPilot calls the Twitch API to set your stream category when a game launche
 3. Name: anything (e.g. `StreamPilot`)
 4. OAuth Redirect URL: `http://localhost`
 5. Category: **Other**
-6. Click **Create**, then **Manage**
-7. Copy the **Client ID** and paste it into `twitch.client_id` in config.json
+6. Client Type: **Public** - StreamPilot is a native desktop app; secrets stored in local config files cannot be kept confidential, so Public is the correct type per the OAuth spec
+7. Click **Create**, then **Manage**
+8. Copy the **Client ID** and paste it into `twitch.client_id` in config.json
 
 ### Step 5 - Get a Twitch OAuth token
 
