@@ -35,9 +35,7 @@ If you switch games mid-stream, StreamPilot swaps the capture source and Twitch 
 
 ### Step 1 - Install dependencies
 
-```
-pip install -r config\requirements.txt
-```
+Double-click `scripts\install.bat`.
 
 ### Step 2 - Configure OBS WebSocket
 
@@ -57,11 +55,7 @@ Also check that your Game Capture source in OBS is named exactly `Game Capture` 
 
 ### Step 3 - Create config.json
 
-```
-copy config\config.example.json config\config.json
-```
-
-Open `config\config.json` and fill in:
+Double-click `scripts\setup-config.bat`. Then open `config\config.json` and fill in:
 
 | Field | What it is | How to get it |
 |---|---|---|
@@ -90,19 +84,11 @@ StreamPilot calls the Twitch API to set your stream category when a game launche
 
 This token gives StreamPilot permission to update YOUR channel's category.
 
-```
-python src\streampilot.py auth
-```
-
-Follow the prompts. The token is saved to config.json automatically.
+Double-click `scripts\auth.bat` and follow the prompts. The token is saved to config.json automatically.
 
 ### Step 6 - Add your games
 
-Run this while the game is open and in the foreground:
-
-```
-python src\streampilot.py config add-game
-```
+Launch the game you want to add and make sure it is open and in the foreground, then double-click `scripts\add-game.bat`.
 
 StreamPilot scans running windows, lets you pick the game, searches Twitch for the category, and writes the entry to config. Repeat for each game you want to automate.
 
@@ -110,17 +96,15 @@ StreamPilot scans running windows, lets you pick the game, searches Twitch for t
 
 ## Daily use
 
-```
-python src\streampilot.py start
-```
+Double-click `scripts\run.bat`. Then just launch your game - everything else is automatic.
 
-Or double-click `scripts\run.bat`. Then just launch your game - everything else is automatic.
+## Scripts
 
-## Commands
-
-| Command | Action |
+| Script | Action |
 |---|---|
-| `python src\streampilot.py start` | Start polling daemon |
-| `python src\streampilot.py status` | Show current game / stream / SABnzbd state |
-| `python src\streampilot.py config add-game` | Add a new game (game must be running) |
-| `python src\streampilot.py auth` | Set up Twitch OAuth token |
+| `scripts\run.bat` | Start StreamPilot |
+| `scripts\status.bat` | Show current game / stream / SABnzbd state |
+| `scripts\add-game.bat` | Add a new game (game must be running) |
+| `scripts\auth.bat` | Set up Twitch OAuth token |
+| `scripts\install.bat` | Install Python dependencies |
+| `scripts\setup-config.bat` | Create config.json from the example template |
