@@ -88,8 +88,8 @@ This token gives StreamPilot permission to update YOUR channel's category.
 2. Click **Custom Scope Token**
 3. Enable scope: `channel:manage:broadcast`
 4. Click **Generate Token** and authorise with your Twitch account
-5. Copy the **Access Token**
-6. Open `config\config.json` and paste it as the value for `twitch.oauth_token`
+5. Copy the **Access Token** only - ignore the Refresh Token and Client ID shown on that page (the Client ID there belongs to the token generator tool, not your app)
+6. Open `config\config.json` and paste the Access Token as the value for `twitch.oauth_token`
 
 ### Step 6 - Add your games
 
