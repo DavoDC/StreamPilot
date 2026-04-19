@@ -73,7 +73,7 @@ StreamPilot calls the Twitch API to set your stream category when a game launche
 
 1. Go to [dev.twitch.tv/console](https://dev.twitch.tv/console) and log in
 2. Click **Register Your Application**
-3. Name: anything (e.g. `StreamPilot`)
+3. Name: anything (e.g. `Davo_StreamPilot`)
 4. OAuth Redirect URL: `http://localhost`
 5. Category: **Other**
 6. Client Type: **Public** - StreamPilot is a native desktop app; secrets stored in local config files cannot be kept confidential, so Public is the correct type per the OAuth spec
@@ -84,7 +84,12 @@ StreamPilot calls the Twitch API to set your stream category when a game launche
 
 This token gives StreamPilot permission to update YOUR channel's category.
 
-Double-click `scripts\auth.bat` and follow the prompts. The token is saved to config.json automatically.
+1. Go to [twitchtokengenerator.com](https://twitchtokengenerator.com)
+2. Click **Custom Scope Token**
+3. Enable scope: `channel:manage:broadcast`
+4. Click **Generate Token** and authorise with your Twitch account
+5. Copy the **Access Token**
+6. Open `config\config.json` and paste it as the value for `twitch.oauth_token`
 
 ### Step 6 - Add your games
 

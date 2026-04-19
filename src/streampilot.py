@@ -126,30 +126,6 @@ def cmd_add_game(args):
     print(f"\nAdded! Run 'streampilot start' to begin monitoring.")
 
 
-def cmd_auth(args):
-    print("=== StreamPilot: Twitch Auth ===")
-    print("1. Go to: https://twitchtokengenerator.com")
-    print("2. Click 'Custom Scope Token'")
-    print("3. Enable scopes: channel:manage:broadcast")
-    print("4. Click 'Generate Token' and authorise")
-    print("5. Copy the Access Token and paste below")
-    print()
-
-    cfg_module.load()
-    token = input("Paste OAuth token: ").strip()
-    if not token:
-        print("No token entered.")
-        return
-
-    import json, os
-    path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config', 'config.json'))
-    with open(path, 'r') as f:
-        data = json.load(f)
-    data["twitch"]["oauth_token"] = token
-    with open(path, 'w') as f:
-        json.dump(data, f, indent=2)
-    print("Token saved to config.json")
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -165,8 +141,6 @@ def main():
     config_sub = config_p.add_subparsers(dest='config_command', required=True)
     config_sub.add_parser('add-game', help='Wizard: detect running game and add to config')
 
-    sub.add_parser('auth', help='Guided Twitch OAuth token setup')
-
     args = parser.parse_args()
 
     if args.command == 'start':
@@ -175,8 +149,6 @@ def main():
         cmd_status(args)
     elif args.command == 'config' and args.config_command == 'add-game':
         cmd_add_game(args)
-    elif args.command == 'auth':
-        cmd_auth(args)
 
 
 if __name__ == '__main__':
