@@ -1,0 +1,7 @@
+program fails to auto-start OBS ,see erros C:\Users\David\GitHubRepos\StreamPilot\data\screenshots\OBSAutoStartFail.png  
+study shortcut at C:\ProgramData\Microsoft\Windows\Start Menu\Programs\OBS Studio  ???
+if i double clik on obs64 it works fine C:\Program Files\obs-studio\bin\64bit.  u must be starting in weird way 
+
+while prgoram is running , sabnzbd should be paused! doesnt atm 
+
+can test tehse fatures without runnign any games, just be running runbat 
