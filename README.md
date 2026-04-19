@@ -94,17 +94,6 @@ StreamPilot scans running windows, lets you pick the game, searches Twitch for t
 
 ---
 
-## Daily use
+## Usage
 
 Double-click `scripts\run.bat`. Then just launch your game - everything else is automatic.
-
-## Scripts
-
-| Script | Action |
-|---|---|
-| `scripts\run.bat` | Start StreamPilot |
-| `scripts\status.bat` | Show current game / stream / SABnzbd state |
-| `scripts\add-game.bat` | Add a new game (game must be running) |
-| `scripts\auth.bat` | Set up Twitch OAuth token |
-| `scripts\install.bat` | Install Python dependencies |
-| `scripts\setup-config.bat` | Create config.json from the example template |
