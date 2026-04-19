@@ -28,6 +28,7 @@ Single scene with two sources:
 - On game launch: updates Game Capture window target, sets Twitch category, starts stream if not live, pauses SABnzbd
 - On game switch: updates capture + category, keeps stream running
 - On game exit: stops stream, resumes SABnzbd
+- SABnzbd paused/resumed per game session only - daemon idle with no game = SABnzbd runs freely
 - Unknown game: Windows toast notification - "Run 'streampilot config add-game'"
 - SABnzbd unreachable: logs warning + prints prompt to pause manually
 
