@@ -35,7 +35,7 @@ If you switch games mid-stream, StreamPilot swaps the capture source and Twitch 
 
 ### Step 1 - Install dependencies
 
-Double-click `scripts\install.bat`.
+Double-click `scripts\setup\install.bat`.
 
 ### Step 2 - Configure OBS WebSocket
 
@@ -55,7 +55,7 @@ Also check that your Game Capture source in OBS is named exactly `Game Capture` 
 
 ### Step 3 - Create config.json
 
-Double-click `scripts\setup-config.bat`. Then open `config\config.json` and fill in:
+Double-click `scripts\setup\setup-config.bat`. Then open `config\config.json` and fill in:
 
 | Field | What it is | How to get it |
 |---|---|---|
@@ -93,7 +93,7 @@ This token gives StreamPilot permission to update YOUR channel's category.
 
 ### Step 6 - Add your games
 
-Launch the game you want to add and make sure it is open and in the foreground, then double-click `scripts\add-game.bat`.
+Launch the game you want to add, then double-click `scripts\setup\add-game.bat`. The game does not need to be in the foreground - it just needs to be running.
 
 StreamPilot scans running windows, lets you pick the game, searches Twitch for the category, and writes the entry to config. Repeat for each game you want to automate.
 
