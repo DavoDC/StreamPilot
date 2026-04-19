@@ -106,6 +106,10 @@ StreamPilot/
 └── data/logs/
 ```
 
+## Why This Exists (ROI Context)
+
+Manually switching games takes ~2 min (OBS game capture + Twitch category). Not huge, but David has been burned by forgetting SABnzbd running during a stream, tanking bandwidth. The real value is the safety net (auto-pause SABnzbd, auto-stop stream on exit) more than the time saving. David also enjoys the build process and it improves his Claude workflow skills. AudioManager would have higher ROI per-session for audio workflows, but StreamPilot is near-complete so the marginal cost to finish is low.
+
 ## First-Time Setup
 
 1. OBS: Tools > WebSocket Server Settings > enable, set port 4455 + password
