@@ -1,6 +1,7 @@
 """StreamPilot polling daemon - detects game launches and drives OBS/Twitch/SABnzbd."""
 
 import logging
+import os
 import subprocess
 import time
 import psutil
@@ -54,7 +55,8 @@ class Daemon:
 
         print("[StreamPilot] OBS not running - launching OBS...")
         log.info(f"Launching OBS: {exe_path}")
-        subprocess.Popen([exe_path])
+        obs_dir = os.path.dirname(os.path.abspath(exe_path))
+        subprocess.Popen([exe_path], cwd=obs_dir)
 
         # Wait up to 30s for WebSocket to become available
         for attempt in range(15):
