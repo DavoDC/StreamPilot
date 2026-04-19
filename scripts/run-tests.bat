@@ -1,3 +1,4 @@
+:: Runs the full test suite using pytest. Use this to verify nothing is broken after making changes.
 @echo off
 title StreamPilot Tests
 echo Running StreamPilot tests...
