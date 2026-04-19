@@ -2,6 +2,11 @@
 
 ## Pending
 
+### Quick wins
+
+- **Bug: OBS auto-start fails** - program launches OBS incorrectly. Direct exe works fine (`C:\Program Files\obs-studio\bin\64bit\obs64.exe`). Investigate current launch method - likely using Start Menu shortcut (`C:\ProgramData\Microsoft\Windows\Start Menu\Programs\OBS Studio`) which fails. Switch to direct binary path.
+- **Bug: SABnzbd not paused while streaming** - SABnzbd should be paused when a stream starts and resumed when it stops (bandwidth contention). SABnzbd has a REST API - use it to pause/resume.
+
 ### Logging overhaul (batch together)
 - Separate, timestamped log files per run - like SBS_Download (`data/logs/streampilot_YYYY-MM-DD_HH-MM-SS.log`), not all appended to one `streampilot.log`
 - Every `.bat` script must produce a log - currently `status.bat` appends to one file, others produce nothing. Should be clear from logs which script was run.
