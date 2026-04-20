@@ -4,8 +4,7 @@
 
 ## P0 - MVP-blocking bugs
 
-- **Bug: Twitch game category not changing** - confirmed 401 error: `"Client ID and OAuth token do not match"`. Client ID and OAuth token were likely generated for different apps or accounts. Fix: re-run `streampilot auth`, ensure the OAuth token is generated using the same Client ID that is in config.
-- **Bug: SABnzbd not paused while streaming** - SABnzbd was running but pause failed with WinError 10061 (connection refused on port 8080). Port in config is likely wrong. Check SABnzbd Settings > General for the actual port and update `config.json`. Also fix misleading "[StreamPilot] SABnzbd paused" print that fires even on failure.
+- **Bug: Twitch game category not changing** - confirmed 401 error: `"Client ID and OAuth token do not match"`. Client ID and OAuth token were likely generated for different apps or accounts. Fix: open `config/config.json` directly and ensure the OAuth token matches the Client ID used to register the app.
 
 ## Quick wins
 
