@@ -2,6 +2,12 @@
 
 ---
 
+## 2026-04-20 - SABnzbd Pause Fix
+
+SABnzbd pause was failing with WinError 10061 (connection refused) because the port in `config.json` was set to 8080 but SABnzbd was listening on a different port. Updated `config.json` with the correct port - SABnzbd now pauses correctly when streaming starts.
+
+---
+
 ## 2026-04-20 - Launch OBS as Admin (P0 fix)
 
 `run.bat` now auto-elevates via UAC before starting the daemon. When the daemon launches OBS via `subprocess.Popen`, OBS inherits admin rights from the elevated parent - required for Marvel Rivals game capture to work. Without elevation, game capture silently fails.
