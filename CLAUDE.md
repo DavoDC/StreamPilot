@@ -12,9 +12,11 @@ David manually changes two OBS settings each time he starts a game:
 1. **Game Capture source** - change target exe to the current game
 2. **Twitch category** - change to the matching game on Twitch
 
-Two primary use cases:
-1. **Fresh start** - launch a game, stream not running - StreamPilot starts the stream, sets Game Capture + category, pauses SABnzbd
-2. **Mid-session switch** - launch a new game while already streaming - StreamPilot swaps Game Capture + category without stopping the stream
+Primary use case: **Fresh start** - launch a game, stream not running - StreamPilot starts the stream, sets Game Capture + category, pauses SABnzbd
+
+Intended architecture (game-per-VOD, in progress):
+- Each game session = one VOD. Stream ends when the game closes; new stream starts when the next game launches.
+- Mid-session switch (swap capture/category without stopping stream) is the current behaviour but is slated for removal - see IDEAS.md Architecture section.
 
 ## Current OBS Setup
 
@@ -75,13 +77,12 @@ Single scene with two sources:
 
 ## CLI Commands
 
-| Command | Action |
+Users run `scripts/run.bat` (and `scripts/setup/add-game.bat`) - these are thin wrappers that call the Python CLI below. The table is for Claude's reference, not user instructions.
+
+| Command | Invoked by |
 |---|---|
-| `streampilot start` | Start background daemon |
-| `streampilot stop` | Stop daemon |
-| `streampilot status` | Show current game, stream state, SABnzbd state |
-| `streampilot config add-game` | Wizard: detect running game, build window string, search Twitch, write config |
-| `streampilot auth` | Guided Twitch token setup (twitchtokengenerator.com) |
+| `python src/streampilot.py start` | `scripts/run.bat` |
+| `python src/streampilot.py config add-game` | `scripts/setup/add-game.bat` |
 
 ## Repo Structure
 
@@ -102,7 +103,10 @@ StreamPilot/
 │   └── HISTORY.md
 ├── scripts/
 │   ├── run.bat
-│   └── run-tests.bat
+│   ├── run-tests.bat
+│   └── setup/
+│       ├── add-game.bat
+│       └── install-dependencies.bat  (setup-config.bat and status.bat pending deletion)
 ├── tests/
 └── data/logs/
 ```
