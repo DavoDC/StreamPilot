@@ -34,6 +34,10 @@
 - Make `status.bat` more robust when OBS or SABnzbd are not running (currently unclear output/errors).
 - Consider renaming `status` to `check` or `dry-run` - its value is as a no-stream diagnostic tool that validates detection logic without actually streaming.
 
+## Security
+
+- **Full security review** - analyse all attack surfaces: config.json stores OAuth token in plaintext, OBS WebSocket password in plaintext, SABnzbd API key in plaintext. Review subprocess calls, WebSocket trust model, any network exposure. Assess risk level for a local desktop tool vs. hardening options (e.g. OS keychain, env vars).
+
 ## Low priority
 
 - LOW: Remove `setup-config.bat` - it's redundant. It copies the example config and then opens the folder anyway, so the user still has to manually edit the file. Easier to just tell the user to open File Explorer, copy `config.example.json` to `config.json`, and edit it directly. Remove the script and update the README.
