@@ -27,7 +27,7 @@ If you switch games mid-stream, StreamPilot swaps the capture source and Twitch 
 
 ## Prerequisites
 
-- A Twitch account with **Two-Factor Authentication (2FA) enabled** - required by Twitch before you can register a developer application. Enable it at [twitch.tv/settings/security](https://www.twitch.tv/settings/security) under "Two-Factor Authentication"
+- A Twitch account with **Two-Factor Authentication (2FA) enabled** - required by Twitch when authorising StreamPilot to manage your channel. Enable it at [twitch.tv/settings/security](https://www.twitch.tv/settings/security) under "Two-Factor Authentication"
 - [Python 3.8+](https://www.python.org/downloads/)
 - [OBS Studio](https://obsproject.com/download)
 
@@ -62,36 +62,23 @@ Double-click `scripts\setup\setup-config.bat`. Then open `config\config.json` an
 | `obs.password` | OBS WebSocket password | The password you set in Step 2 |
 | `obs.game_capture_source` | Exact name of your Game Capture source in OBS | Check your OBS Sources panel |
 | `obs.exe_path` | Path to obs64.exe | Usually `C:\Program Files\obs-studio\bin\64bit\obs64.exe` |
-| `twitch.client_id` | Your Twitch app ID | See Step 4 below |
-| `twitch.oauth_token` | Token proving you can edit your channel | Generated in Step 5 below |
+| `twitch.client_id` | Client ID paired with your OAuth token | See Step 4 below |
+| `twitch.oauth_token` | Token proving you can edit your channel | See Step 4 below |
 | `sabnzbd.api_key` | SABnzbd API key | SABnzbd > Config > General > API Key |
 | `sabnzbd.enabled` | Set to `false` if you don't use SABnzbd | - |
 
-### Step 4 - Get a Twitch Client ID
+### Step 4 - Get a Twitch OAuth token and Client ID
 
-StreamPilot calls the Twitch API to set your stream category when a game launches. Twitch requires every API caller to have a registered app ID.
-
-1. Go to [dev.twitch.tv/console](https://dev.twitch.tv/console) and log in
-2. Click **Register Your Application**
-3. Name: anything (e.g. `Davo_StreamPilot`)
-4. OAuth Redirect URL: `http://localhost`
-5. Category: **Other**
-6. Client Type: **Public** - StreamPilot is a native desktop app; secrets stored in local config files cannot be kept confidential, so Public is the correct type per the OAuth spec
-7. Click **Create**, then **Manage**
-8. Copy the **Client ID** and paste it into `twitch.client_id` in config.json
-
-### Step 5 - Get a Twitch OAuth token
-
-This token gives StreamPilot permission to update YOUR channel's category.
+This token gives StreamPilot permission to update your channel's category. The token generator also provides the Client ID that must match it.
 
 1. Go to [twitchtokengenerator.com](https://twitchtokengenerator.com)
 2. Click **Custom Scope Token**
 3. Enable scope: `channel:manage:broadcast`
 4. Click **Generate Token** and authorise with your Twitch account
-5. Copy the **Access Token** only - ignore the Refresh Token and Client ID shown on that page (the Client ID there belongs to the token generator tool, not your app)
-6. Open `config\config.json` and paste the Access Token as the value for `twitch.oauth_token`
+5. Copy the **Access Token** into `twitch.oauth_token` in config.json
+6. Copy the **Client ID** shown on that same page into `twitch.client_id` in config.json - this Client ID is paired with your token and must match it exactly
 
-### Step 6 - Add your games
+### Step 5 - Add your games
 
 Launch the game you want to add, then double-click `scripts\setup\add-game.bat`. The game does not need to be in the foreground - it just needs to be running.
 
