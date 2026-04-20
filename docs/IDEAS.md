@@ -1,54 +1,49 @@
 # StreamPilot - Ideas and TODOs
 
-Remember to follow C:\Users\David\GitHubRepos\Claude_Workspace\ClaudeOnly\memory\processes\ideas-md-workflow.md !
+> Follow `ClaudeOnly\memory\processes\ideas-md-workflow.md` when progressing this program.
 
-## Pending
+## P0 - MVP-blocking bugs
 
-### TEMP 
-- overall what are our best next steps to get working MVP? prioritize necessary bug fixes first. as per ideas workflow
+- **Bug: Twitch game category not changing** - during run.bat happy-path test with Marvel Rivals running, Twitch category did not update. Core feature broken. Investigate and fix.
+- **Bug: OBS window string format** - config contains `"Marvel Rivals  :UnrealWindow:Marvel-Win64-Shipping.exe"` (double space). Compare against OBS Game Capture dropdown text to confirm format is correct and will match. A mismatch here means OBS never captures the game.
+- **Bug: SABnzbd not paused while streaming** - SABnzbd should be paused when a stream starts and resumed when it stops (bandwidth contention). SABnzbd has a REST API - use it to pause/resume. Strategy: write standalone pause/resume .bat first, test in isolation, then integrate.
+- **Launch OBS as admin** - Marvel Rivals (primary target game) requires OBS to run as Administrator for game capture to work. run.bat should launch OBS elevated so the child process inherits admin rights. Without this, game capture silently fails.
 
-### Quick wins
+## Quick wins
 
-- **Bug: SABnzbd not paused while streaming** - SABnzbd should be paused when a stream starts and resumed when it stops (bandwidth contention). SABnzbd has a REST API - use it to pause/resume. Strategy: write a standalone pause/resume .bat first, test it in isolation, then integrate into main program once confirmed working.
-- **Bug: Twitch game category not changing** - during run.bat happy-path test with Marvel Rivals running, Twitch category did not update. Investigate and fix.
 - **Remove incorrect "streampilot start" message** - add-game.bat outputs "Added! Run 'streampilot start' to begin monitoring." but StreamPilot uses .bat scripts, not a CLI command. Replace with correct bat-script instruction or remove entirely.
-- **Investigate obs_window string format** - config contains `"Marvel Rivals  :UnrealWindow:Marvel-Win64-Shipping.exe"` (double space). Compare against OBS Game Capture dropdown text to confirm format is correct and will match.
+- **Bat scripts must stay open** - all `.bat` scripts should stay open after completion so user can read output. `add-game` closes immediately. Use `cmd /k` or add `pause` at end.
+- **Deduplicate add-game prompt** - `add-game` prompts "Make sure your game is running" twice (once before `pause`, once after). Remove duplicate.
 
-### Logging overhaul (batch together)
-- Separate, timestamped log files per run - like SBS_Download (`data/logs/streampilot_YYYY-MM-DD_HH-MM-SS.log`), not all appended to one `streampilot.log`
-- Every `.bat` script must produce a log - currently `status.bat` appends to one file, others produce nothing. Should be clear from logs which script was run.
-- Remove indentation from log output (current logs have leading whitespace)
+## Robustness (golden path stability)
 
-### Add-game UX (batch together)
-- Replace numbered window list with arrow-key interactive selector - see RivalsVidMaker (`C:\Users\David\GitHubRepos\RivalsVidMaker`) for the pattern. Show list once only, selectable
-- Auto-detect game name from the window title column (2nd column in detected windows, e.g. "Marvel Rivals" from `Marvel-Win64-Shipping.exe | Marvel Rivals`). Use that to search Twitch automatically. only fall back to manual Game ID entry as last resort. ALWAYS Only ask user to confirm before locking in.
-- Clarify the "Game name (for display)" prompt - user didn't understand it was used for Twitch search. Reword or show the intent inline
-- Fix Twitch game search - "Marvel Rivals" returned no results. Implement fuzzy/partial matching or use Twitch's search API more robustly
-- Document or surface where to get Twitch Game IDs when manual entry is needed
-
-### Bat script behaviour
-- All `.bat` scripts should stay open after completion so user can read output and copy to Claude. `add-game` closes immediately. Use `cmd /k` or add a `pause` at end
-- `add-game` prompts "Make sure your game is running" twice (once before `pause`, once after) - deduplicate
-
-### Status script
-- Make `status.bat` more robust when OBS or SABnzbd are not running (currently unclear output/errors)
-- Consider renaming `status` to `check` or `dry-run` - its value is as a no-stream diagnostic tool that validates detection logic without actually streaming
-
-
-### System tray icon
-- Run StreamPilot in the system tray instead of a CLI window, with right-click exit menu. Use `pystray` + `Pillow` for the icon
-- Possible extensions: show status (idle/streaming/game detected), balloon tip notifications, stop from tray
-
-### Robustness
 - **Pre-flight checks** - before connecting to OBS or SABnzbd, verify they are actually running. Currently program tries to connect regardless, causing silent failures or confusing errors. Check process list first; log a clear warning and skip if not found.
 - **Handle OBS closing while running** - if OBS exits mid-session, the program currently does not react. Should detect the process exit and respond gracefully (log it, attempt restart, or surface a clear error).
-- **Launch OBS as admin** - game capture of some titles (e.g. Marvel Rivals) requires OBS to run as Administrator. run.bat should launch OBS elevated so the child process inherits admin rights.
 
-### Process / lifecycle
-- LOW PRIORITY: `streampilot stop` command - send stop signal to running daemon process
-- LOW PRIORITY: Auto-start with Windows (Task Scheduler entry)
-- MED PRIORITY: Auto-start Steam on daemon launch - full workflow becomes: start StreamPilot, launch game, nothing else manual
+## Add-game UX (batch together)
 
-### Game / streaming features
-- LOW PRIORITY: Set Twitch tags per game (currently tags are global) 
-- LOW PRIORITY: Windows toast notification for unknown game detected ("Run 'streampilot config add-game'")
+- Replace numbered window list with arrow-key interactive selector - see RivalsVidMaker (`C:\Users\David\GitHubRepos\RivalsVidMaker`) for the pattern. Show list once only, selectable.
+- Auto-detect game name from the window title column (2nd column in detected windows, e.g. "Marvel Rivals" from `Marvel-Win64-Shipping.exe | Marvel Rivals`). Use that to search Twitch automatically. Only fall back to manual Game ID entry as last resort. Always ask user to confirm before locking in.
+- Fix Twitch game search - "Marvel Rivals" returned no results. Implement fuzzy/partial matching or use Twitch's search API more robustly.
+- Clarify the "Game name (for display)" prompt - user didn't understand it was used for Twitch search. Reword or show intent inline.
+- Document or surface where to get Twitch Game IDs when manual entry is needed.
+
+## Logging overhaul (batch together)
+
+- Separate, timestamped log files per run - like SBS_Download (`data/logs/streampilot_YYYY-MM-DD_HH-MM-SS.log`), not all appended to one `streampilot.log`.
+- Every `.bat` script must produce a log - currently `status.bat` appends to one file, others produce nothing. Should be clear from logs which script was run.
+- Remove indentation from log output (current logs have leading whitespace).
+
+## Status script
+
+- Make `status.bat` more robust when OBS or SABnzbd are not running (currently unclear output/errors).
+- Consider renaming `status` to `check` or `dry-run` - its value is as a no-stream diagnostic tool that validates detection logic without actually streaming.
+
+## Low priority
+
+- MED: Auto-start Steam on daemon launch - full workflow becomes: start StreamPilot, launch game, nothing else manual.
+- LOW: `streampilot stop` command - send stop signal to running daemon process.
+- LOW: Auto-start with Windows (Task Scheduler entry).
+- LOW: System tray icon - run StreamPilot in system tray instead of CLI window, with right-click exit menu. Use `pystray` + `Pillow`. Possible extensions: show status (idle/streaming/game detected), balloon tip notifications, stop from tray.
+- LOW: Set Twitch tags per game (currently tags are global).
+- LOW: Windows toast notification for unknown game detected ("Run 'streampilot config add-game'").
