@@ -2,6 +2,16 @@
 
 ---
 
+## 2026-04-20 - Twitch Category Fix (401 mismatch)
+
+`set_game` was returning 401 "Client ID and OAuth token do not match". Root cause: tokens generated via twitchtokengenerator.com are ALWAYS bound to TTG's own Client ID (`gp762nuuqcoxypju8c569th9wz7q5`), regardless of what you enter in the optional "Use My Client ID" field. Even entering the correct Client ID from the Twitch Dev Console (`ejqn3v0vk0enothyenc1mryt2kywpm`) still produces a token paired with TTG's Client ID - confirmed by checking the CLIENT ID shown in TTG's generated tokens section.
+
+Fix: set `twitch.client_id` in `config.json` to TTG's Client ID (`gp762nuuqcoxypju8c569th9wz7q5`). Confirmed working - Twitch category now sets correctly on game launch.
+
+Note: TTG's optional "Use My Client ID" field appears non-functional for token binding. When using TTG, always use TTG's Client ID in config, not your own Twitch Dev app Client ID.
+
+---
+
 ## 2026-04-20 - SABnzbd Pause Fix
 
 SABnzbd pause was failing with WinError 10061 (connection refused) because the port in `config.json` was set to 8080 but SABnzbd was listening on a different port. Updated `config.json` with the correct port - SABnzbd now pauses correctly when streaming starts.

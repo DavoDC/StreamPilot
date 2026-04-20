@@ -2,10 +2,6 @@
 
 > Follow `ClaudeOnly\memory\processes\ideas-md-workflow.md` when progressing this program.
 
-## P0 - MVP-blocking bugs
-
-- **Bug: Twitch game category not changing** - confirmed 401 error: `"Client ID and OAuth token do not match"`. Client ID and OAuth token were likely generated for different apps or accounts. Fix: open `config/config.json` directly and ensure the OAuth token matches the Client ID used to register the app.
-
 ## Quick wins
 
 - **run.bat opens cmd instead of Windows Terminal** - UAC elevation via `Start-Process` spawns a plain cmd window. User prefers Windows Terminal (`wt.exe`). Change elevation command to: `Start-Process -FilePath wt.exe -ArgumentList "cmd /k cd /d \"%~dp0..\" && python src\streampilot.py start" -Verb RunAs`.
@@ -40,6 +36,7 @@
 
 ## Low priority
 
+- LOW: Remove `setup-config.bat` - it's redundant. It copies the example config and then opens the folder anyway, so the user still has to manually edit the file. Easier to just tell the user to open File Explorer, copy `config.example.json` to `config.json`, and edit it directly. Remove the script and update the README.
 - MED: Auto-start Steam on daemon launch - full workflow becomes: start StreamPilot, launch game, nothing else manual.
 - LOW: `streampilot stop` command - send stop signal to running daemon process.
 - LOW: Auto-start with Windows (Task Scheduler entry).
