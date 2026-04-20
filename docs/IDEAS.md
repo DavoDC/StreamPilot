@@ -1,49 +1,66 @@
 # StreamPilot - Ideas and TODOs
 
-> Follow `ClaudeOnly\memory\processes\ideas-md-workflow.md` when progressing this program.
+> MANDATORY: Read `ClaudeOnly\memory\processes\ideas-md-workflow.md` at session start before picking any item. Fix P0 bugs first. Never work out of order.
+
+## P0 - Blocking bugs
+
+*(none currently)*
+
+## P1 - Do next
+
+- **Windows Terminal** - `run.bat` UAC elevation via `Start-Process` spawns a plain cmd window. Change to: `Start-Process -FilePath wt.exe -ArgumentList "cmd /k cd /d \"%~dp0..\" && python src\streampilot.py start" -Verb RunAs`
 
 ## Quick wins
 
-- **run.bat opens cmd instead of Windows Terminal** - UAC elevation via `Start-Process` spawns a plain cmd window. User prefers Windows Terminal (`wt.exe`). Change elevation command to: `Start-Process -FilePath wt.exe -ArgumentList "cmd /k cd /d \"%~dp0..\" && python src\streampilot.py start" -Verb RunAs`.
-- **OBS window string double space cleanup** - config has `Marvel Rivals  :UnrealWindow:...` (double space). Game capture works despite this, so OBS appears lenient. Confirm the correct string from the OBS Game Capture dropdown and clean up config. Low risk.
-- **Remove incorrect "streampilot start" message** - add-game.bat outputs "Added! Run 'streampilot start' to begin monitoring." but StreamPilot uses .bat scripts, not a CLI command. Replace with correct bat-script instruction or remove entirely.
-- **Bat scripts must stay open** - all `.bat` scripts should stay open after completion so user can read output. `add-game` closes immediately. Use `cmd /k` or add `pause` at end.
-- **Deduplicate add-game prompt** - `add-game` prompts "Make sure your game is running" twice (once before `pause`, once after). Remove duplicate.
+- **Delete status.bat** - redundant once pre-flight checks land (Robustness section). The diagnostic value is covered by main-program startup checks. Delete `scripts/status.bat` and remove from CLAUDE.md CLI table.
+- **Delete setup-config.bat** - copies example config then pauses; user still edits manually. Update README Step 3 to: "Copy `config\config.example.json` to `config\config.json` and open it to fill in your settings." Delete `scripts/setup/setup-config.bat`.
+- **Pair both deletions in one commit** - simpler diff, one README update covers both.
+- **OBS window string double space cleanup** - config has `Marvel Rivals  :UnrealWindow:...` (double space). Confirm the correct string from the OBS Game Capture dropdown and clean up. Low risk.
+- **Remove incorrect "streampilot start" message** - `add-game.bat` outputs "Run 'streampilot start' to begin monitoring." StreamPilot uses .bat scripts, not a CLI command. Replace with correct bat-script instruction.
+- **Bat scripts must stay open** - all `.bat` scripts should use `cmd /k` or `pause` so output is readable. `add-game.bat` currently closes immediately.
+- **Deduplicate add-game prompt** - `add-game` prompts "Make sure your game is running" twice. Remove duplicate.
 
 ## Robustness (golden path stability)
 
-- **Pre-flight checks** - before connecting to OBS or SABnzbd, verify they are actually running. Currently program tries to connect regardless, causing silent failures or confusing errors. Check process list first; log a clear warning and skip if not found.
-- **Handle OBS closing while running** - if OBS exits mid-session, the program currently does not react. Should detect the process exit and respond gracefully (log it, attempt restart, or surface a clear error).
+- **Pre-flight checks** - before connecting to OBS or SABnzbd, verify they are actually running. Check process list first; log a clear warning and skip if not found.
+- **Handle OBS closing while running** - detect OBS process exit and respond gracefully (log it, attempt restart, or surface a clear error).
+
+## Architecture - Game-per-VOD
+
+Each game session = one VOD. This is the intended long-term model:
+
+- When the monitored game process closes, StreamPilot ends the stream/recording automatically.
+- When a new game is detected, a fresh stream starts with that game's config.
+- **This eliminates mid-session switch complexity entirely** - no need to handle game changes mid-stream because streams are scoped to a single game session. The "mid-session switch" use case in CLAUDE.md is slated for removal, not improvement.
+
+Implementation notes:
+- Requires reliable game process exit detection (psutil already polls, just needs exit action)
+- OBS: call StopRecord/StopStream on exit, StartRecord/StartStream on new game launch
+- Config: no changes needed - each game entry already has its own Twitch/OBS settings
+- Update CLAUDE.md "Key Behaviour" and use cases when this ships
 
 ## Add-game UX (batch together)
 
-- Replace numbered window list with arrow-key interactive selector - see RivalsVidMaker (`C:\Users\David\GitHubRepos\RivalsVidMaker`) for the pattern. Show list once only, selectable.
-- Auto-detect game name from the window title column (2nd column in detected windows, e.g. "Marvel Rivals" from `Marvel-Win64-Shipping.exe | Marvel Rivals`). Use that to search Twitch automatically. Only fall back to manual Game ID entry as last resort. Always ask user to confirm before locking in.
-- Fix Twitch game search - "Marvel Rivals" returned no results. Implement fuzzy/partial matching or use Twitch's search API more robustly.
-- Clarify the "Game name (for display)" prompt - user didn't understand it was used for Twitch search. Reword or show intent inline.
+- Replace numbered window list with arrow-key interactive selector - see RivalsVidMaker for pattern. Show list once only, selectable.
+- Auto-detect game name from window title column (e.g. "Marvel Rivals" from `Marvel-Win64-Shipping.exe | Marvel Rivals`). Use that to search Twitch automatically. Only fall back to manual Game ID entry as last resort.
+- Fix Twitch game search - "Marvel Rivals" returned no results. Implement fuzzy/partial matching or use Twitch search API more robustly.
+- Clarify the "Game name (for display)" prompt - reword or show intent inline.
 - Document or surface where to get Twitch Game IDs when manual entry is needed.
 
 ## Logging overhaul (batch together)
 
-- Separate, timestamped log files per run - like SBS_Download (`data/logs/streampilot_YYYY-MM-DD_HH-MM-SS.log`), not all appended to one `streampilot.log`.
-- Every `.bat` script must produce a log - currently `status.bat` appends to one file, others produce nothing. Should be clear from logs which script was run.
+- Separate, timestamped log files per run - like SBS_Download (`data/logs/streampilot_YYYY-MM-DD_HH-MM-SS.log`), not all appended to one file.
+- Every `.bat` script must produce a log - should be clear from logs which script was run.
 - Remove indentation from log output (current logs have leading whitespace).
-
-## Status script
-
-- Make `status.bat` more robust when OBS or SABnzbd are not running (currently unclear output/errors).
-- Consider renaming `status` to `check` or `dry-run` - its value is as a no-stream diagnostic tool that validates detection logic without actually streaming.
 
 ## Security
 
-- **Full security review** - analyse all attack surfaces: config.json stores OAuth token in plaintext, OBS WebSocket password in plaintext, SABnzbd API key in plaintext. Review subprocess calls, WebSocket trust model, any network exposure. Assess risk level for a local desktop tool vs. hardening options (e.g. OS keychain, env vars).
+- **Full security review** - `config.json` stores OAuth token, OBS WebSocket password, and SABnzbd API key in plaintext. Review subprocess calls, WebSocket trust model, any network exposure. Assess risk level and hardening options (OS keychain, env vars).
 
 ## Low priority
 
-- LOW: Remove `setup-config.bat` - it's redundant. It copies the example config and then opens the folder anyway, so the user still has to manually edit the file. Easier to just tell the user to open File Explorer, copy `config.example.json` to `config.json`, and edit it directly. Remove the script and update the README.
-- MED: Auto-start Steam on daemon launch - full workflow becomes: start StreamPilot, launch game, nothing else manual.
-- LOW: `streampilot stop` command - send stop signal to running daemon process.
+- LOW: Auto-relaunch Steam if it has been closed - Windows startup autostart is already enabled but Steam sometimes gets closed manually. StreamPilot should detect Steam is not running and start it before launching the game flow.
 - LOW: Auto-start with Windows (Task Scheduler entry).
-- LOW: System tray icon - run StreamPilot in system tray instead of CLI window, with right-click exit menu. Use `pystray` + `Pillow`. Possible extensions: show status (idle/streaming/game detected), balloon tip notifications, stop from tray.
+- LOW: System tray icon - run in tray with right-click exit, status display, balloon tip notifications. Needs `pystray` + `Pillow`.
 - LOW: Set Twitch tags per game (currently tags are global).
-- LOW: Windows toast notification for unknown game detected ("Run 'streampilot config add-game'").
+- LOW: Windows toast notification for unknown game detected.
