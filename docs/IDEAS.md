@@ -5,11 +5,11 @@
 ## P0 - MVP-blocking bugs
 
 - **Bug: Twitch game category not changing** - confirmed 401 error: `"Client ID and OAuth token do not match"`. Client ID and OAuth token were likely generated for different apps or accounts. Fix: re-run `streampilot auth`, ensure the OAuth token is generated using the same Client ID that is in config.
+- **Bug: SABnzbd not paused while streaming** - SABnzbd was running but pause failed with WinError 10061 (connection refused on port 8080). Port in config is likely wrong. Check SABnzbd Settings > General for the actual port and update `config.json`. Also fix misleading "[StreamPilot] SABnzbd paused" print that fires even on failure.
 
 ## Quick wins
 
 - **run.bat opens cmd instead of Windows Terminal** - UAC elevation via `Start-Process` spawns a plain cmd window. User prefers Windows Terminal (`wt.exe`). Change elevation command to: `Start-Process -FilePath wt.exe -ArgumentList "cmd /k cd /d \"%~dp0..\" && python src\streampilot.py start" -Verb RunAs`.
-- **Fix misleading "SABnzbd paused" print** - `[StreamPilot] SABnzbd paused` currently prints even when the SABnzbd API call failed (connection refused). Only print on confirmed success - move print inside the client or check return value first.
 - **OBS window string double space cleanup** - config has `Marvel Rivals  :UnrealWindow:...` (double space). Game capture works despite this, so OBS appears lenient. Confirm the correct string from the OBS Game Capture dropdown and clean up config. Low risk.
 - **Remove incorrect "streampilot start" message** - add-game.bat outputs "Added! Run 'streampilot start' to begin monitoring." but StreamPilot uses .bat scripts, not a CLI command. Replace with correct bat-script instruction or remove entirely.
 - **Bat scripts must stay open** - all `.bat` scripts should stay open after completion so user can read output. `add-game` closes immediately. Use `cmd /k` or add `pause` at end.
