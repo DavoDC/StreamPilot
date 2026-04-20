@@ -107,6 +107,56 @@ def test_on_no_game_skips_stop_if_not_streaming(daemon):
     daemon.sab.resume.assert_called_once()
 
 
+def test_ensure_obs_running_already_running(daemon):
+    mock_proc = MagicMock()
+    mock_proc.name.return_value = "obs64.exe"
+    with patch("daemon.psutil.process_iter", return_value=[mock_proc]):
+        result = daemon._ensure_obs_running()
+    assert result is False
+
+
+def test_ensure_obs_running_no_exe_path(daemon):
+    mock_proc = MagicMock()
+    mock_proc.name.return_value = "chrome.exe"
+    with patch("daemon.psutil.process_iter", return_value=[mock_proc]):
+        result = daemon._ensure_obs_running()
+    assert result is False
+
+
+def test_ensure_obs_running_launches_obs(daemon):
+    mock_proc = MagicMock()
+    mock_proc.name.return_value = "chrome.exe"
+    daemon.cfg["obs"]["exe_path"] = r"C:\Program Files\obs-studio\bin\64bit\obs64.exe"
+    daemon.obs = MagicMock()
+    daemon.obs.connect.return_value = True
+
+    with patch("daemon.psutil.process_iter", return_value=[mock_proc]), \
+         patch("daemon.subprocess.Popen") as mock_popen, \
+         patch("daemon.time.sleep"):
+        result = daemon._ensure_obs_running()
+
+    mock_popen.assert_called_once_with(
+        [r"C:\Program Files\obs-studio\bin\64bit\obs64.exe"],
+        cwd=r"C:\Program Files\obs-studio\bin\64bit",
+    )
+    assert result is True
+
+
+def test_ensure_obs_running_obs_timeout(daemon):
+    mock_proc = MagicMock()
+    mock_proc.name.return_value = "chrome.exe"
+    daemon.cfg["obs"]["exe_path"] = r"C:\Program Files\obs-studio\bin\64bit\obs64.exe"
+    daemon.obs = MagicMock()
+    daemon.obs.connect.return_value = False
+
+    with patch("daemon.psutil.process_iter", return_value=[mock_proc]), \
+         patch("daemon.subprocess.Popen"), \
+         patch("daemon.time.sleep"):
+        result = daemon._ensure_obs_running()
+
+    assert result is False
+
+
 def test_sab_disabled_does_not_call_sab(daemon):
     daemon.obs = MagicMock()
     daemon.twitch = MagicMock()
