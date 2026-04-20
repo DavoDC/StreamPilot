@@ -4,12 +4,13 @@
 
 ## P0 - MVP-blocking bugs
 
-- **Bug: Twitch game category not changing** - during run.bat happy-path test with Marvel Rivals running, Twitch category did not update. Core feature broken. Investigate and fix.
-- **Bug: OBS window string format** - config contains `"Marvel Rivals  :UnrealWindow:Marvel-Win64-Shipping.exe"` (double space). Compare against OBS Game Capture dropdown text to confirm format is correct and will match. A mismatch here means OBS never captures the game.
-- **Bug: SABnzbd not paused while streaming** - SABnzbd should be paused when a stream starts and resumed when it stops (bandwidth contention). SABnzbd has a REST API - use it to pause/resume. Strategy: write standalone pause/resume .bat first, test in isolation, then integrate.
+- **Bug: Twitch game category not changing** - confirmed 401 error: `"Client ID and OAuth token do not match"`. Client ID and OAuth token were likely generated for different apps or accounts. Fix: re-run `streampilot auth`, ensure the OAuth token is generated using the same Client ID that is in config.
 
 ## Quick wins
 
+- **run.bat opens cmd instead of Windows Terminal** - UAC elevation via `Start-Process` spawns a plain cmd window. User prefers Windows Terminal (`wt.exe`). Change elevation command to: `Start-Process -FilePath wt.exe -ArgumentList "cmd /k cd /d \"%~dp0..\" && python src\streampilot.py start" -Verb RunAs`.
+- **Fix misleading "SABnzbd paused" print** - `[StreamPilot] SABnzbd paused` currently prints even when the SABnzbd API call failed (connection refused). Only print on confirmed success - move print inside the client or check return value first.
+- **OBS window string double space cleanup** - config has `Marvel Rivals  :UnrealWindow:...` (double space). Game capture works despite this, so OBS appears lenient. Confirm the correct string from the OBS Game Capture dropdown and clean up config. Low risk.
 - **Remove incorrect "streampilot start" message** - add-game.bat outputs "Added! Run 'streampilot start' to begin monitoring." but StreamPilot uses .bat scripts, not a CLI command. Replace with correct bat-script instruction or remove entirely.
 - **Bat scripts must stay open** - all `.bat` scripts should stay open after completion so user can read output. `add-game` closes immediately. Use `cmd /k` or add `pause` at end.
 - **Deduplicate add-game prompt** - `add-game` prompts "Make sure your game is running" twice (once before `pause`, once after). Remove duplicate.
