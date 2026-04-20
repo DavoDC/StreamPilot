@@ -2,6 +2,14 @@
 
 ---
 
+## 2026-04-20 - Launch OBS as Admin (P0 fix)
+
+`run.bat` now auto-elevates via UAC before starting the daemon. When the daemon launches OBS via `subprocess.Popen`, OBS inherits admin rights from the elevated parent - required for Marvel Rivals game capture to work. Without elevation, game capture silently fails.
+
+Added 4 unit tests for `_ensure_obs_running` (already-running, no exe_path, launches successfully, OBS timeout). Test count: 9 -> 13.
+
+---
+
 ## 2026-04-19 - OBS Auto-Launch Fix
 
 Fixed `daemon.py` `_ensure_obs_running()`: `subprocess.Popen` was called without `cwd`, defaulting to the script directory. OBS failed to find its plugins/DLLs. Fix: derive `cwd` from `os.path.dirname(os.path.abspath(exe_path))` so OBS launches with its own bin folder as working directory - matching Start Menu shortcut behaviour. Confirmed working in live test.

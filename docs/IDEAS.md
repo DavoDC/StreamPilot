@@ -7,7 +7,6 @@
 - **Bug: Twitch game category not changing** - during run.bat happy-path test with Marvel Rivals running, Twitch category did not update. Core feature broken. Investigate and fix.
 - **Bug: OBS window string format** - config contains `"Marvel Rivals  :UnrealWindow:Marvel-Win64-Shipping.exe"` (double space). Compare against OBS Game Capture dropdown text to confirm format is correct and will match. A mismatch here means OBS never captures the game.
 - **Bug: SABnzbd not paused while streaming** - SABnzbd should be paused when a stream starts and resumed when it stops (bandwidth contention). SABnzbd has a REST API - use it to pause/resume. Strategy: write standalone pause/resume .bat first, test in isolation, then integrate.
-- **Launch OBS as admin** - Marvel Rivals (primary target game) requires OBS to run as Administrator for game capture to work. run.bat should launch OBS elevated so the child process inherits admin rights. Without this, game capture silently fails.
 
 ## Quick wins
 
