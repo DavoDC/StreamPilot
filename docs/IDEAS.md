@@ -9,23 +9,26 @@
 ## P1 - Do next
 
 - **Windows Terminal** - `run.bat` UAC elevation via `Start-Process` spawns a plain cmd window. Change to: `Start-Process -FilePath wt.exe -ArgumentList "cmd /k cd /d \"%~dp0..\" && python src\streampilot.py start" -Verb RunAs`
+- **Game-per-VOD** - see Architecture section below for full spec. This is the core direction for the program; do before investing heavily in mid-session switch behaviour.
+- **Add-game UX** - see section below. Do before adding Dead by Daylight as a second game - the wizard is rough enough that fixing it first is worth it. Marvel Rivals and Dead by Daylight are the two target games.
 
 ## Quick wins
 
-- **Delete status.bat** - redundant once pre-flight checks land (Robustness section). The diagnostic value is covered by main-program startup checks. Delete `scripts/status.bat` and remove from CLAUDE.md CLI table.
-- **Delete setup-config.bat** - copies example config then pauses; user still edits manually. Update README Step 3 to: "Copy `config\config.example.json` to `config\config.json` and open it to fill in your settings." Delete `scripts/setup/setup-config.bat`.
-- **Pair both deletions in one commit** - simpler diff, one README update covers both.
+- **Delete status.bat and setup-config.bat** - do together in one commit, one README update covers both.
+  - `scripts/status.bat` - redundant once pre-flight checks land; diagnostic value covered by main-program startup checks.
+  - `scripts/setup/setup-config.bat` - copies example config then pauses; user still edits manually. Update README Step 3 to: "Copy `config\config.example.json` to `config\config.json` and open it to fill in your settings."
 - **OBS window string double space cleanup** - config has `Marvel Rivals  :UnrealWindow:...` (double space). Confirm the correct string from the OBS Game Capture dropdown and clean up. Low risk.
 - **Remove incorrect "streampilot start" message** - `add-game.bat` outputs "Run 'streampilot start' to begin monitoring." StreamPilot uses .bat scripts, not a CLI command. Replace with correct bat-script instruction.
 - **Bat scripts must stay open** - all `.bat` scripts should use `cmd /k` or `pause` so output is readable. `add-game.bat` currently closes immediately.
 - **Deduplicate add-game prompt** - `add-game` prompts "Make sure your game is running" twice. Remove duplicate.
+- **Auto-relaunch Steam if closed** - same pattern as OBS auto-launch (`daemon.py:51-59`): check psutil, read optional `steam.exe_path` from config (default `C:\Program Files (x86)\Steam\steam.exe`), `subprocess.Popen([exe_path], cwd=steam_dir)`. No admin needed. ~5 lines.
 
 ## Robustness (golden path stability)
 
 - **Pre-flight checks** - before connecting to OBS or SABnzbd, verify they are actually running. Check process list first; log a clear warning and skip if not found.
 - **Handle OBS closing while running** - detect OBS process exit and respond gracefully (log it, attempt restart, or surface a clear error).
 
-## Architecture - Game-per-VOD
+## Architecture - Game-per-VOD (P1 - see above)
 
 Each game session = one VOD. This is the intended long-term model:
 
@@ -39,7 +42,7 @@ Implementation notes:
 - Config: no changes needed - each game entry already has its own Twitch/OBS settings
 - Update CLAUDE.md "Key Behaviour" and use cases when this ships
 
-## Add-game UX (batch together)
+## Add-game UX (batch together, P1 - see above)
 
 - Replace numbered window list with arrow-key interactive selector - see RivalsVidMaker for pattern. Show list once only, selectable.
 - Auto-detect game name from window title column (e.g. "Marvel Rivals" from `Marvel-Win64-Shipping.exe | Marvel Rivals`). Use that to search Twitch automatically. Only fall back to manual Game ID entry as last resort.
@@ -59,7 +62,6 @@ Implementation notes:
 
 ## Low priority
 
-- LOW: Auto-relaunch Steam if it has been closed - Windows startup autostart is already enabled but Steam sometimes gets closed manually. StreamPilot should detect Steam is not running and start it before launching the game flow.
 - LOW: Auto-start with Windows (Task Scheduler entry).
 - LOW: System tray icon - run in tray with right-click exit, status display, balloon tip notifications. Needs `pystray` + `Pillow`.
 - LOW: Set Twitch tags per game (currently tags are global).
