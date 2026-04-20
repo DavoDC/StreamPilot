@@ -1,6 +1,11 @@
 # StreamPilot - Ideas and TODOs
 
+Remember to follow C:\Users\David\GitHubRepos\Claude_Workspace\ClaudeOnly\memory\processes\ideas-md-workflow.md !
+
 ## Pending
+
+### TEMP 
+- overall what are our best next steps to get working MVP? prioritize necessary bug fixes first. as per ideas workflow
 
 ### Quick wins
 
