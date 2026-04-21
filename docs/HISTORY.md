@@ -2,6 +2,20 @@
 
 ---
 
+## 2026-04-21 - Status heartbeat log (live dashboard)
+
+Every 5th poll (~10s) prints a one-line status to the terminal so the second screen acts as a live dashboard while gaming.
+
+Format: `[HH:MM:SS] Status: OK | Streaming: Marvel Rivals | OBS: Live | Category: Marvel Rivals | SABnzbd: Paused`
+
+- `Status: OK/ISSUE` - top-level at-a-glance indicator. ISSUE fires if game is active and OBS is offline, SABnzbd is running, or SABnzbd is unreachable.
+- OBS and SABnzbd state queried live from WebSocket/API each heartbeat - no caching.
+- Twitch category queried live via new `TwitchClient.get_current_game_name()` (`GET /helix/channels`).
+- Warning states surfaced inline: `OBS: OFFLINE - should be streaming`, `SABnzbd: RUNNING - should be paused`, `SABnzbd: Unreachable`.
+- 9 new tests added (4 status tests, 5 heartbeat format/firing tests). Total: 40 -> 59 tests.
+
+---
+
 ## 2026-04-20 - Twitch Category Fix (401 mismatch)
 
 `set_game` was returning 401 "Client ID and OAuth token do not match". Root cause: tokens generated via twitchtokengenerator.com are ALWAYS bound to TTG's own Client ID (`gp762nuuqcoxypju8c569th9wz7q5`), regardless of what you enter in the optional "Use My Client ID" field. Even entering the correct Client ID from the Twitch Dev Console (`ejqn3v0vk0enothyenc1mryt2kywpm`) still produces a token paired with TTG's Client ID - confirmed by checking the CLIENT ID shown in TTG's generated tokens section.

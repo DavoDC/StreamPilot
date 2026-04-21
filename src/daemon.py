@@ -4,7 +4,10 @@ import logging
 import os
 import subprocess
 import time
+from datetime import datetime
 import psutil
+
+HEARTBEAT_EVERY = 5  # polls (~10s at 2s poll interval)
 
 from obs_client import OBSClient
 from twitch_client import TwitchClient
@@ -93,6 +96,7 @@ class Daemon:
 
     def _loop(self):
         log.info(f"Polling every {self.poll_interval}s for known games: {list(self.games.keys())}")
+        poll_count = 0
         while self._running:
             detected = self._detect_game()
             if detected != self._active_game_exe:
@@ -101,7 +105,55 @@ class Daemon:
                 else:
                     self._on_no_game()
                 self._active_game_exe = detected
+            poll_count += 1
+            if poll_count % HEARTBEAT_EVERY == 0:
+                self._print_heartbeat()
             time.sleep(self.poll_interval)
+
+    def _format_heartbeat(
+        self,
+        timestamp: str,
+        game_name: str | None,
+        obs_streaming: bool,
+        twitch_category: str | None,
+        sab_paused: bool | None,
+    ) -> str:
+        game_active = game_name is not None
+
+        game_str = game_name if game_active else "Idle"
+
+        if obs_streaming:
+            obs_str = "Live"
+        elif game_active:
+            obs_str = "OFFLINE - should be streaming"
+        else:
+            obs_str = "Idle"
+
+        cat_str = twitch_category if twitch_category else "Unknown"
+
+        if not self.sab_enabled:
+            sab_str = "Disabled"
+        elif sab_paused is None:
+            sab_str = "Unreachable"
+        elif sab_paused:
+            sab_str = "Paused"
+        elif game_active:
+            sab_str = "RUNNING - should be paused"
+        else:
+            sab_str = "Running"
+
+        issue = game_active and (not obs_streaming or not sab_paused or sab_paused is None)
+        status = "ISSUE" if issue else "OK"
+
+        return f"[{timestamp}] Status: {status} | Streaming: {game_str} | OBS: {obs_str} | Category: {cat_str} | SABnzbd: {sab_str}"
+
+    def _print_heartbeat(self):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        game_name = self.games.get(self._active_game_exe, {}).get("name") if self._active_game_exe else None
+        obs_streaming = self.obs.is_streaming()
+        twitch_category = self.twitch.get_current_game_name()
+        sab_paused = self.sab.is_paused() if (self.sab_enabled and self.sab) else None
+        print(self._format_heartbeat(timestamp, game_name, obs_streaming, twitch_category, sab_paused))
 
     def _detect_game(self):
         """Return exe name of first known running game, or None."""

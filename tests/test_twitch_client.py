@@ -81,3 +81,31 @@ def test_search_game_network_error(client):
     with patch("twitch_client.requests.get", side_effect=Exception("timeout")):
         results = client.search_game("any game")
     assert results == []
+
+
+def test_get_current_game_name_success(client):
+    client._broadcaster_id = "123456"
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"data": [{"game_name": "Marvel Rivals"}]}
+    with patch("twitch_client.requests.get", return_value=mock_resp):
+        assert client.get_current_game_name() == "Marvel Rivals"
+
+
+def test_get_current_game_name_no_broadcaster_id(client):
+    assert client.get_current_game_name() is None
+
+
+def test_get_current_game_name_empty_data(client):
+    client._broadcaster_id = "123456"
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"data": []}
+    with patch("twitch_client.requests.get", return_value=mock_resp):
+        assert client.get_current_game_name() is None
+
+
+def test_get_current_game_name_network_error(client):
+    client._broadcaster_id = "123456"
+    with patch("twitch_client.requests.get", side_effect=Exception("timeout")):
+        assert client.get_current_game_name() is None
