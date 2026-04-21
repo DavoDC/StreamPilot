@@ -22,30 +22,6 @@
 - **Deduplicate add-game prompt** - `add-game` prompts "Make sure your game is running" twice. Remove duplicate.
 - **Auto-relaunch Steam if closed** - same pattern as OBS auto-launch (`daemon.py:51-59`): check psutil, read optional `steam.exe_path` from config (default `C:\Program Files (x86)\Steam\steam.exe`), `subprocess.Popen([exe_path], cwd=steam_dir)`. No admin needed. ~5 lines.
 
-## System tray (P1 - do after status heartbeat)
-
-Two distinct jobs - both matter:
-
-1. **Pre-game confirmation** - before launching a game, David can glance at the tray and know the daemon is active. This is the window where the terminal may be hidden or minimised.
-2. **Close-to-minimize / accidental kill resistance** - closing the terminal window should NOT kill the daemon. Closing the window minimizes to tray instead (Spotify/Discord model - see `Close button should minimize` setting). Without this, one accidental terminal close leaves SABnzbd paused and stream potentially still running with no watchdog.
-
-Implementation:
-- `pystray` + `Pillow` for tray icon
-- Right-click menu: Status, Stop StreamPilot (clean shutdown)
-- On terminal close (`WM_DELETE_WINDOW` or SIGINT from X button): hide window, keep daemon running in background
-- Tray tooltip: current state (Streaming: Marvel Rivals / Idle)
-- The tray icon covers the bookends (pre-game + close guard); the heartbeat log covers in-game monitoring from second screen. Both are needed.
-
-**Note on full-screen coverage:** tray IS covered when game is fullscreen on primary monitor, and Windows may not show it on the secondary. This is expected - tray's job is pre-game and post-game, not in-game. Heartbeat on second screen covers in-game.
-
-## Robustness (golden path stability)
-
-- **Pre-flight checks** - before connecting to OBS or SABnzbd, verify they are actually running. Check process list first; log a clear warning and skip if not found. Observed: starting SP with SABnzbd not running caused a ~13s hang before the connection error was logged (Max retries exceeded). Should fail fast with a clear "SABnzbd not running" message instead.
-
-
-- **Handle OBS closing while running** - detect OBS process exit and respond gracefully (log it, attempt restart, or surface a clear error).
-- **SABnzbd must resume on game stop or program stop** - when StreamPilot detects the game has closed, OR when StreamPilot itself exits, automatically resume SABnzbd (undo any pause/throttle it applied). Currently SABnzbd can be left paused if StreamPilot exits uncleanly.
-
 ## Architecture - Game-per-VOD (P1 - see above)
 
 Each game session = one VOD. This is the intended long-term model:
@@ -68,11 +44,34 @@ Implementation notes:
 - Clarify the "Game name (for display)" prompt - reword or show intent inline.
 - Document or surface where to get Twitch Game IDs when manual entry is needed.
 
+## System tray (P1 - do after status heartbeat)
+
+Two distinct jobs - both matter:
+
+1. **Pre-game confirmation** - before launching a game, David can glance at the tray and know the daemon is active. This is the window where the terminal may be hidden or minimised.
+2. **Close-to-minimize / accidental kill resistance** - closing the terminal window should NOT kill the daemon. Closing the window minimizes to tray instead (Spotify/Discord model - see `Close button should minimize` setting). Without this, one accidental terminal close leaves SABnzbd paused and stream potentially still running with no watchdog.
+
+Implementation:
+- `pystray` + `Pillow` for tray icon
+- Right-click menu: Status, Stop StreamPilot (clean shutdown)
+- On terminal close (`WM_DELETE_WINDOW` or SIGINT from X button): hide window, keep daemon running in background
+- Tray tooltip: current state (Streaming: Marvel Rivals / Idle)
+- The tray icon covers the bookends (pre-game + close guard); the heartbeat log covers in-game monitoring from second screen. Both are needed.
+
+**Note on full-screen coverage:** tray IS covered when game is fullscreen on primary monitor, and Windows may not show it on the secondary. This is expected - tray's job is pre-game and post-game, not in-game. Heartbeat on second screen covers in-game.
+
+## Robustness (golden path stability)
+
+- **Pre-flight checks** - before connecting to OBS or SABnzbd, verify they are actually running. Check process list first; log a clear warning and skip if not found. Observed: starting SP with SABnzbd not running caused a ~13s hang before the connection error was logged (Max retries exceeded). Should fail fast with a clear "SABnzbd not running" message instead.
+- **Handle OBS closing while running** - detect OBS process exit and respond gracefully (log it, attempt restart, or surface a clear error).
+- **SABnzbd must resume on game stop or program stop** - when StreamPilot detects the game has closed, OR when StreamPilot itself exits, automatically resume SABnzbd (undo any pause/throttle it applied). Currently SABnzbd can be left paused if StreamPilot exits uncleanly.
+
 ## Logging overhaul (batch together)
 
 - Separate, timestamped log files per run - like SBS_Download (`data/logs/streampilot_YYYY-MM-DD_HH-MM-SS.log`), not all appended to one file.
 - Every `.bat` script must produce a log - should be clear from logs which script was run.
 - Remove indentation from log output (current logs have leading whitespace).
+- Every entry in log should start with timestamp, looks weird when some don't have
 
 ## Security
 
@@ -89,6 +88,5 @@ Implementation notes:
 ## Low priority
 
 - LOW: Auto-start with Windows (Task Scheduler entry).
-- LOW: Set Twitch tags per game (currently tags are global).
 - LOW: Set Twitch tags per game (currently tags are global).
 - LOW: Windows toast notification for unknown game detected.
