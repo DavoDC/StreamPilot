@@ -2,6 +2,12 @@
 
 ---
 
+## 2026-04-21 - Windows Terminal elevation
+
+`run.bat` UAC relaunch now opens in Windows Terminal instead of a plain cmd window. Changed `Start-Process` target from the bat file itself to `wt.exe` with `cmd /k` and the python command inline. Elevated session opens as a proper WT tab.
+
+---
+
 ## 2026-04-21 - Status heartbeat log (live dashboard)
 
 Every 5th poll (~10s) prints a one-line status to the terminal so the second screen acts as a live dashboard while gaming.

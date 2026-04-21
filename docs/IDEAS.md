@@ -8,7 +8,6 @@
 
 ## P1 - Do next
 
-- **Windows Terminal** - `run.bat` UAC elevation via `Start-Process` spawns a plain cmd window. Change to: `Start-Process -FilePath wt.exe -ArgumentList "cmd /k cd /d \"%~dp0..\" && python src\streampilot.py start" -Verb RunAs`
 - **Game-per-VOD** - see Architecture section below for full spec. This is the core direction for the program; do before investing heavily in mid-session switch behaviour.
 - **Add-game UX** - see section below. Do before adding Dead by Daylight as a second game - the wizard is rough enough that fixing it first is worth it. Marvel Rivals and Dead by Daylight are the two target games.
 
@@ -41,12 +40,7 @@ Implementation:
 
 ## Robustness (golden path stability)
 
-- **Pre-flight checks** - before connecting to OBS or SABnzbd, verify they are actually running. Check process list first; log a clear warning and skip if not found.
-
- - I started SP with sab not running and it hung for long time. timeout? check running processes?
- "2026-04-21 22:37:53,623 [INFO] daemon: Polling every 2s for known games: ['Marvel-Win64-Shipping.exe']
-2026-04-21 22:38:06,190 [WARNING] sabnzbd_client: SABnzbd queue failed: HTTPConnectionPool(host='localhost', port=8081): Max retries exceeded with url: /api?apikey=fea68bf15298451fa383f10a49ce2caf&output=json&mode=queue (Caused by NewConnectionError("HTTPConnection(host='localhost', port=8081): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
-[22:38:01] Streaming: Idle | OBS: Idle | Category: Dead by Daylight | SABnzbd: Unreachable" 
+- **Pre-flight checks** - before connecting to OBS or SABnzbd, verify they are actually running. Check process list first; log a clear warning and skip if not found. Observed: starting SP with SABnzbd not running caused a ~13s hang before the connection error was logged (Max retries exceeded). Should fail fast with a clear "SABnzbd not running" message instead.
 
 
 - **Handle OBS closing while running** - detect OBS process exit and respond gracefully (log it, attempt restart, or surface a clear error).

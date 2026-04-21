@@ -6,7 +6,7 @@ title StreamPilot
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     echo Requesting administrator rights...
-    powershell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    powershell -Command "Start-Process -FilePath wt.exe -ArgumentList 'cmd /k cd /d \"%~dp0..\" && python src\streampilot.py start' -Verb RunAs"
     exit /b
 )
 
