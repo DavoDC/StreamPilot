@@ -167,3 +167,154 @@ def test_sab_disabled_does_not_call_sab(daemon):
     daemon._on_game_launch("game.exe")
 
     daemon.sab.pause.assert_not_called()
+
+
+# --- Heartbeat tests ---
+
+def test_format_heartbeat_game_active_all_good(daemon):
+    line = daemon._format_heartbeat(
+        timestamp="12:00:00",
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=True,
+    )
+    assert "[12:00:00]" in line
+    assert "My Game" in line
+    assert "OBS: Live" in line
+    assert "SABnzbd: Paused" in line
+    assert "should be" not in line
+    assert "Status: OK" in line
+
+
+def test_format_heartbeat_status_issue_when_obs_offline(daemon):
+    line = daemon._format_heartbeat(
+        timestamp="12:00:00",
+        game_name="My Game",
+        obs_streaming=False,
+        twitch_category="My Game",
+        sab_paused=True,
+    )
+    assert "Status: ISSUE" in line
+
+
+def test_format_heartbeat_status_issue_when_sab_running(daemon):
+    line = daemon._format_heartbeat(
+        timestamp="12:00:00",
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=False,
+    )
+    assert "Status: ISSUE" in line
+
+
+def test_format_heartbeat_status_issue_when_sab_unreachable_gaming(daemon):
+    line = daemon._format_heartbeat(
+        timestamp="12:00:00",
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=None,
+    )
+    assert "Status: ISSUE" in line
+
+
+def test_format_heartbeat_status_ok_when_idle(daemon):
+    line = daemon._format_heartbeat(
+        timestamp="12:00:00",
+        game_name=None,
+        obs_streaming=False,
+        twitch_category=None,
+        sab_paused=None,
+    )
+    assert "Status: OK" in line
+
+
+def test_format_heartbeat_obs_offline_while_game_active(daemon):
+    line = daemon._format_heartbeat(
+        timestamp="12:00:00",
+        game_name="My Game",
+        obs_streaming=False,
+        twitch_category="My Game",
+        sab_paused=True,
+    )
+    assert "OFFLINE" in line
+    assert "should be streaming" in line
+
+
+def test_format_heartbeat_sab_running_while_game_active(daemon):
+    line = daemon._format_heartbeat(
+        timestamp="12:00:00",
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=False,
+    )
+    assert "RUNNING" in line
+    assert "should be paused" in line
+
+
+def test_format_heartbeat_idle_no_game(daemon):
+    line = daemon._format_heartbeat(
+        timestamp="12:00:00",
+        game_name=None,
+        obs_streaming=False,
+        twitch_category=None,
+        sab_paused=None,
+    )
+    assert "Idle" in line
+    assert "should be" not in line
+
+
+def test_format_heartbeat_sab_unreachable(daemon):
+    line = daemon._format_heartbeat(
+        timestamp="12:00:00",
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=None,
+    )
+    assert "Unreachable" in line
+
+
+def test_print_heartbeat_calls_live_sources(daemon):
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_streaming.return_value = True
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    with patch("builtins.print") as mock_print:
+        daemon._print_heartbeat()
+
+    daemon.obs.is_streaming.assert_called_once()
+    daemon.twitch.get_current_game_name.assert_called_once()
+    daemon.sab.is_paused.assert_called_once()
+    mock_print.assert_called_once()
+
+
+def test_loop_fires_heartbeat_every_5th_poll(daemon):
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+
+    call_count = [0]
+
+    def stop_after_10(*args, **kwargs):
+        call_count[0] += 1
+        if call_count[0] >= 10:
+            daemon._running = False
+
+    with patch.object(daemon, "_detect_game", return_value=None), \
+         patch.object(daemon, "_print_heartbeat") as mock_hb, \
+         patch("daemon.time.sleep", side_effect=stop_after_10):
+        daemon._running = True
+        daemon._loop()
+
+    assert mock_hb.call_count == 2

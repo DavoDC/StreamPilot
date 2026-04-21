@@ -60,6 +60,25 @@ class TwitchClient:
         except Exception as e:
             log.warning(f"Twitch set_game error: {e}")
 
+    def get_current_game_name(self) -> str | None:
+        """Return the live Twitch channel category name, or None if unavailable."""
+        if not self._broadcaster_id:
+            return None
+        try:
+            resp = requests.get(
+                f"{HELIX_BASE}/channels",
+                headers=self._headers(),
+                params={"broadcaster_id": self._broadcaster_id},
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                data = resp.json().get("data", [])
+                if data:
+                    return data[0].get("game_name")
+        except Exception as e:
+            log.warning(f"Twitch get_current_game_name failed: {e}")
+        return None
+
     def search_game(self, name: str) -> list:
         """Search for games by name. Returns list of dicts with id and name."""
         try:

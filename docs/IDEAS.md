@@ -8,7 +8,6 @@
 
 ## P1 - Do next
 
-- **Status heartbeat log** - every 10s print a one-line status to the terminal so the second screen acts as a live dashboard. Format: `[HH:MM:SS] Streaming: Marvel Rivals | Category: Marvel Rivals | SABnzbd: Paused | OBS: Live`. This is the core UX purpose of the program - while in-game David can glance at the second screen and confirm everything is handled correctly without alt-tabbing. If any value is wrong/unknown, make it obvious (e.g. `SABnzbd: RUNNING - should be paused`). Implement in `daemon.py` polling loop alongside existing 2s poll; heartbeat fires every 5th poll (~10s).
 - **Windows Terminal** - `run.bat` UAC elevation via `Start-Process` spawns a plain cmd window. Change to: `Start-Process -FilePath wt.exe -ArgumentList "cmd /k cd /d \"%~dp0..\" && python src\streampilot.py start" -Verb RunAs`
 - **Game-per-VOD** - see Architecture section below for full spec. This is the core direction for the program; do before investing heavily in mid-session switch behaviour.
 - **Add-game UX** - see section below. Do before adding Dead by Daylight as a second game - the wizard is rough enough that fixing it first is worth it. Marvel Rivals and Dead by Daylight are the two target games.
@@ -43,6 +42,13 @@ Implementation:
 ## Robustness (golden path stability)
 
 - **Pre-flight checks** - before connecting to OBS or SABnzbd, verify they are actually running. Check process list first; log a clear warning and skip if not found.
+
+ - I started SP with sab not running and it hung for long time. timeout? check running processes?
+ "2026-04-21 22:37:53,623 [INFO] daemon: Polling every 2s for known games: ['Marvel-Win64-Shipping.exe']
+2026-04-21 22:38:06,190 [WARNING] sabnzbd_client: SABnzbd queue failed: HTTPConnectionPool(host='localhost', port=8081): Max retries exceeded with url: /api?apikey=fea68bf15298451fa383f10a49ce2caf&output=json&mode=queue (Caused by NewConnectionError("HTTPConnection(host='localhost', port=8081): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+[22:38:01] Streaming: Idle | OBS: Idle | Category: Dead by Daylight | SABnzbd: Unreachable" 
+
+
 - **Handle OBS closing while running** - detect OBS process exit and respond gracefully (log it, attempt restart, or surface a clear error).
 - **SABnzbd must resume on game stop or program stop** - when StreamPilot detects the game has closed, OR when StreamPilot itself exits, automatically resume SABnzbd (undo any pause/throttle it applied). Currently SABnzbd can be left paused if StreamPilot exits uncleanly.
 
