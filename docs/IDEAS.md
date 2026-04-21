@@ -27,6 +27,7 @@
 
 - **Pre-flight checks** - before connecting to OBS or SABnzbd, verify they are actually running. Check process list first; log a clear warning and skip if not found.
 - **Handle OBS closing while running** - detect OBS process exit and respond gracefully (log it, attempt restart, or surface a clear error).
+- **SABnzbd must resume on game stop or program stop** - when StreamPilot detects the game has closed, OR when StreamPilot itself exits, automatically resume SABnzbd (undo any pause/throttle it applied). Currently SABnzbd can be left paused if StreamPilot exits uncleanly.
 
 ## Architecture - Game-per-VOD (P1 - see above)
 
@@ -59,6 +60,14 @@ Implementation notes:
 ## Security
 
 - **Full security review** - `config.json` stores OAuth token, OBS WebSocket password, and SABnzbd API key in plaintext. Review subprocess calls, WebSocket trust model, any network exposure. Assess risk level and hardening options (OS keychain, env vars).
+
+## Stretch goals
+
+- **Dashboard web UI** - replace the batch script setup flow with a browser-based dashboard. Better UX for config, game management, and live status. Would replace the current .bat launcher and add-game wizard.
+
+## Docs overhaul
+
+- Review all docs (README, CLAUDE.md, IDEAS.md, any setup guides) - consolidate, remove duplication, tighten language. No data loss. Reduce total doc surface area. Specific pain point: README's linear step format doesn't reflect how the program actually works - particularly SABnzbd integration, which isn't a sequential setup step but a background behaviour. Restructure around how the program behaves, not a setup checklist.
 
 ## Low priority
 
