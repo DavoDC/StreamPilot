@@ -14,6 +14,8 @@ David manually changes two OBS settings each time he starts a game:
 
 Primary use case: **Fresh start** - launch a game, stream not running - StreamPilot starts the stream, sets Game Capture + category, pauses SABnzbd
 
+**The real purpose - psychological reassurance while gaming:** David uses a two-screen setup (game on primary/left, StreamPilot terminal on secondary/right). The terminal running on the second screen acts as a live dashboard - while in-game he should be able to glance right and confirm everything is handled correctly without alt-tabbing or interrupting gameplay. The goal is "I can see from one place it's all good" - stream is live, right category set, SABnzbd is paused. This is the core UX, not just automation.
+
 Intended architecture (game-per-VOD, in progress):
 - Each game session = one VOD. Stream ends when the game closes; new stream starts when the next game launches.
 - Mid-session switch (swap capture/category without stopping stream) is the current behaviour but is slated for removal - see IDEAS.md Architecture section.
@@ -117,7 +119,7 @@ Marvel Rivals and Dead by Daylight are the two primary games. Marvel Rivals is c
 
 ## Why This Exists (ROI Context)
 
-Manually switching games takes ~2 min (OBS game capture + Twitch category). Not huge, but David has been burned by forgetting SABnzbd running during a stream, tanking bandwidth. The real value is the safety net (auto-pause SABnzbd, auto-stop stream on exit) more than the time saving. David also enjoys the build process and it improves his Claude workflow skills. AudioManager would have higher ROI per-session for audio workflows, but StreamPilot is near-complete so the marginal cost to finish is low.
+The time saving (2 min manual OBS + Twitch switch) is secondary. The real value is reassurance: while gaming David doesn't want to be second-guessing whether SABnzbd is still paused or OBS is capturing the right game. StreamPilot handles it and the terminal on the second screen confirms it. "I shouldn't have to think about this while I'm in a game" is the design goal. David has been burned by SABnzbd tanking stream bandwidth when forgotten - the auto-pause is a safety net, not just convenience. David also enjoys the build process and it improves his Claude workflow skills. AudioManager would have higher ROI per-session for audio workflows, but StreamPilot is near-complete so the marginal cost to finish is low.
 
 ## First-Time Setup
 
