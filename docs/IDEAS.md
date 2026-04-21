@@ -1,6 +1,6 @@
 # StreamPilot - Ideas and TODOs
 
-> MANDATORY: Read `ClaudeOnly\memory\processes\ideas-md-workflow.md` at session start before picking any item. Fix P0 bugs first. Never work out of order.
+> MANDATORY: Run `/dev-session StreamPilot` to start work. That skill IS the workflow - it picks the top item, confirms scope, implements, tests, and closes out correctly. Fix P0 bugs first. Never work out of order.
 
 ## P0 - Blocking bugs
 
@@ -8,6 +8,7 @@
 
 ## P1 - Do next
 
+- **Status heartbeat log** - every 10s print a one-line status to the terminal so the second screen acts as a live dashboard. Format: `[HH:MM:SS] Streaming: Marvel Rivals | Category: Marvel Rivals | SABnzbd: Paused | OBS: Live`. This is the core UX purpose of the program - while in-game David can glance at the second screen and confirm everything is handled correctly without alt-tabbing. If any value is wrong/unknown, make it obvious (e.g. `SABnzbd: RUNNING - should be paused`). Implement in `daemon.py` polling loop alongside existing 2s poll; heartbeat fires every 5th poll (~10s).
 - **Windows Terminal** - `run.bat` UAC elevation via `Start-Process` spawns a plain cmd window. Change to: `Start-Process -FilePath wt.exe -ArgumentList "cmd /k cd /d \"%~dp0..\" && python src\streampilot.py start" -Verb RunAs`
 - **Game-per-VOD** - see Architecture section below for full spec. This is the core direction for the program; do before investing heavily in mid-session switch behaviour.
 - **Add-game UX** - see section below. Do before adding Dead by Daylight as a second game - the wizard is rough enough that fixing it first is worth it. Marvel Rivals and Dead by Daylight are the two target games.
@@ -22,6 +23,22 @@
 - **Bat scripts must stay open** - all `.bat` scripts should use `cmd /k` or `pause` so output is readable. `add-game.bat` currently closes immediately.
 - **Deduplicate add-game prompt** - `add-game` prompts "Make sure your game is running" twice. Remove duplicate.
 - **Auto-relaunch Steam if closed** - same pattern as OBS auto-launch (`daemon.py:51-59`): check psutil, read optional `steam.exe_path` from config (default `C:\Program Files (x86)\Steam\steam.exe`), `subprocess.Popen([exe_path], cwd=steam_dir)`. No admin needed. ~5 lines.
+
+## System tray (P1 - do after status heartbeat)
+
+Two distinct jobs - both matter:
+
+1. **Pre-game confirmation** - before launching a game, David can glance at the tray and know the daemon is active. This is the window where the terminal may be hidden or minimised.
+2. **Close-to-minimize / accidental kill resistance** - closing the terminal window should NOT kill the daemon. Closing the window minimizes to tray instead (Spotify/Discord model - see `Close button should minimize` setting). Without this, one accidental terminal close leaves SABnzbd paused and stream potentially still running with no watchdog.
+
+Implementation:
+- `pystray` + `Pillow` for tray icon
+- Right-click menu: Status, Stop StreamPilot (clean shutdown)
+- On terminal close (`WM_DELETE_WINDOW` or SIGINT from X button): hide window, keep daemon running in background
+- Tray tooltip: current state (Streaming: Marvel Rivals / Idle)
+- The tray icon covers the bookends (pre-game + close guard); the heartbeat log covers in-game monitoring from second screen. Both are needed.
+
+**Note on full-screen coverage:** tray IS covered when game is fullscreen on primary monitor, and Windows may not show it on the secondary. This is expected - tray's job is pre-game and post-game, not in-game. Heartbeat on second screen covers in-game.
 
 ## Robustness (golden path stability)
 
@@ -72,6 +89,6 @@ Implementation notes:
 ## Low priority
 
 - LOW: Auto-start with Windows (Task Scheduler entry).
-- LOW: System tray icon - run in tray with right-click exit, status display, balloon tip notifications. Needs `pystray` + `Pillow`.
+- LOW: Set Twitch tags per game (currently tags are global).
 - LOW: Set Twitch tags per game (currently tags are global).
 - LOW: Windows toast notification for unknown game detected.
