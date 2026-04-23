@@ -172,11 +172,11 @@ class Daemon:
         self.obs.set_game_capture_window(game["obs_window"])
         self.twitch.set_game(game["twitch_game_id"])
 
-        if not self.obs.is_streaming():
-            self.obs.start_stream()
-            print(f"[StreamPilot] Stream started for {name}")
-        else:
-            print(f"[StreamPilot] Switched to {name} (stream already live)")
+        if self.obs.is_streaming():
+            self.obs.stop_stream()
+            print(f"[StreamPilot] Ending previous VOD")
+        self.obs.start_stream()
+        print(f"[StreamPilot] Stream started for {name}")
 
         if self.sab_enabled and self.sab:
             self.sab.pause()
