@@ -58,7 +58,8 @@ def test_on_game_launch_starts_stream_when_not_live(daemon):
     daemon.sab.pause.assert_called_once()
 
 
-def test_on_game_launch_skips_start_when_already_live(daemon):
+def test_on_game_launch_stops_then_starts_stream_on_switch(daemon):
+    """Game-per-VOD: if a stream is live when a game launches, end it and start a fresh one."""
     daemon.obs = MagicMock()
     daemon.twitch = MagicMock()
     daemon.sab = MagicMock()
@@ -67,8 +68,11 @@ def test_on_game_launch_skips_start_when_already_live(daemon):
 
     daemon._on_game_launch("game.exe")
 
-    daemon.obs.set_game_capture_window.assert_called_once()
-    daemon.obs.start_stream.assert_not_called()
+    daemon.obs.stop_stream.assert_called_once()
+    daemon.obs.start_stream.assert_called_once()
+    stop_idx = daemon.obs.method_calls.index(call.stop_stream())
+    start_idx = daemon.obs.method_calls.index(call.start_stream())
+    assert stop_idx < start_idx, "stop_stream must be called before start_stream"
     daemon.sab.pause.assert_called_once()
 
 
