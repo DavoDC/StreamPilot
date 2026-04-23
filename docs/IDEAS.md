@@ -8,8 +8,11 @@
 
 ## P1 - Do next
 
-- **Game-per-VOD** - see Architecture section below for full spec. This is the core direction for the program; do before investing heavily in mid-session switch behaviour.
 - **Add-game UX** - see section below. Do before adding Dead by Daylight as a second game - the wizard is rough enough that fixing it first is worth it. Marvel Rivals and Dead by Daylight are the two target games.
+
+## Needs real-environment test
+
+- **Verify game-per-VOD in live session** - launch a game, confirm stream starts, launch a second known game, confirm stream stops and restarts (new VOD). Feature is implemented and unit-tested but not yet verified end-to-end.
 
 ## Quick wins
 
@@ -21,20 +24,6 @@
 - **Bat scripts must stay open** - all `.bat` scripts should use `cmd /k` or `pause` so output is readable. `add-game.bat` currently closes immediately.
 - **Deduplicate add-game prompt** - `add-game` prompts "Make sure your game is running" twice. Remove duplicate.
 - **Auto-relaunch Steam if closed** - same pattern as OBS auto-launch (`daemon.py:51-59`): check psutil, read optional `steam.exe_path` from config (default `C:\Program Files (x86)\Steam\steam.exe`), `subprocess.Popen([exe_path], cwd=steam_dir)`. No admin needed. ~5 lines.
-
-## Architecture - Game-per-VOD (P1 - see above)
-
-Each game session = one VOD. This is the intended long-term model:
-
-- When the monitored game process closes, StreamPilot ends the stream/recording automatically.
-- When a new game is detected, a fresh stream starts with that game's config.
-- **This eliminates mid-session switch complexity entirely** - no need to handle game changes mid-stream because streams are scoped to a single game session. The "mid-session switch" use case in CLAUDE.md is slated for removal, not improvement.
-
-Implementation notes:
-- Requires reliable game process exit detection (psutil already polls, just needs exit action)
-- OBS: call StopRecord/StopStream on exit, StartRecord/StartStream on new game launch
-- Config: no changes needed - each game entry already has its own Twitch/OBS settings
-- Update CLAUDE.md "Key Behaviour" and use cases when this ships
 
 ## Add-game UX (batch together, P1 - see above)
 

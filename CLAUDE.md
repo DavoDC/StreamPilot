@@ -16,9 +16,9 @@ Primary use case: **Fresh start** - launch a game, stream not running - StreamPi
 
 **The real purpose - psychological reassurance while gaming:** David uses a two-screen setup (game on primary/left, StreamPilot terminal on secondary/right). The terminal running on the second screen acts as a live dashboard - while in-game he should be able to glance right and confirm everything is handled correctly without alt-tabbing or interrupting gameplay. The goal is "I can see from one place it's all good" - stream is live, right category set, SABnzbd is paused. This is the core UX, not just automation.
 
-Intended architecture (game-per-VOD, in progress):
-- Each game session = one VOD. Stream ends when the game closes; new stream starts when the next game launches.
-- Mid-session switch (swap capture/category without stopping stream) is the current behaviour but is slated for removal - see IDEAS.md Architecture section.
+Architecture: game-per-VOD
+- Each game session = one VOD. Stream ends when the game closes; a fresh stream starts when the next game launches.
+- Mid-session switch (keeping stream live across game changes) has been removed.
 
 ## Current OBS Setup
 
@@ -29,8 +29,7 @@ Single scene with two sources:
 ## Key Behaviour
 
 - Polls for known game exes every 2s via `psutil`
-- On game launch: updates Game Capture window target, sets Twitch category, starts stream if not live, pauses SABnzbd
-- On game switch: updates capture + category, keeps stream running
+- On game launch: updates Game Capture window target, sets Twitch category, starts stream (stopping any existing stream first for a fresh VOD), pauses SABnzbd
 - On game exit: stops stream, resumes SABnzbd
 - SABnzbd paused/resumed per game session only - daemon idle with no game = SABnzbd runs freely
 - Unknown game: Windows toast notification - "Run 'streampilot config add-game'"
