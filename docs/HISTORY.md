@@ -2,6 +2,12 @@
 
 ---
 
+## 2026-04-24 - Game-per-VOD (implemented, untested in live session)
+
+Each game session is now its own VOD. When a new game is detected while a stream is already live, StreamPilot stops the current stream before starting a fresh one. Previously the stream stayed live across game changes (mid-session switch). This eliminates mid-session switch complexity and ensures every VOD is scoped to a single game session. 1 test updated, 59 total passing. Pending real-environment verification - see IDEAS.md.
+
+---
+
 ## 2026-04-21 - Windows Terminal elevation
 
 `run.bat` UAC relaunch now opens in Windows Terminal instead of a plain cmd window. Changed `Start-Process` target from the bat file itself to `wt.exe` with `cmd /k` and the python command inline. Elevated session opens as a proper WT tab.
