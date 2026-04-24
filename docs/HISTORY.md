@@ -2,6 +2,22 @@
 
 ---
 
+## 2026-04-24 - Add-game UX overhaul
+
+Full rewrite of the `config add-game` wizard. Unblocks adding Dead by Daylight as a second game (now confirmed added and working).
+
+Changes:
+- **Arrow-key window selector** - replaced numbered list with `questionary.select`. Same pattern as RivalsVidMaker.
+- **Auto-detect game name** - display name pre-fills from the selected window title; Twitch search runs automatically with that name. No manual Twitch lookup needed in the happy path.
+- **Robust Twitch search** - new `search_game_robust()` method tries full name first, then first word only if empty. Fixes cases where the full game name returns no results.
+- **Clarified display name prompt** - reworded from "Game name (for display)" to "Display name in StreamPilot dashboard" with inline default.
+- **Removed duplicate prompt** - "Make sure your game is running" was shown twice (once by bat, once by Python). Python prompt removed; bat handles it.
+- **Fixed end message** - was incorrectly saying `streampilot start`; now says `scripts\run.bat`.
+- **Added `questionary>=2.0.0`** to `requirements.txt`.
+- 4 new tests for `search_game_robust` (63 total, all passing).
+
+---
+
 ## 2026-04-24 - Game-per-VOD (implemented, untested in live session)
 
 Each game session is now its own VOD. When a new game is detected while a stream is already live, StreamPilot stops the current stream before starting a fresh one. Previously the stream stayed live across game changes (mid-session switch). This eliminates mid-session switch complexity and ensures every VOD is scoped to a single game session. 1 test updated, 59 total passing. Pending real-environment verification - see IDEAS.md.
