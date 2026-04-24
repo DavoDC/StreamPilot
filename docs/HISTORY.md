@@ -2,6 +2,14 @@
 
 ---
 
+## 2026-04-24 - Delete status.bat + setup-config.bat; fix add-game.bat window close
+
+- Deleted `scripts/status.bat` (redundant - startup checks cover it) and `scripts/setup/setup-config.bat` (single-purpose file copy; replaced with a manual copy instruction in README Step 3).
+- Fixed `add-game.bat` closing immediately after the Python wizard exits: interactive wizard leaves buffered keypresses in stdin that instantly satisfy a trailing `pause`. Replaced final `pause` with `cmd /k` so the window stays open unconditionally.
+- Updated CLAUDE.md repo structure and README Step 3 to match.
+
+---
+
 ## 2026-04-24 - Add-game UX overhaul
 
 Full rewrite of the `config add-game` wizard. Unblocks adding Dead by Daylight as a second game (now confirmed added and working).

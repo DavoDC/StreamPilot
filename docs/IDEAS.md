@@ -16,11 +16,7 @@
 
 ## Quick wins
 
-- **Delete status.bat and setup-config.bat** - do together in one commit, one README update covers both.
-  - `scripts/status.bat` - redundant once pre-flight checks land; diagnostic value covered by main-program startup checks.
-  - `scripts/setup/setup-config.bat` - copies example config then pauses; user still edits manually. Update README Step 3 to: "Copy `config\config.example.json` to `config\config.json` and open it to fill in your settings."
 - **OBS window string double space cleanup** - config has `Marvel Rivals  :UnrealWindow:...` (double space). Confirm the correct string from the OBS Game Capture dropdown and clean up. Low risk.
-- **Bat scripts must stay open** - all `.bat` scripts should use `cmd /k` or `pause` so output is readable. `add-game.bat` currently closes immediately.
 - **Auto-relaunch Steam if closed** - same pattern as OBS auto-launch (`daemon.py:51-59`): check psutil, read optional `steam.exe_path` from config (default `C:\Program Files (x86)\Steam\steam.exe`), `subprocess.Popen([exe_path], cwd=steam_dir)`. No admin needed. ~5 lines.
 
 ## System tray (P1 - do after status heartbeat)
