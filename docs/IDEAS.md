@@ -58,7 +58,7 @@ Implementation:
 
 ## Stretch goals
 
-- **Dashboard web UI** - replace the batch script setup flow with a browser-based dashboard. Better UX for config, game management, and live status. Would replace the current .bat launcher and add-game wizard. Research best framework before starting - lightweight options preferred (no heavy Node stack).
+- **Dashboard web UI** - replace the batch script setup flow with a browser-based dashboard. Better UX for config, game management, and live status. Would replace the current .bat launcher and add-game wizard. Research best framework before starting - lightweight options preferred (no heavy Node stack). Consider https://claude.ai/design for UI mockups first.
 
 ## Docs overhaul
 
