@@ -60,6 +60,7 @@ Implementation:
 ## Docs overhaul
 
 - Review all docs (README, CLAUDE.md, IDEAS.md, any setup guides) - consolidate, remove duplication, tighten language. No data loss. Reduce total doc surface area. Specific pain point: README's linear step format doesn't reflect how the program actually works - particularly SABnzbd integration, which isn't a sequential setup step but a background behaviour. Restructure around how the program behaves, not a setup checklist.
+- Add icon to readme similar to # <img width="24px" src="./Logo/256.png" alt="Sonarr"></img> Sonarr like https://github.com/Sonarr/Sonarr does 
 
 ## Low priority
 
