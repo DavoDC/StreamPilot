@@ -48,7 +48,7 @@ Implementation:
 
 ## Live status improvements
 
-- **More frequent status updates** - current heartbeat fires every ~10s. David wants ~3-5s for a "live" feel. Options: (a) lower the heartbeat interval, (b) open a dedicated second terminal that clears and reprints status every 2-3s. Needs thought on which UX is better.
+- **More frequent status updates** - current heartbeat fires every ~10s; target ~3-5s for a "live" feel with something always changing on screen. Options: (a) lower the heartbeat interval, (b) open a dedicated second terminal that clears and reprints status every 2-3s. Needs UX decision before implementing.
 - **Check audio and OBS settings** - verify game being streamed is in "Application Audio Output Capture" list and correctly configured. Could be checked or set automatically, similar to the game capture window check.
 - **Windows Terminal on right screen** - for this program only, open maximised on the right monitor by default. Windows Terminal supports per-profile config (`initialPosition`, `launchMode` in settings JSON) - investigate feasibility.
 
@@ -58,20 +58,20 @@ Implementation:
 
 ## Stretch goals
 
-- **Dashboard web UI** - replace the batch script setup flow with a browser-based dashboard. Better UX for config, game management, and live status. Would replace the current .bat launcher and add-game wizard. Ask claude best way to do , use https://claude.ai/design ? use https://github.com/nextlevelbuilder/ui-ux-pro-max-skill?
+- **Dashboard web UI** - replace the batch script setup flow with a browser-based dashboard. Better UX for config, game management, and live status. Would replace the current .bat launcher and add-game wizard. Research best framework before starting - lightweight options preferred (no heavy Node stack).
 
 ## Docs overhaul
 
 - Review all docs (README, CLAUDE.md, IDEAS.md, any setup guides) - consolidate, remove duplication, tighten language. No data loss. Reduce total doc surface area. Specific pain point: README's linear step format doesn't reflect how the program actually works - particularly SABnzbd integration, which isn't a sequential setup step but a background behaviour. Restructure around how the program behaves, not a setup checklist.
-- Add icon to readme similar to `# <img width="24px" src="./Logo/256.png" alt="Sonarr"></img>` like https://github.com/Sonarr/Sonarr does
+- Add inline icon to the README heading - same pattern as Sonarr's README (`<img>` tag next to the `#` heading). Icon assets are already in `assets/`.
 
 ## Medium priority
 
-- Auto-start with Windows (Task Scheduler entry)
-- Windows toast notification for unknown game detected
-- Brainstorm session with Claude - get Claude to generate a wide list of StreamPilot improvement ideas (separate dev session, purely generative, no implementation)
+- **Auto-start with Windows** - Task Scheduler entry to launch StreamPilot on login.
+- **Windows toast notification for unknown game** - when an unrecognised process is detected, surface a Windows toast so it can be added via the add-game wizard without switching windows.
+- **Brainstorm session with Claude** - dedicated session to generate a wide list of improvement ideas for StreamPilot. Purely generative, no implementation. Run as a separate `/dev-session`.
 
 ## Low priority
 
-- LOW: Set Twitch tags per game (currently tags are global)
-- LOW: SABnzbd per-game config for offline games - in config, specify games that SHOULDN'T pause SAB. Only multiplayer games need SAB paused; offline/single-player games should leave SAB running. No offline games currently, but design for it.
+- **Set Twitch tags per game** - currently tags are global. Allow per-game tag overrides in config.
+- **SABnzbd per-game config for offline games** - in config, flag games that SHOULDN'T pause SAB. Only multiplayer games need SAB paused; offline/single-player games should leave it running. No offline games currently, but worth designing for.
