@@ -96,6 +96,9 @@ StreamPilot/
 │   ├── twitch_client.py     # Twitch API
 │   ├── sabnzbd_client.py    # SABnzbd API
 │   └── config.py            # Loader + validator
+├── assets/
+│   ├── StreamPilotIconNoBG.ico   # Program icon (transparent background)
+│   └── StreamPilotIconOriginal.png
 ├── config/
 │   ├── config.example.json
 │   └── config.json          # gitignored
