@@ -110,7 +110,7 @@ StreamPilot/
 │   ├── run-tests.bat
 │   └── setup/
 │       ├── add-game.bat
-│       └── install-dependencies.bat  (setup-config.bat and status.bat pending deletion)
+│       └── install-dependencies.bat
 ├── tests/
 └── data/logs/
 ```
