@@ -8,7 +8,7 @@
 
 ## P1 - Do next
 
-- **Add-game UX** - see section below. Do before adding Dead by Daylight as a second game - the wizard is rough enough that fixing it first is worth it. Marvel Rivals and Dead by Daylight are the two target games.
+*(none currently)*
 
 ## Needs real-environment test
 
@@ -20,18 +20,8 @@
   - `scripts/status.bat` - redundant once pre-flight checks land; diagnostic value covered by main-program startup checks.
   - `scripts/setup/setup-config.bat` - copies example config then pauses; user still edits manually. Update README Step 3 to: "Copy `config\config.example.json` to `config\config.json` and open it to fill in your settings."
 - **OBS window string double space cleanup** - config has `Marvel Rivals  :UnrealWindow:...` (double space). Confirm the correct string from the OBS Game Capture dropdown and clean up. Low risk.
-- **Remove incorrect "streampilot start" message** - `add-game.bat` outputs "Run 'streampilot start' to begin monitoring." StreamPilot uses .bat scripts, not a CLI command. Replace with correct bat-script instruction.
 - **Bat scripts must stay open** - all `.bat` scripts should use `cmd /k` or `pause` so output is readable. `add-game.bat` currently closes immediately.
-- **Deduplicate add-game prompt** - `add-game` prompts "Make sure your game is running" twice. Remove duplicate.
 - **Auto-relaunch Steam if closed** - same pattern as OBS auto-launch (`daemon.py:51-59`): check psutil, read optional `steam.exe_path` from config (default `C:\Program Files (x86)\Steam\steam.exe`), `subprocess.Popen([exe_path], cwd=steam_dir)`. No admin needed. ~5 lines.
-
-## Add-game UX (batch together, P1 - see above)
-
-- Replace numbered window list with arrow-key interactive selector - see RivalsVidMaker for pattern. Show list once only, selectable.
-- Auto-detect game name from window title column (e.g. "Marvel Rivals" from `Marvel-Win64-Shipping.exe | Marvel Rivals`). Use that to search Twitch automatically. Only fall back to manual Game ID entry as last resort.
-- Fix Twitch game search - "Marvel Rivals" returned no results. Implement fuzzy/partial matching or use Twitch search API more robustly.
-- Clarify the "Game name (for display)" prompt - reword or show intent inline.
-- Document or surface where to get Twitch Game IDs when manual entry is needed.
 
 ## System tray (P1 - do after status heartbeat)
 
@@ -42,6 +32,7 @@ Two distinct jobs - both matter:
 
 Implementation:
 - `pystray` + `Pillow` for tray icon
+- Icon ready: `assets/StreamPilotIconNoBG.ico` (transparent background) + `assets/StreamPilotIconOriginal.png`
 - Right-click menu: Status, Stop StreamPilot (clean shutdown)
 - On terminal close (`WM_DELETE_WINDOW` or SIGINT from X button): hide window, keep daemon running in background
 - Tray tooltip: current state (Streaming: Marvel Rivals / Idle)
