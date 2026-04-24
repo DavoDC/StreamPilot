@@ -34,6 +34,7 @@ Get claude to brainstorm ideas for imprvint this program = as an IDea , put in s
 Idea for /dev-session = Store last three repos that skill has been used on in skill itself, dev session often used on same repo in a row. could save a read/tokens on first step
 
 Dev session should check repo for feedback file and stop if detected and suggest running process feedback !
+can grep last 10 commits for "feedback" to get quickly ,  then fallabck to full repo search. make sure skills are token efficient!
 
 New feature = when streampilot closes, OBS should be closed with it !
 
