@@ -93,3 +93,13 @@ class TwitchClient:
         except Exception as e:
             log.warning(f"Twitch search_game error: {e}")
         return []
+
+    def search_game_robust(self, name: str) -> list:
+        """Search by full name; if empty, retry with the first word only."""
+        results = self.search_game(name)
+        if results:
+            return results
+        words = name.split()
+        if len(words) > 1:
+            results = self.search_game(words[0])
+        return results

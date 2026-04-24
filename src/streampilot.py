@@ -52,23 +52,21 @@ def cmd_status(args):
 def cmd_add_game(args):
     """Wizard: detect running game window, search Twitch, write to config."""
     setup_logging()
-    cfg_module.load()
 
     try:
         import win32gui
         import win32process
         import psutil
+        import questionary
         from twitch_client import TwitchClient
     except ImportError as e:
         print(f"Missing dependency: {e}")
-        print("Run: pip install pywin32 psutil")
+        print("Run: pip install -r config\\requirements.txt")
         sys.exit(1)
 
     cfg = cfg_module.load()
 
     print("=== StreamPilot: Add Game ===")
-    print("Make sure your game is running, then press Enter...")
-    input()
 
     windows = []
 
@@ -93,37 +91,47 @@ def cmd_add_game(args):
         print("No windows found.")
         return
 
-    print("\nDetected windows:")
-    for i, (title, cls, exe) in enumerate(windows[:20]):
-        print(f"  [{i}] {exe} | {title[:60]} | {cls}")
-
-    choice = input("\nEnter number of game window: ").strip()
-    try:
-        title, cls, exe = windows[int(choice)]
-    except (ValueError, IndexError):
-        print("Invalid selection.")
+    choices = [
+        questionary.Choice(f"{exe}  |  {title[:55]}  |  {cls}", value=i)
+        for i, (title, cls, exe) in enumerate(windows[:20])
+    ]
+    choice = questionary.select("Select your game window:", choices=choices).ask()
+    if choice is None:
         return
 
+    title, cls, exe = windows[choice]
     obs_window = f"{title}:{cls}:{exe}"
-    print(f"obs_window: {obs_window}")
 
-    game_name = input("Game name (for display): ").strip()
+    game_name = questionary.text(
+        "Display name in StreamPilot dashboard:",
+        default=title.strip(),
+    ).ask()
+    if not game_name:
+        return
+    game_name = game_name.strip()
 
     twitch = TwitchClient(cfg["twitch"]["client_id"], cfg["twitch"]["oauth_token"])
-    results = twitch.search_game(game_name)
+    print(f'Searching Twitch for "{game_name}"...')
+    results = twitch.search_game_robust(game_name)
 
     if not results:
-        print("No Twitch results found. Enter game ID manually.")
-        game_id = input("Twitch game ID: ").strip()
+        print(f'No Twitch results found for "{game_name}".')
+        print("Find game IDs at: https://www.twitch.tv/directory")
+        game_id = questionary.text("Enter Twitch game ID:").ask()
+        if not game_id:
+            return
+        game_id = game_id.strip()
     else:
-        print("\nTwitch matches:")
-        for i, g in enumerate(results[:10]):
-            print(f"  [{i}] {g['name']} (ID: {g['id']})")
-        pick = input("Select [0]: ").strip() or "0"
-        game_id = results[int(pick)]["id"]
+        twitch_choices = [
+            questionary.Choice(f"{g['name']}  (ID: {g['id']})", value=g["id"])
+            for g in results[:10]
+        ]
+        game_id = questionary.select("Select Twitch category:", choices=twitch_choices).ask()
+        if game_id is None:
+            return
 
     cfg_module.add_game(exe, game_name, game_id, obs_window)
-    print(f"\nAdded! Run 'streampilot start' to begin monitoring.")
+    print(f"\nAdded! Run scripts\\run.bat to begin monitoring.")
 
 
 
