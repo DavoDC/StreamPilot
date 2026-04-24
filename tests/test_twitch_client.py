@@ -109,3 +109,47 @@ def test_get_current_game_name_network_error(client):
     client._broadcaster_id = "123456"
     with patch("twitch_client.requests.get", side_effect=Exception("timeout")):
         assert client.get_current_game_name() is None
+
+
+# --- search_game_robust ---
+
+def test_search_game_robust_full_name_match(client):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"data": [{"id": "532273", "name": "Marvel Rivals"}]}
+    with patch("twitch_client.requests.get", return_value=mock_resp) as mock_get:
+        results = client.search_game_robust("Marvel Rivals")
+    assert len(results) == 1
+    assert results[0]["id"] == "532273"
+    assert mock_get.call_count == 1
+
+
+def test_search_game_robust_falls_back_to_first_word(client):
+    full_resp = MagicMock()
+    full_resp.status_code = 200
+    full_resp.json.return_value = {"data": []}
+    word_resp = MagicMock()
+    word_resp.status_code = 200
+    word_resp.json.return_value = {"data": [{"id": "532273", "name": "Marvel Rivals"}]}
+    with patch("twitch_client.requests.get", side_effect=[full_resp, word_resp]):
+        results = client.search_game_robust("Marvel Rivals")
+    assert results[0]["id"] == "532273"
+
+
+def test_search_game_robust_single_word_no_retry(client):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"data": []}
+    with patch("twitch_client.requests.get", return_value=mock_resp) as mock_get:
+        results = client.search_game_robust("Minecraft")
+    assert results == []
+    assert mock_get.call_count == 1
+
+
+def test_search_game_robust_both_empty(client):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"data": []}
+    with patch("twitch_client.requests.get", return_value=mock_resp):
+        results = client.search_game_robust("Unknown XYZ Game")
+    assert results == []
