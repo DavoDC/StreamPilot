@@ -8,4 +8,4 @@ cd /d "%~dp0..\.."
 python src\streampilot.py config add-game
 echo.
 echo Done. You can close this window.
-pause
+cmd /k
