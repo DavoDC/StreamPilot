@@ -55,7 +55,7 @@ Also check that your Game Capture source in OBS is named exactly `Game Capture` 
 
 ### Step 3 - Create config.json
 
-Double-click `scripts\setup\setup-config.bat`. Then open `config\config.json` and fill in:
+Copy `config\config.example.json` to `config\config.json`, then open it and fill in:
 
 | Field | What it is | How to get it |
 |---|---|---|
