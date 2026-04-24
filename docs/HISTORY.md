@@ -2,6 +2,18 @@
 
 ---
 
+## 2026-04-24 - Game-per-VOD live test CONFIRMED
+
+Verified game-per-VOD feature end-to-end in a live session. Feature confirmed working: launching a second game while streaming correctly stops the current stream and starts a fresh one (new VOD). Removed from IDEAS.md "Needs real-environment test".
+
+---
+
+## 2026-04-24 - SABnzbd resume on game/program stop CONFIRMED
+
+David confirmed SABnzbd resume is already implemented and working: when StreamPilot detects the game has closed, or when StreamPilot itself exits, SABnzbd is automatically resumed. Removed from IDEAS.md Robustness section.
+
+---
+
 ## 2026-04-24 - Delete status.bat + setup-config.bat; fix add-game.bat window close
 
 - Deleted `scripts/status.bat` (redundant - startup checks cover it) and `scripts/setup/setup-config.bat` (single-purpose file copy; replaced with a manual copy instruction in README Step 3).
