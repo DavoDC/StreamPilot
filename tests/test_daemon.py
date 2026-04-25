@@ -1,5 +1,6 @@
 """Tests for daemon.py"""
 
+import copy
 import pytest
 from unittest.mock import MagicMock, patch, call
 from daemon import Daemon
@@ -21,7 +22,7 @@ SAMPLE_CFG = {
 
 @pytest.fixture
 def daemon():
-    return Daemon(SAMPLE_CFG)
+    return Daemon(copy.deepcopy(SAMPLE_CFG))
 
 
 def test_detect_game_found(daemon):
@@ -174,25 +175,31 @@ def test_sab_disabled_does_not_call_sab(daemon):
 
 
 # --- Heartbeat tests ---
+# _format_heartbeat no longer takes a timestamp param - logging framework adds it uniformly.
 
 def test_format_heartbeat_game_active_all_good(daemon):
     line = daemon._format_heartbeat(
-        timestamp="12:00:00",
         game_name="My Game",
         obs_streaming=True,
         twitch_category="My Game",
         sab_paused=True,
     )
-    assert "[12:00:00]" in line
     assert "My Game" in line
     assert "SABnzbd: Paused" in line
     assert "should be" not in line
     assert "Status: OK" in line
 
 
+def test_format_heartbeat_no_embedded_timestamp(daemon):
+    line = daemon._format_heartbeat(
+        game_name=None, obs_streaming=False, twitch_category=None, sab_paused=None
+    )
+    # Logging adds the timestamp; the message itself must not start with one
+    assert not line.startswith("[")
+
+
 def test_format_heartbeat_status_issue_when_obs_offline(daemon):
     line = daemon._format_heartbeat(
-        timestamp="12:00:00",
         game_name="My Game",
         obs_streaming=False,
         twitch_category="My Game",
@@ -203,7 +210,6 @@ def test_format_heartbeat_status_issue_when_obs_offline(daemon):
 
 def test_format_heartbeat_status_issue_when_sab_running(daemon):
     line = daemon._format_heartbeat(
-        timestamp="12:00:00",
         game_name="My Game",
         obs_streaming=True,
         twitch_category="My Game",
@@ -214,7 +220,6 @@ def test_format_heartbeat_status_issue_when_sab_running(daemon):
 
 def test_format_heartbeat_status_issue_when_sab_unreachable_gaming(daemon):
     line = daemon._format_heartbeat(
-        timestamp="12:00:00",
         game_name="My Game",
         obs_streaming=True,
         twitch_category="My Game",
@@ -225,7 +230,6 @@ def test_format_heartbeat_status_issue_when_sab_unreachable_gaming(daemon):
 
 def test_format_heartbeat_status_ok_when_idle(daemon):
     line = daemon._format_heartbeat(
-        timestamp="12:00:00",
         game_name=None,
         obs_streaming=False,
         twitch_category=None,
@@ -236,7 +240,6 @@ def test_format_heartbeat_status_ok_when_idle(daemon):
 
 def test_format_heartbeat_obs_offline_while_game_active(daemon):
     line = daemon._format_heartbeat(
-        timestamp="12:00:00",
         game_name="My Game",
         obs_streaming=False,
         twitch_category="My Game",
@@ -247,7 +250,6 @@ def test_format_heartbeat_obs_offline_while_game_active(daemon):
 
 def test_format_heartbeat_sab_running_while_game_active(daemon):
     line = daemon._format_heartbeat(
-        timestamp="12:00:00",
         game_name="My Game",
         obs_streaming=True,
         twitch_category="My Game",
@@ -259,7 +261,6 @@ def test_format_heartbeat_sab_running_while_game_active(daemon):
 
 def test_format_heartbeat_idle_no_game(daemon):
     line = daemon._format_heartbeat(
-        timestamp="12:00:00",
         game_name=None,
         obs_streaming=False,
         twitch_category=None,
@@ -271,7 +272,6 @@ def test_format_heartbeat_idle_no_game(daemon):
 
 def test_format_heartbeat_sab_unreachable(daemon):
     line = daemon._format_heartbeat(
-        timestamp="12:00:00",
         game_name="My Game",
         obs_streaming=True,
         twitch_category="My Game",
@@ -291,13 +291,62 @@ def test_print_heartbeat_calls_live_sources(daemon):
     daemon.twitch.get_current_game_name.return_value = "My Game"
     daemon.sab.is_paused.return_value = True
 
-    with patch("builtins.print") as mock_print:
+    with patch("daemon.log") as mock_log:
         daemon._print_heartbeat()
 
     daemon.obs.is_streaming.assert_called_once()
     daemon.twitch.get_current_game_name.assert_called_once()
     daemon.sab.is_paused.assert_called_once()
-    mock_print.assert_called_once()
+    mock_log.info.assert_called_once()
+
+
+# --- Steam relaunch tests ---
+
+STEAM_DEFAULT = r"C:\Program Files (x86)\Steam\steam.exe"
+STEAM_DIR = r"C:\Program Files (x86)\Steam"
+
+
+def test_ensure_steam_running_skips_when_already_running(daemon):
+    mock_proc = MagicMock()
+    mock_proc.name.return_value = "steam.exe"
+    with patch("daemon.psutil.process_iter", return_value=[mock_proc]):
+        with patch("daemon.subprocess.Popen") as mock_popen:
+            daemon._ensure_steam_running()
+            mock_popen.assert_not_called()
+
+
+def test_ensure_steam_running_launches_default_exe(daemon):
+    with patch("daemon.psutil.process_iter", return_value=[]):
+        with patch("daemon.os.path.exists", return_value=True):
+            with patch("daemon.subprocess.Popen") as mock_popen:
+                daemon._ensure_steam_running()
+                mock_popen.assert_called_once()
+                assert mock_popen.call_args[0][0][0] == STEAM_DEFAULT
+
+
+def test_ensure_steam_running_uses_config_path(daemon):
+    daemon.cfg["steam"] = {"exe_path": r"D:\Steam\steam.exe"}
+    with patch("daemon.psutil.process_iter", return_value=[]):
+        with patch("daemon.os.path.exists", return_value=True):
+            with patch("daemon.subprocess.Popen") as mock_popen:
+                daemon._ensure_steam_running()
+                assert mock_popen.call_args[0][0][0] == r"D:\Steam\steam.exe"
+
+
+def test_ensure_steam_running_cwd_is_exe_directory(daemon):
+    with patch("daemon.psutil.process_iter", return_value=[]):
+        with patch("daemon.os.path.exists", return_value=True):
+            with patch("daemon.subprocess.Popen") as mock_popen:
+                daemon._ensure_steam_running()
+                assert mock_popen.call_args[1]["cwd"] == STEAM_DIR
+
+
+def test_ensure_steam_running_skips_when_exe_missing(daemon):
+    with patch("daemon.psutil.process_iter", return_value=[]):
+        with patch("daemon.os.path.exists", return_value=False):
+            with patch("daemon.subprocess.Popen") as mock_popen:
+                daemon._ensure_steam_running()
+                mock_popen.assert_not_called()
 
 
 def test_loop_fires_heartbeat_every_2nd_poll(daemon):
