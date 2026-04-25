@@ -349,7 +349,8 @@ def test_ensure_steam_running_skips_when_exe_missing(daemon):
                 mock_popen.assert_not_called()
 
 
-def test_loop_fires_heartbeat_every_2nd_poll(daemon):
+def test_loop_fires_heartbeat_every_poll(daemon):
+    """HEARTBEAT_EVERY=1: every poll prints heartbeat; sleep never fires (API calls throttle instead)."""
     daemon.obs = MagicMock()
     daemon.twitch = MagicMock()
     daemon.sab = MagicMock()
@@ -357,15 +358,16 @@ def test_loop_fires_heartbeat_every_2nd_poll(daemon):
 
     call_count = [0]
 
-    def stop_after_10(*args, **kwargs):
+    def stop_after_5(*args, **kwargs):
         call_count[0] += 1
-        if call_count[0] >= 10:
+        if call_count[0] >= 5:
             daemon._running = False
 
     with patch.object(daemon, "_detect_game", return_value=None), \
-         patch.object(daemon, "_print_heartbeat") as mock_hb, \
-         patch("daemon.time.sleep", side_effect=stop_after_10):
+         patch.object(daemon, "_print_heartbeat", side_effect=stop_after_5) as mock_hb, \
+         patch("daemon.time.sleep") as mock_sleep:
         daemon._running = True
         daemon._loop()
 
     assert mock_hb.call_count == 5
+    mock_sleep.assert_not_called()
