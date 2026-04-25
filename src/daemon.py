@@ -6,7 +6,7 @@ import subprocess
 import time
 import psutil
 
-HEARTBEAT_EVERY = 2  # polls (~4s at 2s poll interval)
+HEARTBEAT_EVERY = 1  # every poll; API calls in heartbeat provide natural throttling (~3-5s/cycle)
 
 from obs_client import OBSClient
 from twitch_client import TwitchClient
@@ -124,7 +124,8 @@ class Daemon:
             poll_count += 1
             if poll_count % HEARTBEAT_EVERY == 0:
                 self._print_heartbeat()
-            time.sleep(self.poll_interval)
+            else:
+                time.sleep(self.poll_interval)
 
     def _format_heartbeat(
         self,
