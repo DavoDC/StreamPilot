@@ -2,6 +2,15 @@
 
 ---
 
+## 2026-04-25 - Quick fix: remove extra delay + redirect focus to AudioManager
+
+- **Removed extra sleep from heartbeat polls** - `HEARTBEAT_EVERY` changed from 2 to 1. The `time.sleep(poll_interval)` now only fires in the `else` branch (non-heartbeat polls). Since every poll is now a heartbeat, the sleep never fires; Twitch/OBS/SABnzbd API calls (~3-5s combined) provide natural throttling. Result: status line interval drops from ~6-7s to ~3-5s.
+- **IDEAS.md redirected to AudioManager** - added a stop banner at the top of IDEAS.md: StreamPilot is feature-complete for current use; new work goes to AudioManager.
+- Test updated: `test_loop_fires_heartbeat_every_2nd_poll` renamed and rewritten to assert heartbeat fires every poll and sleep is never called.
+- 69 tests, all passing.
+
+---
+
 ## 2026-04-25 - P1 QOL batch: logging overhaul + Steam auto-relaunch
 
 - **Timestamped log files per run** - log files are now `data/logs/streampilot_YYYY-MM-DD_HH-MM-SS.log` (one per run, never appended). Was: single `streampilot.log` overwritten each run.

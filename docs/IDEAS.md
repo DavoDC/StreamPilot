@@ -1,5 +1,7 @@
 # StreamPilot - Ideas and TODOs
 
+> **STOP - DO NOT add work here. StreamPilot is feature-complete for current use. Primary focus is now AudioManager. Only return here for critical bugs.**
+
 > MANDATORY: Run `/dev-session StreamPilot` to start work. That skill IS the workflow - it picks the top item, confirms scope, implements, tests, and closes out correctly. Fix P0 bugs first. Never work out of order.
 
 ## P0 - Blocking bugs
