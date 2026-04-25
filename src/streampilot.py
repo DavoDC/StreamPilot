@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import sys
+from datetime import datetime
 
 # Ensure src/ is on path when run directly
 sys.path.insert(0, os.path.dirname(__file__))
@@ -13,16 +14,21 @@ import config as cfg_module
 from daemon import Daemon
 
 LOG_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'logs')
-LOG_FILE = os.path.join(LOG_DIR, 'streampilot.log')
+
+_LOG_FMT = '[%(asctime)s] [%(levelname)s] %(name)s: %(message)s'
+_DATE_FMT = '%Y-%m-%d %H:%M:%S'
 
 
 def setup_logging():
     os.makedirs(LOG_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    log_file = os.path.join(LOG_DIR, f'streampilot_{timestamp}.log')
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        format=_LOG_FMT,
+        datefmt=_DATE_FMT,
         handlers=[
-            logging.FileHandler(LOG_FILE, encoding='utf-8'),
+            logging.FileHandler(log_file, encoding='utf-8'),
             logging.StreamHandler(sys.stdout),
         ],
     )

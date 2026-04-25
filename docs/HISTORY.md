@@ -2,6 +2,18 @@
 
 ---
 
+## 2026-04-25 - P1 QOL batch: logging overhaul + Steam auto-relaunch
+
+- **Timestamped log files per run** - log files are now `data/logs/streampilot_YYYY-MM-DD_HH-MM-SS.log` (one per run, never appended). Was: single `streampilot.log` overwritten each run.
+- **Uniform timestamp prefix** - all log lines now use `[YYYY-MM-DD HH:MM:SS] [LEVEL] name: message`. Both FileHandler and StreamHandler share the same formatter so terminal output and log file are 1:1.
+- **All print() removed from daemon** - every event (game launch, stream start/stop, SABnzbd pause/resume, OBS launch, heartbeat) now routes through `log.info()`. Eliminated the split where some events appeared on screen but not in the log file.
+- **run-tests.bat now produces a log** - added `--log-file=data\logs\run-tests.log` to pytest invocation.
+- **Auto-relaunch Steam** - if Steam is not running when the daemon starts, it is launched automatically. Default path: `C:\Program Files (x86)\Steam\steam.exe` (matching the Start Menu shortcut); overridable via `steam.exe_path` in config. Same cwd-as-exe-dir pattern as OBS auto-launch.
+- Fixed pre-existing test isolation bug: `SAMPLE_CFG` was a shared module-level dict; tests that mutated `daemon.cfg` were polluting subsequent tests. Fixed by `copy.deepcopy(SAMPLE_CFG)` in the fixture.
+- 6 new tests added (5 Steam relaunch, 1 heartbeat no-embedded-timestamp). 69 total, all passing.
+
+---
+
 ## 2026-04-24 - QOL batch: heartbeat cleanup + faster updates + obs_window fix
 
 - **Removed OBS field from heartbeat** - `| OBS: Live` was redundant; OBS state is implied by `Status: OK/ISSUE`. Heartbeat now: `[HH:MM:SS] Status: OK | Streaming: X | Category: X | SABnzbd: X`. ISSUE still fires when OBS is offline.

@@ -6,17 +6,6 @@
 
 *(none currently)*
 
-## P1 - QOL batch (do all of these, then STOP and move to AudioManager)
-
-- **Logging overhaul** (batch all sub-items together):
-  - Every log line must start with a uniform timestamp prefix: `[YYYY-MM-DD HH:MM:SS,mmm]`
-  - Log file and terminal output must be 1:1 equivalent - what appears on screen goes to the log file, same format, same lines
-  - Separate, timestamped log files per run - like SBS_Download (`data/logs/streampilot_YYYY-MM-DD_HH-MM-SS.log`), not all appended to one file
-  - Every `.bat` script must produce a log - should be clear from logs which script was run
-  - Remove indentation from log output (current logs have leading whitespace)
-
-- **Auto-relaunch Steam if closed** - same pattern as OBS auto-launch (`daemon.py:51-59`): check psutil, read optional `steam.exe_path` from config (default `C:\Program Files (x86)\Steam\steam.exe`), `subprocess.Popen([exe_path], cwd=steam_dir)`. No admin needed. ~5 lines.
-
 ## P1 - AudioManager (next major feature - start after QOL batch is done)
 
 ## System tray (do after status heartbeat)
