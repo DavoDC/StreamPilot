@@ -100,7 +100,7 @@ def cmd_add_game(args):
         return
 
     title, cls, exe = windows[choice]
-    obs_window = f"{title}:{cls}:{exe}"
+    obs_window = f"{title.strip()}:{cls}:{exe}"
 
     game_name = questionary.text(
         "Display name in StreamPilot dashboard:",
