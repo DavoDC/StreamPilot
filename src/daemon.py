@@ -4,7 +4,6 @@ import logging
 import os
 import subprocess
 import time
-from datetime import datetime
 import psutil
 
 HEARTBEAT_EVERY = 2  # polls (~4s at 2s poll interval)
@@ -56,7 +55,7 @@ class Daemon:
             log.warning("OBS not running and obs.exe_path not set in config - cannot auto-launch.")
             return False
 
-        print("[StreamPilot] OBS not running - launching OBS...")
+        log.info("OBS not running - launching OBS...")
         log.info(f"Launching OBS: {exe_path}")
         obs_dir = os.path.dirname(os.path.abspath(exe_path))
         subprocess.Popen([exe_path], cwd=obs_dir)
@@ -65,16 +64,33 @@ class Daemon:
         for attempt in range(15):
             time.sleep(2)
             if self.obs.connect():
-                print("[StreamPilot] OBS ready.")
-                log.info("OBS WebSocket connected after launch.")
+                log.info("OBS WebSocket ready.")
                 return True  # already connected
             log.info(f"Waiting for OBS WebSocket... (attempt {attempt + 1}/15)")
 
         log.error("OBS did not become ready within 30s.")
         return False
 
+    def _ensure_steam_running(self) -> None:
+        """Launch Steam if not running. Uses steam.exe_path from config or the default install path."""
+        steam_running = any(p.name().lower() == "steam.exe" for p in psutil.process_iter(['name']))
+        if steam_running:
+            return
+
+        exe_path = self.cfg.get("steam", {}).get(
+            "exe_path", r"C:\Program Files (x86)\Steam\steam.exe"
+        )
+        if not os.path.exists(exe_path):
+            log.warning(f"Steam not running and exe not found at {exe_path} - cannot auto-launch.")
+            return
+
+        log.info(f"Steam not running - launching: {exe_path}")
+        steam_dir = os.path.dirname(os.path.abspath(exe_path))
+        subprocess.Popen([exe_path], cwd=steam_dir)
+
     def start(self):
         log.info("StreamPilot daemon starting...")
+        self._ensure_steam_running()
         already_connected = self._ensure_obs_running()
         if not already_connected and not self.obs.connect():
             log.error("Could not connect to OBS WebSocket. Is OBS running with WebSocket enabled?")
@@ -112,7 +128,6 @@ class Daemon:
 
     def _format_heartbeat(
         self,
-        timestamp: str,
         game_name: str | None,
         obs_streaming: bool,
         twitch_category: str | None,
@@ -137,15 +152,14 @@ class Daemon:
         issue = game_active and (not obs_streaming or not sab_paused or sab_paused is None)
         status = "ISSUE" if issue else "OK"
 
-        return f"[{timestamp}] Status: {status} | Streaming: {game_str} | Category: {cat_str} | SABnzbd: {sab_str}"
+        return f"Status: {status} | Streaming: {game_str} | Category: {cat_str} | SABnzbd: {sab_str}"
 
     def _print_heartbeat(self):
-        timestamp = datetime.now().strftime("%H:%M:%S")
         game_name = self.games.get(self._active_game_exe, {}).get("name") if self._active_game_exe else None
         obs_streaming = self.obs.is_streaming()
         twitch_category = self.twitch.get_current_game_name()
         sab_paused = self.sab.is_paused() if (self.sab_enabled and self.sab) else None
-        print(self._format_heartbeat(timestamp, game_name, obs_streaming, twitch_category, sab_paused))
+        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused))
 
     def _detect_game(self):
         """Return exe name of first known running game, or None."""
@@ -159,33 +173,31 @@ class Daemon:
         game = self.games[exe]
         name = game["name"]
         log.info(f"Game detected: {name} ({exe})")
-        print(f"[StreamPilot] {name} detected")
 
         self.obs.set_game_capture_window(game["obs_window"])
         self.twitch.set_game(game["twitch_game_id"])
 
         if self.obs.is_streaming():
             self.obs.stop_stream()
-            print(f"[StreamPilot] Ending previous VOD")
+            log.info("Ending previous VOD")
         self.obs.start_stream()
-        print(f"[StreamPilot] Stream started for {name}")
+        log.info(f"Stream started for {name}")
 
         if self.sab_enabled and self.sab:
             self.sab.pause()
-            print("[StreamPilot] SABnzbd paused")
+            log.info("SABnzbd paused")
 
     def _on_no_game(self):
         if self._active_game_exe is None:
             return
-        log.info("No game detected - stopping stream")
-        print("[StreamPilot] Game exited - stopping stream")
+        log.info("Game exited - stopping stream")
 
         if self.obs.is_streaming():
             self.obs.stop_stream()
 
         if self.sab_enabled and self.sab:
             self.sab.resume()
-            print("[StreamPilot] SABnzbd resumed")
+            log.info("SABnzbd resumed")
 
     def get_status(self) -> dict:
         streaming = self.obs.is_streaming() if self.obs._client else False
