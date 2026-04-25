@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 import psutil
 
-HEARTBEAT_EVERY = 5  # polls (~10s at 2s poll interval)
+HEARTBEAT_EVERY = 2  # polls (~4s at 2s poll interval)
 
 from obs_client import OBSClient
 from twitch_client import TwitchClient
@@ -121,14 +121,6 @@ class Daemon:
         game_active = game_name is not None
 
         game_str = game_name if game_active else "Idle"
-
-        if obs_streaming:
-            obs_str = "Live"
-        elif game_active:
-            obs_str = "OFFLINE - should be streaming"
-        else:
-            obs_str = "Idle"
-
         cat_str = twitch_category if twitch_category else "Unknown"
 
         if not self.sab_enabled:
@@ -145,7 +137,7 @@ class Daemon:
         issue = game_active and (not obs_streaming or not sab_paused or sab_paused is None)
         status = "ISSUE" if issue else "OK"
 
-        return f"[{timestamp}] Status: {status} | Streaming: {game_str} | OBS: {obs_str} | Category: {cat_str} | SABnzbd: {sab_str}"
+        return f"[{timestamp}] Status: {status} | Streaming: {game_str} | Category: {cat_str} | SABnzbd: {sab_str}"
 
     def _print_heartbeat(self):
         timestamp = datetime.now().strftime("%H:%M:%S")
