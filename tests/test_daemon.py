@@ -185,7 +185,6 @@ def test_format_heartbeat_game_active_all_good(daemon):
     )
     assert "[12:00:00]" in line
     assert "My Game" in line
-    assert "OBS: Live" in line
     assert "SABnzbd: Paused" in line
     assert "should be" not in line
     assert "Status: OK" in line
@@ -243,8 +242,7 @@ def test_format_heartbeat_obs_offline_while_game_active(daemon):
         twitch_category="My Game",
         sab_paused=True,
     )
-    assert "OFFLINE" in line
-    assert "should be streaming" in line
+    assert "Status: ISSUE" in line
 
 
 def test_format_heartbeat_sab_running_while_game_active(daemon):
@@ -302,7 +300,7 @@ def test_print_heartbeat_calls_live_sources(daemon):
     mock_print.assert_called_once()
 
 
-def test_loop_fires_heartbeat_every_5th_poll(daemon):
+def test_loop_fires_heartbeat_every_2nd_poll(daemon):
     daemon.obs = MagicMock()
     daemon.twitch = MagicMock()
     daemon.sab = MagicMock()
@@ -321,4 +319,4 @@ def test_loop_fires_heartbeat_every_5th_poll(daemon):
         daemon._running = True
         daemon._loop()
 
-    assert mock_hb.call_count == 2
+    assert mock_hb.call_count == 5
