@@ -2,6 +2,15 @@
 
 ---
 
+## 2026-04-24 - QOL batch: heartbeat cleanup + faster updates + obs_window fix
+
+- **Removed OBS field from heartbeat** - `| OBS: Live` was redundant; OBS state is implied by `Status: OK/ISSUE`. Heartbeat now: `[HH:MM:SS] Status: OK | Streaming: X | Category: X | SABnzbd: X`. ISSUE still fires when OBS is offline.
+- **Faster heartbeat** - `HEARTBEAT_EVERY` 5 -> 2 polls (~4s interval in practice; ~6-7s observed due to API call latency on heartbeat polls, vs ~10s before).
+- **obs_window double-space fix** - added `.strip()` to window title in add-game wizard (`streampilot.py:103`) so future game captures don't produce trailing-space titles. Fixed `config.example.json`. Existing `config.json` entries unchanged (stream works; re-run add-game to regenerate clean strings if desired).
+- 3 tests updated to match new behaviour. 63 total, all passing.
+
+---
+
 ## 2026-04-24 - Game-per-VOD live test CONFIRMED
 
 Verified game-per-VOD feature end-to-end in a live session. Feature confirmed working: launching a second game while streaming correctly stops the current stream and starts a fresh one (new VOD). Removed from IDEAS.md "Needs real-environment test".
