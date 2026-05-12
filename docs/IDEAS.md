@@ -1,6 +1,6 @@
 # StreamPilot - Ideas and TODOs
 
-> **STOP - DO NOT add work here. StreamPilot is feature-complete for current use. Primary focus is now AudioManager. Only return here for critical bugs.**
+**Status:** Feature-complete for current use. AudioManager MVP now complete, so StreamPilot can receive enhancements again. Critical bugs always welcome.
 
 > MANDATORY: Run `/dev-session StreamPilot` to start work. That skill IS the workflow - it picks the top item, confirms scope, implements, tests, and closes out correctly. Fix P0 bugs first. Never work out of order.
 
@@ -33,6 +33,27 @@ Implementation:
 - **Pre-flight checks** - before connecting to OBS or SABnzbd, verify they are actually running. Check process list first; log a clear warning and skip if not found. Observed: starting SP with SABnzbd not running caused a ~13s hang before the connection error was logged (Max retries exceeded). Should fail fast with a clear "SABnzbd not running" message instead.
 - **Handle OBS closing while running** - detect OBS process exit and respond gracefully. Many state combinations need thought: OBS closed intentionally, OBS crashed, OBS restarted externally. All relevant program statuses should be monitored and handled - needs design session before implementing.
 - **Close OBS when StreamPilot exits** - when the daemon shuts down cleanly, OBS should also close automatically. Ensures no zombie OBS session remains after StreamPilot stops.
+
+## Homeostasis - Keep Things in Right State
+
+**Concept:** Regularly check that critical services are in the state StreamPilot expects, and automatically bring them back if they drift.
+
+**Problem:** If SABnzbd somehow starts downloading on its own (user mistake, external trigger, script), StreamPilot won't catch it until the next game launch. Similarly, if OBS crashes, SP should detect and restart it. State can drift without SP knowing.
+
+**Solution:** Background health-check loop (runs in parallel with main game detection):
+
+- **SABnzbd pause state** - every 10s, verify SABnzbd is paused (when no game running). If it's downloading, pause it + log warning "SABnzbd auto-resumed, StreamPilot paused it"
+- **OBS process** - every 30s, check if OBS process is running. If it crashed, restart it automatically
+- **OBS stream state** - verify stream state (live vs idle) matches what SP thinks. If mismatch, log and sync
+- **Connection health** - periodically test OBS WebSocket + SABnzbd API. Detect connection loss early
+
+**Benefit:** Eliminates manual recovery from unexpected state changes. "Why is SABnzbd running?" → "SP auto-paused it 2m ago, check the log"
+
+**Implementation approach:**
+- Separate thread/task for health checks
+- Configurable check intervals (10s for SABnzbd, 30s for OBS, etc.)
+- Log all corrections with timestamps + reason
+- Heartbeat log captures all corrections (second screen visibility)
 
 ## Live status improvements
 
