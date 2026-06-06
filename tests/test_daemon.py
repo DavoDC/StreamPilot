@@ -349,6 +349,69 @@ def test_ensure_steam_running_skips_when_exe_missing(daemon):
                 mock_popen.assert_not_called()
 
 
+# --- get_status tests ---
+
+def test_get_status_idle_no_connection(daemon):
+    """No game, OBS not connected: active_game=None, streaming=False."""
+    daemon.obs = MagicMock()
+    daemon.obs._client = None        # not connected -> streaming skipped
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.sab.is_paused.return_value = False
+    daemon._active_game_exe = None
+
+    status = daemon.get_status()
+
+    assert status["active_game"] is None
+    assert status["streaming"] is False
+    daemon.obs.is_streaming.assert_not_called()
+
+
+def test_get_status_game_active_streaming(daemon):
+    """Game running, OBS connected and streaming, SABnzbd paused."""
+    daemon.obs = MagicMock()
+    daemon.obs.is_streaming.return_value = True
+    daemon.sab = MagicMock()
+    daemon.sab.is_paused.return_value = True
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    status = daemon.get_status()
+
+    assert status["active_game"] == "My Game"
+    assert status["streaming"] is True
+    assert status["sabnzbd_paused"] is True
+
+
+def test_get_status_sab_disabled_returns_none(daemon):
+    """sab_enabled=False -> sabnzbd_paused is None regardless of SABnzbd state."""
+    daemon.obs = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = False
+    daemon._active_game_exe = None
+
+    status = daemon.get_status()
+
+    assert status["sabnzbd_paused"] is None
+    daemon.sab.is_paused.assert_not_called()
+
+
+def test_get_status_obs_not_connected_returns_false_streaming(daemon):
+    """OBS _client is None (not connected) -> streaming=False even with active game."""
+    daemon.obs = MagicMock()
+    daemon.obs._client = None
+    daemon.sab = MagicMock()
+    daemon.sab.is_paused.return_value = True
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    status = daemon.get_status()
+
+    assert status["active_game"] == "My Game"
+    assert status["streaming"] is False
+    daemon.obs.is_streaming.assert_not_called()
+
+
 def test_loop_fires_heartbeat_every_poll(daemon):
     """HEARTBEAT_EVERY=1: every poll prints heartbeat; sleep never fires (API calls throttle instead)."""
     daemon.obs = MagicMock()
