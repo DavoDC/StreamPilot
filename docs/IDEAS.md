@@ -38,16 +38,16 @@ Implementation:
 
 **Concept:** Regularly check that critical services are in the state StreamPilot expects, and automatically bring them back if they drift.
 
-**Shipped (in heartbeat):**
-- **OBS Game Capture window** - verified every poll, reapplied if wrong. Shows `OBS Window: REAPPLIED` + ISSUE.
-- **SABnzbd pause state** - verified every poll when game active. If running, auto-repauses. Shows `SABnzbd: REPAUSED` + ISSUE.
+**Shipped (in heartbeat, every 2s when game active):**
+- **OBS Game Capture window** - verified, reapplied if wrong. Shows `OBS Window: REAPPLIED` + ISSUE.
+- **SABnzbd pause state** - auto-repauses if found running. Shows `SABnzbd: REPAUSED` + ISSUE.
+- **OBS WebSocket connection** - `is_connected()` check before all OBS calls; reconnects if WebSocket dropped.
+- **Stream state** - if WebSocket alive but stream stopped, restarts stream. Shows `Stream: RESTARTED` + ISSUE.
 
-**Remaining:**
-- **OBS process crash** - detect OBS process exit and restart it. Needs design: OBS crash vs intentional close vs WebSocket loss. More complex than the heartbeat pattern - requires subprocess monitoring.
-- **OBS stream state** - if game active but stream stops (OBS crashed), restart it. Blocked on OBS crash detection above.
-- **Connection health** - periodically test OBS WebSocket + SABnzbd API. Detect connection loss early.
+**Remaining (needs separate design session):**
+- **OBS process crash** - detect OBS.exe exit and restart the process. Needs design: OBS crash vs intentional close vs WebSocket timeout. Subprocess monitoring, not a heartbeat-pattern fix.
 
-**Design note:** The heartbeat pattern (poll every 2s, correct inline, flag ISSUE) covers stateless corrections with no side-effect risk. OBS process restart is a heavier action and needs its own design session before implementing.
+**Design note:** The heartbeat pattern (poll every 2s, correct inline, flag ISSUE) works for any correction where the target service's API is reachable. OBS process restart requires a different mechanism (process supervision) - deliberately deferred.
 
 ## Live status improvements
 
