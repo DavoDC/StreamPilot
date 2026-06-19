@@ -365,6 +365,90 @@ def test_format_heartbeat_obs_window_ok_no_extra_field(daemon):
     assert "OBS Window" not in line
 
 
+def test_format_heartbeat_sab_corrected_shows_repaused(daemon):
+    """sab_corrected=True overrides 'RUNNING' display with 'REPAUSED' and flags ISSUE."""
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=False,
+        sab_corrected=True,
+    )
+    assert "REPAUSED" in line
+    assert "RUNNING" not in line
+    assert "Status: ISSUE" in line
+
+
+def test_format_heartbeat_sab_not_corrected_still_shows_running(daemon):
+    """Without correction flag, uncorrected SABnzbd still shows 'RUNNING - should be paused'."""
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=False,
+        sab_corrected=False,
+    )
+    assert "RUNNING" in line
+    assert "should be paused" in line
+
+
+def test_print_heartbeat_repauses_sab_when_running_during_game(daemon):
+    """SABnzbd running while game active triggers automatic re-pause."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = False  # SABnzbd has drifted - it's running
+
+    with patch("daemon.log") as mock_log:
+        daemon._print_heartbeat()
+
+    daemon.sab.pause.assert_called_once()
+    logged_line = mock_log.info.call_args[0][0]
+    assert "REPAUSED" in logged_line
+    assert "ISSUE" in logged_line
+
+
+def test_print_heartbeat_no_sab_correction_when_idle(daemon):
+    """No game active - SABnzbd correction is skipped even if SABnzbd is running."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = None
+
+    daemon.obs.is_streaming.return_value = False
+    daemon.twitch.get_current_game_name.return_value = None
+    daemon.sab.is_paused.return_value = False  # running when idle is fine
+
+    daemon._print_heartbeat()
+
+    daemon.sab.pause.assert_not_called()
+
+
+def test_print_heartbeat_no_sab_correction_when_already_paused(daemon):
+    """SABnzbd already paused - no correction call made."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True  # already paused - no action needed
+
+    daemon._print_heartbeat()
+
+    daemon.sab.pause.assert_not_called()
+
+
 # --- Steam relaunch tests ---
 
 STEAM_DEFAULT = r"C:\Program Files (x86)\Steam\steam.exe"
