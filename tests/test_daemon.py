@@ -287,6 +287,7 @@ def test_print_heartbeat_calls_live_sources(daemon):
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
+    daemon.obs.is_connected.return_value = True
     daemon.obs.is_streaming.return_value = True
     daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
     daemon.twitch.get_current_game_name.return_value = "My Game"
@@ -295,6 +296,7 @@ def test_print_heartbeat_calls_live_sources(daemon):
     with patch("daemon.log") as mock_log:
         daemon._print_heartbeat()
 
+    daemon.obs.is_connected.assert_called_once()
     daemon.obs.is_streaming.assert_called_once()
     daemon.obs.get_game_capture_window.assert_called_once()
     daemon.twitch.get_current_game_name.assert_called_once()
@@ -310,6 +312,7 @@ def test_print_heartbeat_reapplies_window_on_mismatch(daemon):
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
+    daemon.obs.is_connected.return_value = True
     daemon.obs.is_streaming.return_value = True
     daemon.obs.get_game_capture_window.return_value = "Dead by Daylight  [...]:UnrealWindow:DeadByDaylight.exe"
     daemon.twitch.get_current_game_name.return_value = "My Game"
@@ -365,6 +368,92 @@ def test_format_heartbeat_obs_window_ok_no_extra_field(daemon):
     assert "OBS Window" not in line
 
 
+def test_print_heartbeat_restarts_stream_when_stopped_during_game(daemon):
+    """Stream dropped while game active and OBS WebSocket alive - stream is restarted."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = False  # stream dropped
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    with patch("daemon.log") as mock_log:
+        daemon._print_heartbeat()
+
+    daemon.obs.start_stream.assert_called_once()
+    logged_line = mock_log.info.call_args[0][0]
+    assert "ISSUE" in logged_line
+    assert "Stream: RESTARTED" in logged_line
+
+
+def test_print_heartbeat_no_stream_restart_when_obs_disconnected(daemon):
+    """OBS WebSocket dead - skip stream restart (can't control a dead OBS)."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_connected.return_value = False
+    daemon.obs.connect.return_value = False  # reconnect also fails
+    daemon.obs.is_streaming.return_value = False
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    daemon._print_heartbeat()
+
+    daemon.obs.start_stream.assert_not_called()
+
+
+def test_print_heartbeat_attempts_reconnect_when_obs_disconnected(daemon):
+    """OBS WebSocket disconnected - reconnect is attempted."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_connected.return_value = False
+    daemon.obs.connect.return_value = True  # reconnect succeeds
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    daemon._print_heartbeat()
+
+    daemon.obs.connect.assert_called_once()
+
+
+def test_format_heartbeat_stream_restarted_shows_issue(daemon):
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=False,
+        twitch_category="My Game",
+        sab_paused=True,
+        stream_restarted=True,
+    )
+    assert "Status: ISSUE" in line
+    assert "Stream: RESTARTED" in line
+
+
+def test_format_heartbeat_stream_restarted_false_no_extra_field(daemon):
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=True,
+        stream_restarted=False,
+    )
+    assert "Stream: RESTARTED" not in line
+
+
 def test_format_heartbeat_sab_corrected_shows_repaused(daemon):
     """sab_corrected=True overrides 'RUNNING' display with 'REPAUSED' and flags ISSUE."""
     line = daemon._format_heartbeat(
@@ -400,6 +489,7 @@ def test_print_heartbeat_repauses_sab_when_running_during_game(daemon):
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
+    daemon.obs.is_connected.return_value = True
     daemon.obs.is_streaming.return_value = True
     daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
     daemon.twitch.get_current_game_name.return_value = "My Game"
@@ -439,6 +529,7 @@ def test_print_heartbeat_no_sab_correction_when_already_paused(daemon):
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
+    daemon.obs.is_connected.return_value = True
     daemon.obs.is_streaming.return_value = True
     daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
     daemon.twitch.get_current_game_name.return_value = "My Game"

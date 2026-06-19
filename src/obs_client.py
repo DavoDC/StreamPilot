@@ -90,3 +90,13 @@ class OBSClient:
         except Exception as e:
             log.warning(f"OBS get_input_settings failed: {e}")
             return None
+
+    def is_connected(self) -> bool:
+        """Return True if the WebSocket connection is alive."""
+        if not self._client:
+            return False
+        try:
+            self._client.get_version()
+            return True
+        except Exception:
+            return False
