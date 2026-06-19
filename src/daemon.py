@@ -135,6 +135,7 @@ class Daemon:
         sab_paused: bool | None,
         obs_window_ok: bool = True,
         sab_corrected: bool = False,
+        stream_restarted: bool = False,
     ) -> str:
         game_active = game_name is not None
 
@@ -154,22 +155,40 @@ class Daemon:
         else:
             sab_str = "Running"
 
-        issue = game_active and (not obs_streaming or not sab_paused or sab_paused is None or not obs_window_ok or sab_corrected)
+        issue = game_active and (
+            not obs_streaming or not sab_paused or sab_paused is None
+            or not obs_window_ok or sab_corrected or stream_restarted
+        )
         status = "ISSUE" if issue else "OK"
 
         line = f"Status: {status} | Streaming: {game_str} | Category: {cat_str} | SABnzbd: {sab_str}"
         if game_active and not obs_window_ok:
             line += " | OBS Window: REAPPLIED"
+        if game_active and stream_restarted:
+            line += " | Stream: RESTARTED"
         return line
 
     def _print_heartbeat(self):
         game_name = self.games.get(self._active_game_exe, {}).get("name") if self._active_game_exe else None
-        obs_streaming = self.obs.is_streaming()
         twitch_category = self.twitch.get_current_game_name()
         sab_paused = self.sab.is_paused() if (self.sab_enabled and self.sab) else None
 
         obs_window_ok = True
+        sab_corrected = False
+        stream_restarted = False
+
         if self._active_game_exe:
+            # OBS connectivity - attempt reconnect before other OBS calls
+            obs_live = self.obs.is_connected()
+            if not obs_live:
+                log.warning("OBS WebSocket disconnected - attempting reconnect")
+                if self.obs.connect():
+                    obs_live = True
+                    log.info("OBS WebSocket reconnected")
+
+            obs_streaming = self.obs.is_streaming()
+
+            # OBS window verification + correction
             expected = self.games[self._active_game_exe]["obs_window"]
             actual = self.obs.get_game_capture_window()
             if actual != expected:
@@ -177,13 +196,21 @@ class Daemon:
                 self.obs.set_game_capture_window(expected)
                 obs_window_ok = False
 
-        sab_corrected = False
-        if self._active_game_exe and self.sab_enabled and self.sab and sab_paused is False:
-            log.warning("SABnzbd running during active game session - repausing")
-            self.sab.pause()
-            sab_corrected = True
+            # Stream correction: only when WebSocket is alive (avoids restart-on-crash loop)
+            if obs_live and not obs_streaming:
+                log.warning("Stream stopped while game active - restarting")
+                self.obs.start_stream()
+                stream_restarted = True
 
-        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected))
+            # SABnzbd correction
+            if self.sab_enabled and self.sab and sab_paused is False:
+                log.warning("SABnzbd running during active game session - repausing")
+                self.sab.pause()
+                sab_corrected = True
+        else:
+            obs_streaming = self.obs.is_streaming()
+
+        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted))
 
     def _detect_game(self):
         """Return exe name of first known running game, or None."""

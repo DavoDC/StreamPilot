@@ -84,6 +84,22 @@ def test_get_game_capture_window_exception(client):
     assert client.get_game_capture_window() is None
 
 
+def test_is_connected_true(client):
+    client._client = MagicMock()
+    assert client.is_connected() is True
+    client._client.get_version.assert_called_once()
+
+
+def test_is_connected_no_client(client):
+    assert client.is_connected() is False
+
+
+def test_is_connected_exception(client):
+    client._client = MagicMock()
+    client._client.get_version.side_effect = Exception("disconnected")
+    assert client.is_connected() is False
+
+
 def test_start_stream(client):
     client._client = MagicMock()
     client.start_stream()
