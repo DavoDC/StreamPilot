@@ -65,6 +65,25 @@ def test_set_game_capture_window_no_client(client):
     client.set_game_capture_window("Title:Class:game.exe")
 
 
+def test_get_game_capture_window_returns_window(client):
+    mock_resp = MagicMock()
+    mock_resp.input_settings = {"window": "Title:Class:game.exe"}
+    client._client = MagicMock()
+    client._client.get_input_settings.return_value = mock_resp
+    assert client.get_game_capture_window() == "Title:Class:game.exe"
+    client._client.get_input_settings.assert_called_once_with(name="Game Capture")
+
+
+def test_get_game_capture_window_no_client(client):
+    assert client.get_game_capture_window() is None
+
+
+def test_get_game_capture_window_exception(client):
+    client._client = MagicMock()
+    client._client.get_input_settings.side_effect = Exception("failed")
+    assert client.get_game_capture_window() is None
+
+
 def test_start_stream(client):
     client._client = MagicMock()
     client.start_stream()

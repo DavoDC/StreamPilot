@@ -288,6 +288,7 @@ def test_print_heartbeat_calls_live_sources(daemon):
     daemon._active_game_exe = "game.exe"
 
     daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
     daemon.twitch.get_current_game_name.return_value = "My Game"
     daemon.sab.is_paused.return_value = True
 
@@ -295,9 +296,73 @@ def test_print_heartbeat_calls_live_sources(daemon):
         daemon._print_heartbeat()
 
     daemon.obs.is_streaming.assert_called_once()
+    daemon.obs.get_game_capture_window.assert_called_once()
     daemon.twitch.get_current_game_name.assert_called_once()
     daemon.sab.is_paused.assert_called_once()
     mock_log.info.assert_called_once()
+
+
+def test_print_heartbeat_reapplies_window_on_mismatch(daemon):
+    """Heartbeat re-applies window and flags ISSUE when OBS has wrong game captured."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "Dead by Daylight  [...]:UnrealWindow:DeadByDaylight.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    with patch("daemon.log") as mock_log:
+        daemon._print_heartbeat()
+
+    daemon.obs.set_game_capture_window.assert_called_once_with("My Game:GameClass:game.exe")
+    logged_line = mock_log.info.call_args[0][0]
+    assert "ISSUE" in logged_line
+    assert "OBS Window: REAPPLIED" in logged_line
+
+
+def test_print_heartbeat_no_window_check_when_idle(daemon):
+    """No game active - skip window verification entirely."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = None
+
+    daemon.obs.is_streaming.return_value = False
+    daemon.twitch.get_current_game_name.return_value = None
+    daemon.sab.is_paused.return_value = None
+
+    daemon._print_heartbeat()
+
+    daemon.obs.get_game_capture_window.assert_not_called()
+
+
+def test_format_heartbeat_obs_window_wrong_shows_issue(daemon):
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=True,
+        obs_window_ok=False,
+    )
+    assert "Status: ISSUE" in line
+    assert "OBS Window: REAPPLIED" in line
+
+
+def test_format_heartbeat_obs_window_ok_no_extra_field(daemon):
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=True,
+        obs_window_ok=True,
+    )
+    assert "Status: OK" in line
+    assert "OBS Window" not in line
 
 
 # --- Steam relaunch tests ---
