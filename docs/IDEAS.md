@@ -38,22 +38,16 @@ Implementation:
 
 **Concept:** Regularly check that critical services are in the state StreamPilot expects, and automatically bring them back if they drift.
 
-**Problem:** If SABnzbd somehow starts downloading on its own (user mistake, external trigger, script), StreamPilot won't catch it until the next game launch. Similarly, if OBS crashes, SP should detect and restart it. State can drift without SP knowing.
+**Shipped (in heartbeat):**
+- **OBS Game Capture window** - verified every poll, reapplied if wrong. Shows `OBS Window: REAPPLIED` + ISSUE.
+- **SABnzbd pause state** - verified every poll when game active. If running, auto-repauses. Shows `SABnzbd: REPAUSED` + ISSUE.
 
-**Solution:** Background health-check loop (runs in parallel with main game detection):
+**Remaining:**
+- **OBS process crash** - detect OBS process exit and restart it. Needs design: OBS crash vs intentional close vs WebSocket loss. More complex than the heartbeat pattern - requires subprocess monitoring.
+- **OBS stream state** - if game active but stream stops (OBS crashed), restart it. Blocked on OBS crash detection above.
+- **Connection health** - periodically test OBS WebSocket + SABnzbd API. Detect connection loss early.
 
-- **SABnzbd pause state** - every 10s, verify SABnzbd is paused (when no game running). If it's downloading, pause it + log warning "SABnzbd auto-resumed, StreamPilot paused it"
-- **OBS process** - every 30s, check if OBS process is running. If it crashed, restart it automatically
-- **OBS stream state** - verify stream state (live vs idle) matches what SP thinks. If mismatch, log and sync
-- **Connection health** - periodically test OBS WebSocket + SABnzbd API. Detect connection loss early
-
-**Benefit:** Eliminates manual recovery from unexpected state changes. "Why is SABnzbd running?" → "SP auto-paused it 2m ago, check the log"
-
-**Implementation approach:**
-- Separate thread/task for health checks
-- Configurable check intervals (10s for SABnzbd, 30s for OBS, etc.)
-- Log all corrections with timestamps + reason
-- Heartbeat log captures all corrections (second screen visibility)
+**Design note:** The heartbeat pattern (poll every 2s, correct inline, flag ISSUE) covers stateless corrections with no side-effect risk. OBS process restart is a heavier action and needs its own design session before implementing.
 
 ## Live status improvements
 

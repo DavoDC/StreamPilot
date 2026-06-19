@@ -134,6 +134,7 @@ class Daemon:
         twitch_category: str | None,
         sab_paused: bool | None,
         obs_window_ok: bool = True,
+        sab_corrected: bool = False,
     ) -> str:
         game_active = game_name is not None
 
@@ -144,6 +145,8 @@ class Daemon:
             sab_str = "Disabled"
         elif sab_paused is None:
             sab_str = "Unreachable"
+        elif sab_corrected:
+            sab_str = "REPAUSED"
         elif sab_paused:
             sab_str = "Paused"
         elif game_active:
@@ -151,7 +154,7 @@ class Daemon:
         else:
             sab_str = "Running"
 
-        issue = game_active and (not obs_streaming or not sab_paused or sab_paused is None or not obs_window_ok)
+        issue = game_active and (not obs_streaming or not sab_paused or sab_paused is None or not obs_window_ok or sab_corrected)
         status = "ISSUE" if issue else "OK"
 
         line = f"Status: {status} | Streaming: {game_str} | Category: {cat_str} | SABnzbd: {sab_str}"
@@ -174,7 +177,13 @@ class Daemon:
                 self.obs.set_game_capture_window(expected)
                 obs_window_ok = False
 
-        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok))
+        sab_corrected = False
+        if self._active_game_exe and self.sab_enabled and self.sab and sab_paused is False:
+            log.warning("SABnzbd running during active game session - repausing")
+            self.sab.pause()
+            sab_corrected = True
+
+        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected))
 
     def _detect_game(self):
         """Return exe name of first known running game, or None."""
