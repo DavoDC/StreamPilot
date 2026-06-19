@@ -6,7 +6,7 @@
 
 ## P0 - Blocking bugs
 
-*(none currently)*
+*(none currently - OBS window staleness fixed: heartbeat now verifies + reapplies)*
 
 ## P1 - AudioManager (next major feature - start after QOL batch is done)
 
@@ -57,7 +57,7 @@ Implementation:
 
 ## Live status improvements
 
-- **Check audio and OBS settings** - verify game being streamed is in "Application Audio Output Capture" list and correctly configured. Could be checked or set automatically, similar to the game capture window check.
+- **Check audio and OBS settings** - verify game being streamed is in "Application Audio Output Capture" list and correctly configured. Could be checked or set automatically (same pattern as the game capture window check, which is already done in the heartbeat).
 - **Windows Terminal on right screen** - for this program only, open maximised on the right monitor by default. Windows Terminal supports per-profile config (`initialPosition`, `launchMode` in settings JSON) - investigate feasibility.
 
 ## Security

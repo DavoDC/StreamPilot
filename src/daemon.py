@@ -133,6 +133,7 @@ class Daemon:
         obs_streaming: bool,
         twitch_category: str | None,
         sab_paused: bool | None,
+        obs_window_ok: bool = True,
     ) -> str:
         game_active = game_name is not None
 
@@ -150,17 +151,30 @@ class Daemon:
         else:
             sab_str = "Running"
 
-        issue = game_active and (not obs_streaming or not sab_paused or sab_paused is None)
+        issue = game_active and (not obs_streaming or not sab_paused or sab_paused is None or not obs_window_ok)
         status = "ISSUE" if issue else "OK"
 
-        return f"Status: {status} | Streaming: {game_str} | Category: {cat_str} | SABnzbd: {sab_str}"
+        line = f"Status: {status} | Streaming: {game_str} | Category: {cat_str} | SABnzbd: {sab_str}"
+        if game_active and not obs_window_ok:
+            line += " | OBS Window: REAPPLIED"
+        return line
 
     def _print_heartbeat(self):
         game_name = self.games.get(self._active_game_exe, {}).get("name") if self._active_game_exe else None
         obs_streaming = self.obs.is_streaming()
         twitch_category = self.twitch.get_current_game_name()
         sab_paused = self.sab.is_paused() if (self.sab_enabled and self.sab) else None
-        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused))
+
+        obs_window_ok = True
+        if self._active_game_exe:
+            expected = self.games[self._active_game_exe]["obs_window"]
+            actual = self.obs.get_game_capture_window()
+            if actual != expected:
+                log.warning(f"OBS window mismatch (expected '{expected}', got '{actual}') - reapplying")
+                self.obs.set_game_capture_window(expected)
+                obs_window_ok = False
+
+        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok))
 
     def _detect_game(self):
         """Return exe name of first known running game, or None."""
