@@ -79,3 +79,14 @@ class OBSClient:
             log.info(f"Game Capture window set to: {obs_window}")
         except Exception as e:
             log.warning(f"OBS set_input_settings failed: {e}")
+
+    def get_game_capture_window(self) -> str | None:
+        """Read back the current window setting from the Game Capture source."""
+        if not self._client:
+            return None
+        try:
+            resp = self._client.get_input_settings(name=self.game_capture_source)
+            return resp.input_settings.get('window')
+        except Exception as e:
+            log.warning(f"OBS get_input_settings failed: {e}")
+            return None
