@@ -22,4 +22,5 @@ data/logs/*.log
 .claude/
 !.claude/hooks/
 !.claude/hooks/guard.sh
+!.claude/hooks/guard.py
 !.claude/settings.json
