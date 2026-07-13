@@ -60,7 +60,7 @@ Implementation:
 
 ## Stretch goals
 
-- **Dashboard web UI** - replace the batch script setup flow with a browser-based dashboard. Better UX for config, game management, and live status. Would replace the current .bat launcher and add-game wizard. Research best framework before starting - lightweight options preferred (no heavy Node stack). Consider https://claude.ai/design for UI mockups first.
+- **Setup/config web UI** - replace the batch-script setup flow (config editing, add-game wizard) with a browser-based UI. NOTE: the live-status half of this idea shipped 2026-07-13 as a tkinter dashboard (`scripts/dashboard.bat`) instead of web - see HISTORY.md; this item is now scoped to config/setup only, not live status.
 
 ## Docs overhaul
 

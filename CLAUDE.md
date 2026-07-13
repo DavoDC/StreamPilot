@@ -35,6 +35,7 @@ Single scene with two sources:
 - Unknown game: Windows toast notification - "Run 'streampilot config add-game'"
 - SABnzbd unreachable: logs warning + prints prompt to pause manually
 - **Heartbeat homeostasis (every 2s when game active):** verifies + self-heals all critical state - OBS WebSocket reconnect, OBS window reapply, stream restart if dropped, SABnzbd repause if drifted. Each correction shows as named field in `Status: ISSUE` line. Pattern: `observe -> compare -> correct -> flag`. Guard: stream restart only fires if `is_connected()` - prevents restart loop when OBS process is dead.
+- **Dashboard (`src/dashboard.py`, launch via `scripts/dashboard.bat`):** every heartbeat, the daemon also writes `data/logs/status.json` (`src/status_file.py` - atomic write, gitignored). The dashboard is a separate tkinter process (stdlib only, zero new deps) that polls that file every 500ms - no socket/IPC coupling to the daemon, same "write state, read state" pattern as AudioManager's subprocess+JSON-contract GUI. Shows a big OK/ISSUE/IDLE/OFFLINE badge, a continuously-pulsing heartbeat dot (proves the window itself is alive, independent of daemon state), and Game/Category/SABnzbd rows. OFFLINE (grey) fires if no fresh write within `poll_interval * 4` (min 8s) - catches a dead/crashed daemon so the dashboard never shows stale reassurance.
 
 ## Stack
 
@@ -84,6 +85,7 @@ Users run `scripts/run.bat` (and `scripts/setup/add-game.bat`) - these are thin 
 | Command | Invoked by |
 |---|---|
 | `python src/streampilot.py start` | `scripts/run.bat` |
+| `python src/streampilot.py dashboard` | `scripts/dashboard.bat` |
 | `python src/streampilot.py config add-game` | `scripts/setup/add-game.bat` |
 
 ## Repo Structure
@@ -96,6 +98,8 @@ StreamPilot/
 │   ├── obs_client.py        # OBS WebSocket wrapper
 │   ├── twitch_client.py     # Twitch API
 │   ├── sabnzbd_client.py    # SABnzbd API
+│   ├── status_file.py       # Daemon<->dashboard JSON contract (write/read/staleness)
+│   ├── dashboard.py         # tkinter reassurance dashboard (second-screen window)
 │   └── config.py            # Loader + validator
 ├── assets/
 │   ├── StreamPilotIconNoBG.ico   # Program icon (transparent background)

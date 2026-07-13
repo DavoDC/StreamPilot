@@ -2,6 +2,40 @@
 
 ---
 
+## 2026-07-13 - Live reassurance dashboard (tkinter, second-screen window)
+
+David wanted the "glance at the terminal to confirm everything's OK" reassurance
+loop replaced with a small sleek animated window, cheapest and simplest possible.
+
+- **`src/status_file.py`** - the daemon<->dashboard JSON contract. `write_status()`
+  (atomic: write to `.tmp` then `os.replace`), `read_status()` (returns `None` on
+  missing/corrupt file), `is_stale()` (daemon presumed dead if no write within
+  `poll_interval * 4`, floor 8s). 8 new unit tests, all pure functions.
+- **`daemon.py` refactor** - extracted `_classify()` from `_format_heartbeat` so
+  the terminal log line and the new JSON write share one source of truth instead
+  of duplicating the OK/ISSUE/game/category/SABnzbd logic. `_format_heartbeat`
+  keeps its original signature/behaviour (all 16 existing tests untouched,
+  unmodified, still passing). Every heartbeat now also writes
+  `data/logs/status.json` (gitignored).
+- **`src/dashboard.py`** - tkinter, Python stdlib only, zero new dependencies
+  (deliberately NOT AudioManager's NiceGUI stack - overkill for a single status
+  window; picked the cheapest tool that gives a sleek always-on-top window).
+  Polls `status.json` every 500ms - no socket/IPC, same decoupled
+  write-state/read-state pattern as AudioManager's GUI. Shows: a big colored
+  OK (green) / ISSUE (red) / IDLE (grey) / OFFLINE badge, a continuously
+  pulsing heartbeat dot (proves the *window* is alive, independent of daemon
+  state - a stuck dashboard is now visually obvious), and Game/Category/SABnzbd
+  rows with a "last updated Xs ago" footer.
+- Wired as `streampilot.py dashboard` (CLI subcommand) + `scripts/dashboard.bat`
+  (thin launcher, no admin elevation needed - only `run.bat` needs that for OBS).
+- **Verified live**, not just unit-tested: launched the actual tkinter window
+  against a synthetic `status.json` - confirmed OK state renders the correct
+  badge/game/category, and confirmed the OFFLINE state renders correctly when
+  the status file is absent (simulating a dead/not-yet-started daemon).
+- 109 tests total, all passing.
+
+---
+
 ## 2026-04-25 - Quick fix: remove extra delay + redirect focus to AudioManager
 
 - **Removed extra sleep from heartbeat polls** - `HEARTBEAT_EVERY` changed from 2 to 1. The `time.sleep(poll_interval)` now only fires in the `else` branch (non-heartbeat polls). Since every poll is now a heartbeat, the sleep never fires; Twitch/OBS/SABnzbd API calls (~3-5s combined) provide natural throttling. Result: status line interval drops from ~6-7s to ~3-5s.

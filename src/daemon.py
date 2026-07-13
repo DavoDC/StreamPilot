@@ -11,8 +11,11 @@ HEARTBEAT_EVERY = 1  # every poll; API calls in heartbeat provide natural thrott
 from obs_client import OBSClient
 from twitch_client import TwitchClient
 from sabnzbd_client import SABnzbdClient
+import status_file
 
 log = logging.getLogger(__name__)
+
+STATUS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'logs', 'status.json')
 
 
 class Daemon:
@@ -127,7 +130,7 @@ class Daemon:
             else:
                 time.sleep(self.poll_interval)
 
-    def _format_heartbeat(
+    def _classify(
         self,
         game_name: str | None,
         obs_streaming: bool,
@@ -136,11 +139,10 @@ class Daemon:
         obs_window_ok: bool = True,
         sab_corrected: bool = False,
         stream_restarted: bool = False,
-    ) -> str:
+    ) -> dict:
+        """Turn raw heartbeat readings into the shared status shape consumed by
+        both the terminal log line and the dashboard JSON file."""
         game_active = game_name is not None
-
-        game_str = game_name if game_active else "Idle"
-        cat_str = twitch_category if twitch_category else "Unknown"
 
         if not self.sab_enabled:
             sab_str = "Disabled"
@@ -159,12 +161,33 @@ class Daemon:
             not obs_streaming or not sab_paused or sab_paused is None
             or not obs_window_ok or sab_corrected or stream_restarted
         )
-        status = "ISSUE" if issue else "OK"
+        status = "ISSUE" if issue else ("OK" if game_active else "IDLE")
 
-        line = f"Status: {status} | Streaming: {game_str} | Category: {cat_str} | SABnzbd: {sab_str}"
-        if game_active and not obs_window_ok:
+        return {
+            "game_active": game_active,
+            "game_str": game_name if game_active else "Idle",
+            "cat_str": twitch_category if twitch_category else "Unknown",
+            "sab_str": sab_str,
+            "status": status,
+            "obs_window_ok": obs_window_ok,
+            "stream_restarted": stream_restarted,
+        }
+
+    def _format_heartbeat(
+        self,
+        game_name: str | None,
+        obs_streaming: bool,
+        twitch_category: str | None,
+        sab_paused: bool | None,
+        obs_window_ok: bool = True,
+        sab_corrected: bool = False,
+        stream_restarted: bool = False,
+    ) -> str:
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted)
+        line = f"Status: {c['status'] if c['game_active'] else 'OK'} | Streaming: {c['game_str']} | Category: {c['cat_str']} | SABnzbd: {c['sab_str']}"
+        if c["game_active"] and not c["obs_window_ok"]:
             line += " | OBS Window: REAPPLIED"
-        if game_active and stream_restarted:
+        if c["game_active"] and c["stream_restarted"]:
             line += " | Stream: RESTARTED"
         return line
 
@@ -210,7 +233,22 @@ class Daemon:
         else:
             obs_streaming = self.obs.is_streaming()
 
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted)
         log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted))
+        try:
+            status_file.write_status(
+                STATUS_PATH,
+                status=c["status"],
+                game=game_name,
+                streaming=obs_streaming,
+                category=twitch_category,
+                sabnzbd=c["sab_str"],
+                poll_interval=self.poll_interval,
+                obs_window_ok=obs_window_ok,
+                stream_restarted=stream_restarted,
+            )
+        except OSError as e:
+            log.warning(f"Could not write dashboard status file: {e}")
 
     def _detect_game(self):
         """Return exe name of first known running game, or None."""
