@@ -90,7 +90,7 @@ Implementation:
 
 ## Stretch goals
 
-- **Setup/config web UI** - replace the batch-script setup flow (config editing, add-game wizard) with a browser-based UI. NOTE: the live-status half of this idea shipped 2026-07-13 as `scripts/dashboard.bat` (a local web dashboard) - see HISTORY.md; this item is now scoped to config/setup only, not live status.
+- **Setup/config web UI** - replace the batch-script setup flow (config editing, add-game wizard) with a browser-based UI. NOTE: the live-status half of this idea shipped 2026-07-13 as the dashboard, now built into `run.bat` itself - see HISTORY.md; this item is now scoped to config/setup only, not live status.
 
 ## Docs overhaul
 
