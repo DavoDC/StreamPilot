@@ -2,37 +2,42 @@
 
 ---
 
-## 2026-07-13 - Live reassurance dashboard (tkinter, second-screen window)
+## 2026-07-13 - Live reassurance dashboard (local web page, second-screen browser tab)
 
 David wanted the "glance at the terminal to confirm everything's OK" reassurance
-loop replaced with a small sleek animated window, cheapest and simplest possible.
+loop replaced with a small sleek animated status view, cheapest and simplest
+possible. First cut was a tkinter window; David then asked for a browser-based
+version instead, so it was rebuilt as a local web page (tkinter removed same day).
 
 - **`src/status_file.py`** - the daemon<->dashboard JSON contract. `write_status()`
   (atomic: write to `.tmp` then `os.replace`), `read_status()` (returns `None` on
   missing/corrupt file), `is_stale()` (daemon presumed dead if no write within
-  `poll_interval * 4`, floor 8s). 8 new unit tests, all pure functions.
+  `poll_interval * 4`, floor 8s). Covered by unit tests, all pure functions.
 - **`daemon.py` refactor** - extracted `_classify()` from `_format_heartbeat` so
   the terminal log line and the new JSON write share one source of truth instead
   of duplicating the OK/ISSUE/game/category/SABnzbd logic. `_format_heartbeat`
-  keeps its original signature/behaviour (all 16 existing tests untouched,
+  keeps its original signature/behaviour (pre-existing tests untouched,
   unmodified, still passing). Every heartbeat now also writes
   `data/logs/status.json` (gitignored).
-- **`src/dashboard.py`** - tkinter, Python stdlib only, zero new dependencies
-  (deliberately NOT AudioManager's NiceGUI stack - overkill for a single status
-  window; picked the cheapest tool that gives a sleek always-on-top window).
-  Polls `status.json` every 500ms - no socket/IPC, same decoupled
-  write-state/read-state pattern as AudioManager's GUI. Shows: a big colored
-  OK (green) / ISSUE (red) / IDLE (grey) / OFFLINE badge, a continuously
-  pulsing heartbeat dot (proves the *window* is alive, independent of daemon
-  state - a stuck dashboard is now visually obvious), and Game/Category/SABnzbd
-  rows with a "last updated Xs ago" footer.
+- **`src/dashboard_server.py`** - a tiny local web server, Python stdlib
+  `http.server` only, zero new dependencies (no Flask/FastAPI, no Node, no
+  build step - deliberately NOT AudioManager's NiceGUI stack, which is overkill
+  for one status page). Serves a single-file HTML/CSS/JS page that polls
+  `/status.json` every second and opens automatically in the default browser.
+  **Security-by-construction:** the handler serves exactly two routes (`/` and
+  `/status.json`) instead of the directory tree, so `config.json`'s secrets
+  (OAuth token, OBS password, SABnzbd API key) can never be reached through it
+  - verified live with a direct guess AND a `/../config/config.json` path-
+  traversal attempt, both correctly 404. Shows a big colored OK (green) / ISSUE
+  (red) / IDLE (grey) / OFFLINE badge, a continuously pulsing heartbeat dot (CSS
+  animation - proves the page itself is alive, independent of daemon state), and
+  Game/Category/SABnzbd rows with a "last updated Xs ago" footer.
 - Wired as `streampilot.py dashboard` (CLI subcommand) + `scripts/dashboard.bat`
   (thin launcher, no admin elevation needed - only `run.bat` needs that for OBS).
-- **Verified live**, not just unit-tested: launched the actual tkinter window
-  against a synthetic `status.json` - confirmed OK state renders the correct
-  badge/game/category, and confirmed the OFFLINE state renders correctly when
-  the status file is absent (simulating a dead/not-yet-started daemon).
-- 109 tests total, all passing.
+- **Verified live**, not just unit-tested: started the real server, fetched `/`
+  and `/status.json` over HTTP and confirmed correct content, then confirmed the
+  security property above with real requests.
+- Full test suite green.
 
 ---
 
