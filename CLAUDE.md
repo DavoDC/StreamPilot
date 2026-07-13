@@ -35,7 +35,7 @@ Single scene with two sources:
 - Unknown game: Windows toast notification - "Run 'streampilot config add-game'"
 - SABnzbd unreachable: logs warning + prints prompt to pause manually
 - **Heartbeat homeostasis (every 2s when game active):** verifies + self-heals all critical state - OBS WebSocket reconnect, OBS window reapply, stream restart if dropped, SABnzbd repause if drifted. Each correction shows as named field in `Status: ISSUE` line. Pattern: `observe -> compare -> correct -> flag`. Guard: stream restart only fires if `is_connected()` - prevents restart loop when OBS process is dead.
-- **Dashboard (`src/dashboard.py`, launch via `scripts/dashboard.bat`):** every heartbeat, the daemon also writes `data/logs/status.json` (`src/status_file.py` - atomic write, gitignored). The dashboard is a separate tkinter process (stdlib only, zero new deps) that polls that file every 500ms - no socket/IPC coupling to the daemon, same "write state, read state" pattern as AudioManager's subprocess+JSON-contract GUI. Shows a big OK/ISSUE/IDLE/OFFLINE badge, a continuously-pulsing heartbeat dot (proves the window itself is alive, independent of daemon state), and Game/Category/SABnzbd rows. OFFLINE (grey) fires if no fresh write within `poll_interval * 4` (min 8s) - catches a dead/crashed daemon so the dashboard never shows stale reassurance.
+- **Dashboard (`src/dashboard_server.py`, launch via `scripts/dashboard.bat`):** every heartbeat, the daemon also writes `data/logs/status.json` (`src/status_file.py` - atomic write, gitignored). The dashboard is a tiny local web server (Python stdlib `http.server`, zero new deps, no Flask/FastAPI/Node) serving a single-file HTML/CSS/JS page that polls `/status.json` every second - opens in a browser tab, no socket/IPC coupling to the daemon, same "write state, read state" pattern as AudioManager's GUI. **Security: the handler serves exactly two routes** (`/` and `/status.json`) rather than the directory tree, so `config.json`'s secrets (OAuth token, OBS password, SABnzbd API key) can never be reached through it - never switch this to `SimpleHTTPRequestHandler`. Shows a big OK/ISSUE/IDLE/OFFLINE badge, a continuously-pulsing heartbeat dot (CSS animation - proves the page itself is alive, independent of daemon state), and Game/Category/SABnzbd rows. OFFLINE (grey) fires if no fresh write within `poll_interval * 4` (min 8s) - catches a dead/crashed daemon so the dashboard never shows stale reassurance.
 
 ## Stack
 
@@ -85,7 +85,7 @@ Users run `scripts/run.bat` (and `scripts/setup/add-game.bat`) - these are thin 
 | Command | Invoked by |
 |---|---|
 | `python src/streampilot.py start` | `scripts/run.bat` |
-| `python src/streampilot.py dashboard` | `scripts/dashboard.bat` |
+| `python src/streampilot.py dashboard` (opens a browser tab) | `scripts/dashboard.bat` |
 | `python src/streampilot.py config add-game` | `scripts/setup/add-game.bat` |
 
 ## Repo Structure
@@ -99,7 +99,7 @@ StreamPilot/
 │   ├── twitch_client.py     # Twitch API
 │   ├── sabnzbd_client.py    # SABnzbd API
 │   ├── status_file.py       # Daemon<->dashboard JSON contract (write/read/staleness)
-│   ├── dashboard.py         # tkinter reassurance dashboard (second-screen window)
+│   ├── dashboard_server.py  # Local web dashboard (stdlib http.server, no deps)
 │   └── config.py            # Loader + validator
 ├── assets/
 │   ├── StreamPilotIconNoBG.ico   # Program icon (transparent background)
