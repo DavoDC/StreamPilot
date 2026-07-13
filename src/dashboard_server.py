@@ -29,6 +29,7 @@ INDEX_HTML = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <title>StreamPilot</title>
+<link rel="icon" id="favicon" type="image/svg+xml" href="">
 <style>
   :root { color-scheme: dark; }
   body {
@@ -68,7 +69,14 @@ INDEX_HTML = """<!doctype html>
   <div id="footer">waiting for daemon...</div>
 <script>
 const COLORS = { OK: "#3fd67a", ISSUE: "#ff5d5d", IDLE: "#6b7280", OFFLINE: "#4b5563" };
+const TITLE_DOTS = { OK: "🟢", ISSUE: "🔴", IDLE: "⚪", OFFLINE: "⚫" };
 const STALE_MULT = 4, STALE_FLOOR = 8;
+
+function setFavicon(color) {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>` +
+              `<circle cx='16' cy='16' r='13' fill='${color}'/></svg>`;
+  document.getElementById("favicon").href = "data:image/svg+xml," + encodeURIComponent(svg);
+}
 
 async function tick() {
   let s = null;
@@ -88,18 +96,22 @@ async function tick() {
   document.getElementById("badge").textContent = state;
   document.getElementById("badge").style.color = color;
   document.getElementById("dot").style.background = color;
+  setFavicon(color);
 
   if (stale) {
     document.getElementById("game").textContent = "-";
     document.getElementById("category").textContent = "-";
     document.getElementById("sabnzbd").textContent = "-";
     document.getElementById("footer").textContent = "No signal from daemon - is it running?";
+    document.title = `${TITLE_DOTS[state]} Offline - StreamPilot`;
   } else {
-    document.getElementById("game").textContent = s.game || "Idle";
+    const game = s.game || "Idle";
+    document.getElementById("game").textContent = game;
     document.getElementById("category").textContent = s.category || "Unknown";
     document.getElementById("sabnzbd").textContent = s.sabnzbd || "-";
     document.getElementById("footer").textContent =
       `updated ${Math.max(0, Math.round(age))}s ago  |  polling every ${s.poll_interval}s`;
+    document.title = `${TITLE_DOTS[state]} ${game} - StreamPilot`;
   }
 }
 tick();
