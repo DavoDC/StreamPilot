@@ -12,7 +12,7 @@ Auto-manages OBS streaming + SABnzbd when you launch a known game.
 
 ## How it works
 
-1. Start StreamPilot by running `scripts\run.bat`.
+1. Start StreamPilot by running `scripts\run.bat` - this also opens a live dashboard in your browser showing at a glance whether everything's OK (the tab title and icon update with status too, so you can tell just by glancing at the tab).
 2. StreamPilot auto-launches OBS if not already open, then connects via WebSocket
 3. Launch your game
 4. StreamPilot detects the game, sets your OBS Game Capture source, sets the Twitch category, and starts the stream automatically
