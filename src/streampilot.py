@@ -56,8 +56,8 @@ def cmd_status(args):
 
 
 def cmd_dashboard(args):
-    import dashboard
-    dashboard.run()
+    import dashboard_server
+    dashboard_server.run()
 
 
 def cmd_add_game(args):
