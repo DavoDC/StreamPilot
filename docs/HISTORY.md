@@ -2,6 +2,38 @@
 
 ---
 
+## 2026-07-13 - Code review before setting up a new game: 2 real fixes
+
+David asked for a foresight check before running `add-game.bat` for a new game.
+Reviewed the add-game code path end-to-end (not just IDEAS.md) and found two
+real issues, both fixed:
+
+- **`twitch_client.py::search_game()` silently returned `[]` for both "no
+  results" and any non-200 API response** (expired/revoked OAuth token, rate
+  limit, Twitch outage) - only network exceptions were logged, an auth failure
+  wasn't. In the wizard this looked identical to "your game isn't in Twitch's
+  directory," with no way to tell the difference. Fixed: non-200 responses are
+  now logged as a warning with the status code. Also added an explicit
+  `twitch.validate()` check at the START of `cmd_add_game` (`streampilot.py`)
+  that prints a clear terminal warning ("Twitch token appears invalid or
+  expired...") instead of only surfacing the problem indirectly via a confusing
+  "not found" message later. New regression test:
+  `test_search_game_auth_error_logs_warning_not_silent`.
+- **add-game's window picker only showed the first 20 of ALL visible top-level
+  windows on the system**, unsorted/unfiltered, with no indication anything was
+  cut off. On a realistic streaming desktop (game + OBS + Discord + browser +
+  terminal) the target game could be pushed past the cutoff and simply never
+  appear in the list. Raised the cap to 40 (`WINDOW_LIST_LIMIT`) and added an
+  explicit "N windows open, only showing the first 40" note so a future
+  truncation is visible instead of silent.
+- Verified live: David's actual Twitch token was valid at review time (not the
+  live risk today), but the silent-swallow was a real code gap regardless -
+  future token expiry would have hit it. Current window count on his machine
+  was well under both the old and new cap.
+- Full test suite green (added 1 new test, all pre-existing tests untouched).
+
+---
+
 ## 2026-07-13 - Live reassurance dashboard (local web page, second-screen browser tab)
 
 David wanted the "glance at the terminal to confirm everything's OK" reassurance

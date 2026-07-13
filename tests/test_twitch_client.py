@@ -83,6 +83,20 @@ def test_search_game_network_error(client):
     assert results == []
 
 
+def test_search_game_auth_error_logs_warning_not_silent(client, caplog):
+    # A 401 (expired/revoked token) must be distinguishable in the logs from a
+    # genuine "no results" - both currently return [], but only this case
+    # should warn, so add-game's "not found" message isn't misleading.
+    mock_resp = MagicMock()
+    mock_resp.status_code = 401
+    mock_resp.text = "invalid token"
+    with patch("twitch_client.requests.get", return_value=mock_resp):
+        with caplog.at_level("WARNING"):
+            results = client.search_game("dead by daylight")
+    assert results == []
+    assert any("401" in r.message for r in caplog.records)
+
+
 def test_get_current_game_name_success(client):
     client._broadcaster_id = "123456"
     mock_resp = MagicMock()

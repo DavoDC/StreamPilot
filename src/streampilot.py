@@ -14,6 +14,7 @@ import config as cfg_module
 from daemon import Daemon
 
 LOG_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'logs')
+WINDOW_LIST_LIMIT = 40  # add-game window picker cap - was 20, silently dropped windows on a busy desktop
 
 _LOG_FMT = '[%(asctime)s] [%(levelname)s] %(name)s: %(message)s'
 _DATE_FMT = '%Y-%m-%d %H:%M:%S'
@@ -79,6 +80,12 @@ def cmd_add_game(args):
 
     print("=== StreamPilot: Add Game ===")
 
+    twitch = TwitchClient(cfg["twitch"]["client_id"], cfg["twitch"]["oauth_token"])
+    if not twitch.validate():
+        print("WARNING: Twitch token appears invalid or expired - category search below will fail.")
+        print("Get a new token: https://twitchtokengenerator.com (see README Step 4)")
+        print("Continuing - you can still enter a Twitch game ID manually.\n")
+
     windows = []
 
     def _enum(hwnd, _):
@@ -102,9 +109,13 @@ def cmd_add_game(args):
         print("No windows found.")
         return
 
+    if len(windows) > WINDOW_LIST_LIMIT:
+        print(f"Note: {len(windows)} windows open, only showing the first {WINDOW_LIST_LIMIT}.")
+        print("If your game isn't listed, close some other windows and try again.\n")
+
     choices = [
         questionary.Choice(f"{exe}  |  {title[:55]}  |  {cls}", value=i)
-        for i, (title, cls, exe) in enumerate(windows[:20])
+        for i, (title, cls, exe) in enumerate(windows[:WINDOW_LIST_LIMIT])
     ]
     choice = questionary.select("Select your game window:", choices=choices).ask()
     if choice is None:
@@ -121,7 +132,6 @@ def cmd_add_game(args):
         return
     game_name = game_name.strip()
 
-    twitch = TwitchClient(cfg["twitch"]["client_id"], cfg["twitch"]["oauth_token"])
     print(f'Searching Twitch for "{game_name}"...')
     results = twitch.search_game_robust(game_name)
 

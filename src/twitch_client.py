@@ -80,7 +80,13 @@ class TwitchClient:
         return None
 
     def search_game(self, name: str) -> list:
-        """Search for games by name. Returns list of dicts with id and name."""
+        """Search for games by name. Returns list of dicts with id and name.
+
+        An empty list can mean either "no matches" or "the API call failed"
+        (e.g. an expired/revoked OAuth token) - callers can't tell those apart
+        from the return value alone, so a non-200 is always logged here rather
+        than silently folded into "no results".
+        """
         try:
             resp = requests.get(
                 f"{HELIX_BASE}/search/categories",
@@ -90,6 +96,7 @@ class TwitchClient:
             )
             if resp.status_code == 200:
                 return [{"id": g["id"], "name": g["name"]} for g in resp.json().get("data", [])]
+            log.warning(f"Twitch search_game failed ({resp.status_code}): {resp.text}")
         except Exception as e:
             log.warning(f"Twitch search_game error: {e}")
         return []
