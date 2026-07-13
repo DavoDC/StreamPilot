@@ -6,7 +6,21 @@
 
 ## P0 - Blocking bugs
 
-*(none currently - OBS window staleness fixed: heartbeat now verifies + reapplies)*
+*(none currently - OBS window staleness fixed: heartbeat now verifies + reapplies.
+Twitch-auth-silently-looks-like-"not found" and the 20-window add-game cap were
+both fixed 2026-07-13, see HISTORY.md)*
+
+## Robustness follow-ups (found during 2026-07-13 code review, not yet needed)
+
+- **add-game window picker still can't search/filter** - raised the cap 20->40 as
+  an immediate fix, but on a very busy desktop it could still truncate. If this
+  ever bites, swap `questionary.select` for `questionary.autocomplete` (built-in
+  fuzzy text filter) instead of raising the cap further.
+- **Twitch token expiry has no proactive warning during normal daemon operation**
+  - add-game now validates and warns up front (fixed), but `daemon.py`'s
+    `start()` also calls `self.twitch.validate()` (line ~102) without checking
+    the result or logging clearly if it fails. Worth a heartbeat-visible warning
+    if the token goes stale mid-session, same pattern as the SABnzbd/OBS checks.
 
 ## P1 - AudioManager (next major feature - start after QOL batch is done)
 
