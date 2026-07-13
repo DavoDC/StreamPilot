@@ -27,6 +27,13 @@ def test_index_html_contains_expected_markers():
     assert "StreamPilot" in html
 
 
+def test_index_html_updates_tab_title_and_favicon():
+    html = dashboard_server.INDEX_HTML
+    assert "document.title" in html
+    assert 'id="favicon"' in html
+    assert "setFavicon" in html
+
+
 def test_make_handler_only_serves_two_known_routes():
     # The handler class must not expose SimpleHTTPRequestHandler's directory
     # listing / arbitrary file serving - config.json must never be reachable.
