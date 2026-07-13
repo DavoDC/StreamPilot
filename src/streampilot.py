@@ -55,6 +55,11 @@ def cmd_status(args):
     daemon.obs.disconnect()
 
 
+def cmd_dashboard(args):
+    import dashboard
+    dashboard.run()
+
+
 def cmd_add_game(args):
     """Wizard: detect running game window, search Twitch, write to config."""
     setup_logging()
@@ -150,6 +155,7 @@ def main():
 
     sub.add_parser('start', help='Start background polling daemon')
     sub.add_parser('status', help='Show current game, stream state, SABnzbd state')
+    sub.add_parser('dashboard', help='Open the live reassurance dashboard window')
 
     config_p = sub.add_parser('config', help='Config management')
     config_sub = config_p.add_subparsers(dest='config_command', required=True)
@@ -161,6 +167,8 @@ def main():
         cmd_start(args)
     elif args.command == 'status':
         cmd_status(args)
+    elif args.command == 'dashboard':
+        cmd_dashboard(args)
     elif args.command == 'config' and args.config_command == 'add-game':
         cmd_add_game(args)
 
