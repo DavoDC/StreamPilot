@@ -2,6 +2,30 @@
 
 ---
 
+## 2026-07-13 - Consolidated to one launcher: run.bat now starts daemon + dashboard
+
+The `start-all.bat` added earlier today was immediately redundant - David's
+desktop shortcut (checked live: `TARGET: scripts\run.bat`, no args) already
+points at `run.bat`, so a THIRD script wasn't the one-click answer; making
+`run.bat` itself do both was. Simplified:
+
+- **`run.bat`** now calls `streampilot.py start --dashboard` (both the direct
+  and admin-elevated paths) instead of plain `start`. The existing desktop
+  shortcut needed zero changes - it already targets `run.bat` with no
+  arguments, so this was a pure behind-the-shortcut upgrade.
+- **Deleted `scripts/dashboard.bat` and `scripts/start-all.bat`** - both
+  redundant now that `run.bat` covers the combined case. The
+  `streampilot.py dashboard` CLI subcommand itself stays (useful to reopen the
+  tab without restarting the daemon) but has no dedicated `.bat` anymore.
+- Docs (CLAUDE.md, README.md, IDEAS.md) updated to match; this HISTORY.md
+  keeps the earlier same-day entries as-written rather than rewriting them,
+  per the "history is a log, not a whiteboard" norm - this entry documents the
+  correction on top.
+- Full test suite green (no test changes needed - the deleted files had no
+  code, just launcher wrappers around already-tested CLI wiring).
+
+---
+
 ## 2026-07-13 - Tab title/favicon state + one-click combined launcher
 
 David wanted to monitor stream state by glancing at the browser tab (title/icon)
