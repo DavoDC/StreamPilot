@@ -2,6 +2,33 @@
 
 ---
 
+## 2026-07-13 - Tab title/favicon state + one-click combined launcher
+
+David wanted to monitor stream state by glancing at the browser tab (title/icon)
+without needing it focused, and a single launcher that starts the daemon and
+opens the dashboard together instead of two separate clicks.
+
+- **Tab title now shows a colored dot + game name** (🟢 OK / 🔴 ISSUE / ⚪ IDLE /
+  ⚫ OFFLINE, e.g. "🟢 Marvel Rivals - StreamPilot"), updated every poll tick.
+- **Favicon recolors to match state** - a small inline SVG (data URI, no image
+  asset needed) built client-side and swapped via the `<link rel="icon">` href.
+- Harder follow-ups (genuinely animated/blinking favicon, browser notification
+  on OK->ISSUE, audio ping) logged to IDEAS.md rather than built now - the
+  static title/favicon recolor is the cheap, immediate win.
+- **`streampilot.py start --dashboard`** runs the dashboard server in a
+  background thread of the SAME process as the daemon - one command starts
+  both, no second window/click needed. New **`scripts/start-all.bat`** mirrors
+  `run.bat`'s admin auto-elevation (OBS needs it) and calls `start --dashboard`.
+  `run.bat` and `dashboard.bat` are unchanged for anyone who wants them
+  separately (e.g. dashboard tab already pinned open).
+- Verified live: started the dashboard thread standalone (simulating the
+  `--dashboard` code path without needing real OBS/Twitch credentials) and
+  confirmed the server responds while "the daemon" runs, with the new
+  title/favicon JS present in the served page.
+- Full test suite green (2 new tests for the title/favicon markers).
+
+---
+
 ## 2026-07-13 - Code review before setting up a new game: 2 real fixes
 
 David asked for a foresight check before running `add-game.bat` for a new game.

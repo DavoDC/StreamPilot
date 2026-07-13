@@ -22,6 +22,22 @@ both fixed 2026-07-13, see HISTORY.md)*
     the result or logging clearly if it fails. Worth a heartbeat-visible warning
     if the token goes stale mid-session, same pattern as the SABnzbd/OBS checks.
 
+## Dashboard tab title/favicon - future (harder stuff, easy version shipped 2026-07-13)
+Shipped: tab title shows a colored dot + game name (🟢/🔴/⚪/⚫), favicon recolors
+to match state. See HISTORY.md. Harder follow-ups, not done:
+- **Genuinely animated/blinking favicon on ISSUE** - alternate the favicon between
+  the color and blank on an interval so it catches the eye even in a background
+  tab, not just a static recolor. More code (an interval + two icon states) and
+  a flicker/attention tradeoff to get right - worth it only if the static
+  recolor turns out to not be noticeable enough in practice.
+- **Browser notification on OK->ISSUE transition** - `Notification` API popup
+  when the state flips to ISSUE, so David doesn't need the tab visible at all.
+  Needs a permission prompt (one-time) and only fires reliably if the tab/OS
+  allows background notifications - real but bigger lift than the visual cues.
+- **Audio ping on ISSUE** - a short sound cue as a second channel besides visual,
+  useful if the second monitor isn't always in view. Simple `Audio()` object,
+  but needs a user gesture first (browser autoplay policy) so isn't zero-effort.
+
 ## P1 - AudioManager (next major feature - start after QOL batch is done)
 
 ## System tray (do after status heartbeat)

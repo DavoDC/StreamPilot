@@ -39,6 +39,11 @@ def cmd_start(args):
     setup_logging()
     cfg = cfg_module.load()
     daemon = Daemon(cfg)
+    if getattr(args, 'dashboard', False):
+        import dashboard_server
+        import threading
+        t = threading.Thread(target=dashboard_server.run, kwargs={'open_browser': True}, daemon=True)
+        t.start()
     daemon.start()
 
 
@@ -163,9 +168,10 @@ def main():
     )
     sub = parser.add_subparsers(dest='command', required=True)
 
-    sub.add_parser('start', help='Start background polling daemon')
+    start_p = sub.add_parser('start', help='Start background polling daemon')
+    start_p.add_argument('--dashboard', action='store_true', help='Also open the live dashboard in your browser')
     sub.add_parser('status', help='Show current game, stream state, SABnzbd state')
-    sub.add_parser('dashboard', help='Open the live reassurance dashboard window')
+    sub.add_parser('dashboard', help='Open the live reassurance dashboard in your browser')
 
     config_p = sub.add_parser('config', help='Config management')
     config_sub = config_p.add_subparsers(dest='config_command', required=True)
