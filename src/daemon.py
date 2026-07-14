@@ -15,7 +15,7 @@ import status_file
 
 log = logging.getLogger(__name__)
 
-STATUS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'logs', 'status.json')
+STATUS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'state', 'status.json')
 
 
 class Daemon:

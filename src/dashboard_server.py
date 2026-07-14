@@ -20,7 +20,7 @@ import webbrowser
 
 import status_file
 
-STATUS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'logs', 'status.json')
+STATUS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'state', 'status.json')
 PORT = 8765
 POLL_MS = 1000  # how often the page re-fetches status.json
 
