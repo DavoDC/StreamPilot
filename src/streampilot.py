@@ -10,6 +10,13 @@ from datetime import datetime
 # Ensure src/ is on path when run directly
 sys.path.insert(0, os.path.dirname(__file__))
 
+# pythonw.exe (used by the silent launcher, scripts/run-silent.vbs) has no console,
+# so sys.stdout/stderr are None - any print() call would crash. Give them a sink.
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w')
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w')
+
 import config as cfg_module
 from daemon import Daemon
 
@@ -24,14 +31,15 @@ def setup_logging():
     os.makedirs(LOG_DIR, exist_ok=True)
     timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     log_file = os.path.join(LOG_DIR, f'streampilot_{timestamp}.log')
+    handlers = [logging.FileHandler(log_file, encoding='utf-8')]
+    # sys.stdout is None under pythonw.exe (no console attached, e.g. the silent launcher) - skip console logging then
+    if sys.stdout is not None:
+        handlers.append(logging.StreamHandler(sys.stdout))
     logging.basicConfig(
         level=logging.INFO,
         format=_LOG_FMT,
         datefmt=_DATE_FMT,
-        handlers=[
-            logging.FileHandler(log_file, encoding='utf-8'),
-            logging.StreamHandler(sys.stdout),
-        ],
+        handlers=handlers,
     )
 
 
