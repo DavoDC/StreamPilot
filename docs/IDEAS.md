@@ -42,21 +42,23 @@ to match state. See HISTORY.md. Harder follow-ups, not done:
 
 ## System tray (do after status heartbeat)
 
-Two distinct jobs - both matter:
+**Note (2026-07-14):** `run.bat` now launches headless via `pythonw.exe` (no
+terminal window exists at all) - the old "accidental terminal close kills the
+daemon" risk is already gone, since the daemon is a detached process with no
+window tied to it. Tray's remaining value is narrower than originally scoped:
 
-1. **Pre-game confirmation** - before launching a game, David can glance at the tray and know the daemon is active. This is the window where the terminal may be hidden or minimised.
-2. **Close-to-minimize / accidental kill resistance** - closing the terminal window should NOT kill the daemon. Closing the window minimizes to tray instead (Spotify/Discord model - see `Close button should minimize` setting). Without this, one accidental terminal close leaves SABnzbd paused and stream potentially still running with no watchdog.
+1. **Pre-game confirmation** - before launching a game, David can glance at the tray and know the daemon is active, without needing the browser dashboard tab open/visible.
+2. **Clean shutdown control** - right-click > Stop, since there's no window to close anymore (Task Manager is currently the only way to stop it).
 
 Implementation:
 - `pystray` + `Pillow` for tray icon
 - **Dynamic icon** - tick (all OK) or cross (issue) visible in taskbar while alt-tabbed to Discord or elsewhere
 - Icon ready: `assets/StreamPilotIconNoBG.ico` (transparent background) + `assets/StreamPilotIconOriginal.png`
 - Right-click menu: Status, Stop StreamPilot (clean shutdown)
-- On terminal close (`WM_DELETE_WINDOW` or SIGINT from X button): hide window, keep daemon running in background
 - Tray tooltip: current state (Streaming: Marvel Rivals / Idle)
-- The tray icon covers the bookends (pre-game + close guard); the heartbeat log covers in-game monitoring from second screen. Both are needed.
+- The tray icon covers the bookends (pre-game + shutdown); the browser dashboard covers in-game monitoring from second screen. Both are needed.
 
-**Note on full-screen coverage:** tray IS covered when game is fullscreen on primary monitor, and Windows may not show it on the secondary. This is expected - tray's job is pre-game and post-game, not in-game. Heartbeat on second screen covers in-game.
+**Note on full-screen coverage:** tray IS covered when game is fullscreen on primary monitor, and Windows may not show it on the secondary. This is expected - tray's job is pre-game and post-game, not in-game. The dashboard on second screen covers in-game.
 
 ## Robustness (golden path stability)
 
@@ -82,7 +84,6 @@ Implementation:
 ## Live status improvements
 
 - **Check audio and OBS settings** - verify game being streamed is in "Application Audio Output Capture" list and correctly configured. Could be checked or set automatically (same pattern as the game capture window check, which is already done in the heartbeat).
-- **Windows Terminal on right screen** - for this program only, open maximised on the right monitor by default. Windows Terminal supports per-profile config (`initialPosition`, `launchMode` in settings JSON) - investigate feasibility.
 
 ## Security
 
