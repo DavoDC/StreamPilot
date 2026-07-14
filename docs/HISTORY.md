@@ -2,6 +2,36 @@
 
 ---
 
+## 2026-07-14 - Silent launch (no terminal), stale-instance kill, status.json moved
+
+David wanted the desktop shortcut to launch with zero visible console window and to
+never stack up duplicate running instances across repeat clicks or dev restarts.
+
+- **`run.bat`** now self-elevates first (still one UAC prompt - required for OBS game
+  capture), then, while elevated, kills any previously running `streampilot.py`
+  process (matched by command line via `Get-CimInstance`/`Stop-Process`), then
+  launches via `pythonw.exe` instead of `python.exe` - `pythonw` has no console at
+  all, so nothing flashes on screen. Tried a two-file VBScript wrapper approach
+  first (`run-silent.vbs` + `run-hidden.vbs`) to sidestep cmd.exe's console-on-launch
+  behavior, but David wanted to stay at one script file, so it collapsed back into
+  `run.bat` alone using `Start-Process -Verb RunAs -WindowStyle Hidden`.
+- **Ordering bug caught during testing:** the kill step must run AFTER elevation -
+  a non-admin process gets `Access is denied` (blank `CommandLine`, can't even see
+  it to match) against an already-elevated instance, so killing before elevating
+  silently no-ops on exactly the processes it's meant to catch.
+- **`sys.stdout`/`sys.stderr` are `None` under `pythonw.exe`** (confirmed by direct
+  test, not assumed) - any `print()` or the existing `logging.StreamHandler(sys.stdout)`
+  would crash. `streampilot.py` now patches both to a devnull sink at import time if
+  they're `None`; file logging in `data/logs/` is unaffected either way.
+- **Dashboard URL** changed from `http://127.0.0.1:8765/` to `http://localhost:8765/`
+  (cosmetic, same server).
+- **`data/logs/status.json` moved to `data/state/status.json`** - it's live
+  daemon<->dashboard heartbeat state overwritten every poll, not a timestamped
+  historical log, so it didn't belong mixed in with `streampilot_*.log` files.
+  Matches the workspace's `data/state/` vs `data/logs/` convention.
+
+---
+
 ## 2026-07-13 - Consolidated to one launcher: run.bat now starts daemon + dashboard
 
 The `start-all.bat` added earlier today was immediately redundant - David's

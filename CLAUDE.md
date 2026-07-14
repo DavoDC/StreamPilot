@@ -14,7 +14,7 @@ David manually changes two OBS settings each time he starts a game:
 
 Primary use case: **Fresh start** - launch a game, stream not running - StreamPilot starts the stream, sets Game Capture + category, pauses SABnzbd
 
-**The real purpose - psychological reassurance while gaming:** David uses a two-screen setup (game on primary/left, StreamPilot terminal on secondary/right). The terminal running on the second screen acts as a live dashboard - while in-game he should be able to glance right and confirm everything is handled correctly without alt-tabbing or interrupting gameplay. The goal is "I can see from one place it's all good" - stream is live, right category set, SABnzbd is paused. This is the core UX, not just automation.
+**The real purpose - psychological reassurance while gaming:** David uses a two-screen setup (game on primary/left, StreamPilot's browser dashboard on secondary/right). `run.bat` launches the daemon with no terminal window at all (via `pythonw.exe`) and opens the dashboard tab automatically - while in-game he should be able to glance right and confirm everything is handled correctly without alt-tabbing or interrupting gameplay. The goal is "I can see from one place it's all good" - stream is live, right category set, SABnzbd is paused. This is the core UX, not just automation.
 
 Architecture: game-per-VOD
 - Each game session = one VOD. Stream ends when the game closes; a fresh stream starts when the next game launches.
@@ -35,7 +35,7 @@ Single scene with two sources:
 - Unknown game: Windows toast notification - "Run 'streampilot config add-game'"
 - SABnzbd unreachable: logs warning + prints prompt to pause manually
 - **Heartbeat homeostasis (every 2s when game active):** verifies + self-heals all critical state - OBS WebSocket reconnect, OBS window reapply, stream restart if dropped, SABnzbd repause if drifted. Each correction shows as named field in `Status: ISSUE` line. Pattern: `observe -> compare -> correct -> flag`. Guard: stream restart only fires if `is_connected()` - prevents restart loop when OBS process is dead.
-- **Dashboard (`src/dashboard_server.py`):** every heartbeat, the daemon also writes `data/logs/status.json` (`src/status_file.py` - atomic write, gitignored). The dashboard is a tiny local web server (Python stdlib `http.server`, zero new deps, no Flask/FastAPI/Node) serving a single-file HTML/CSS/JS page that polls `/status.json` every second - opens in a browser tab, no socket/IPC coupling to the daemon, same "write state, read state" pattern as AudioManager's GUI. **Security: the handler serves exactly two routes** (`/` and `/status.json`) rather than the directory tree, so `config.json`'s secrets (OAuth token, OBS password, SABnzbd API key) can never be reached through it - never switch this to `SimpleHTTPRequestHandler`. Shows a big OK/ISSUE/IDLE/OFFLINE badge, a continuously-pulsing heartbeat dot (CSS animation - proves the page itself is alive, independent of daemon state), and Game/Category/SABnzbd rows. OFFLINE (grey) fires if no fresh write within `poll_interval * 4` (min 8s) - catches a dead/crashed daemon so the dashboard never shows stale reassurance. The browser **tab title and favicon also reflect state** (colored dot + game name in the title, recolored favicon) so David can monitor by glancing at the tab without it being focused. **`run.bat` (the desktop shortcut target) always starts both** - it runs `streampilot.py start --dashboard`, which starts the dashboard server in a background thread of the same daemon process. One click, one window, dashboard opens automatically.
+- **Dashboard (`src/dashboard_server.py`):** every heartbeat, the daemon also writes `data/state/status.json` (`src/status_file.py` - atomic write, gitignored; lives under `data/state/` not `data/logs/` since it's live runtime state, not a timestamped log). The dashboard is a tiny local web server (Python stdlib `http.server`, zero new deps, no Flask/FastAPI/Node) serving a single-file HTML/CSS/JS page that polls `/status.json` every second - opens at `http://localhost:8765/` in a browser tab, no socket/IPC coupling to the daemon, same "write state, read state" pattern as AudioManager's GUI. **Security: the handler serves exactly two routes** (`/` and `/status.json`) rather than the directory tree, so `config.json`'s secrets (OAuth token, OBS password, SABnzbd API key) can never be reached through it - never switch this to `SimpleHTTPRequestHandler`. Shows a big OK/ISSUE/IDLE/OFFLINE badge, a continuously-pulsing heartbeat dot (CSS animation - proves the page itself is alive, independent of daemon state), and Game/Category/SABnzbd rows. OFFLINE (grey) fires if no fresh write within `poll_interval * 4` (min 8s) - catches a dead/crashed daemon so the dashboard never shows stale reassurance. The browser **tab title and favicon also reflect state** (colored dot + game name in the title, recolored favicon) so David can monitor by glancing at the tab without it being focused. **`run.bat` (the desktop shortcut target) always starts both** - it self-elevates (OBS game capture needs admin rights), kills any previously running `streampilot.py` instance (avoids stacking duplicates across dev restarts or repeat clicks), then runs `streampilot.py start --dashboard` via `pythonw.exe` so no console window ever appears. One click, no terminal, dashboard opens automatically.
 
 ## Stack
 
@@ -84,7 +84,7 @@ Users run `scripts/run.bat` (and `scripts/setup/add-game.bat`) - these are thin 
 
 | Command | Invoked by |
 |---|---|
-| `python src/streampilot.py start --dashboard` (daemon + dashboard, one process) | `scripts/run.bat` (the desktop shortcut target) |
+| `pythonw src/streampilot.py start --dashboard` (daemon + dashboard, one process, no console) | `scripts/run.bat` (the desktop shortcut target) |
 | `python src/streampilot.py dashboard` (reopen the dashboard tab without restarting the daemon) | manual CLI only, no `.bat` - rarely needed |
 | `python src/streampilot.py config add-game` | `scripts/setup/add-game.bat` |
 
@@ -117,7 +117,9 @@ StreamPilot/
 │       ├── add-game.bat
 │       └── install-dependencies.bat
 ├── tests/
-└── data/logs/
+└── data/
+    ├── logs/            # timestamped daemon logs
+    └── state/           # status.json - live daemon<->dashboard heartbeat
 ```
 
 ## Target Games
@@ -126,7 +128,7 @@ Marvel Rivals and Dead by Daylight are the two primary games. Marvel Rivals is c
 
 ## Why This Exists (ROI Context)
 
-The time saving (2 min manual OBS + Twitch switch) is secondary. The real value is reassurance: while gaming David doesn't want to be second-guessing whether SABnzbd is still paused or OBS is capturing the right game. StreamPilot handles it and the terminal on the second screen confirms it. "I shouldn't have to think about this while I'm in a game" is the design goal. David has been burned by SABnzbd tanking stream bandwidth when forgotten - the auto-pause is a safety net, not just convenience. David also enjoys the build process and it improves his Claude workflow skills. AudioManager would have higher ROI per-session for audio workflows, but StreamPilot is near-complete so the marginal cost to finish is low.
+The time saving (2 min manual OBS + Twitch switch) is secondary. The real value is reassurance: while gaming David doesn't want to be second-guessing whether SABnzbd is still paused or OBS is capturing the right game. StreamPilot handles it and the browser dashboard on the second screen confirms it. "I shouldn't have to think about this while I'm in a game" is the design goal. David has been burned by SABnzbd tanking stream bandwidth when forgotten - the auto-pause is a safety net, not just convenience. David also enjoys the build process and it improves his Claude workflow skills. AudioManager would have higher ROI per-session for audio workflows, but StreamPilot is near-complete so the marginal cost to finish is low.
 
 ## First-Time Setup
 
