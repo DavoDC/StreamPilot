@@ -156,7 +156,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 def run(port: int = PORT, open_browser: bool = True):
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    url = f"http://127.0.0.1:{port}/"
+    url = f"http://localhost:{port}/"
     print(f"[StreamPilot Dashboard] Serving at {url}")
     print("Press Ctrl+C to stop.")
     if open_browser:
