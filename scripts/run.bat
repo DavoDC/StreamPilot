@@ -1,19 +1,18 @@
-:: Starts the StreamPilot daemon and opens the live dashboard in your browser - one click.
-:: Monitors running processes and auto-manages OBS and Twitch when a known game is detected.
+:: One-click launcher. Elevates for OBS game capture, kills any previously running
+:: StreamPilot instance (avoids stacking up duplicates across dev restarts - the kill step
+:: must run elevated too, otherwise it can't see/close a previous elevated instance), then
+:: starts the daemon + dashboard via pythonw.exe so no console/terminal window appears.
+:: Dashboard opens at http://localhost:8765/. Logs still go to data\logs\ regardless.
 @echo off
-title StreamPilot
+cd /d "%~dp0.."
 
 :: Auto-elevate: OBS requires admin rights for game capture (Marvel Rivals silently fails without it)
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo Requesting administrator rights...
-    powershell -Command "Start-Process -FilePath wt.exe -ArgumentList 'cmd /k cd /d \"%~dp0..\" && python src\streampilot.py start --dashboard' -Verb RunAs"
+    powershell -NoProfile -WindowStyle Hidden -Command "Start-Process -FilePath '%~f0' -WorkingDirectory '%cd%' -Verb RunAs -WindowStyle Hidden"
     exit /b
 )
 
-echo Starting StreamPilot + dashboard...
-cd /d "%~dp0.."
-python src\streampilot.py start --dashboard
-echo.
-echo StreamPilot exited.
-pause
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='python.exe' or Name='pythonw.exe'\" | Where-Object { $_.CommandLine -match 'streampilot\.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+
+start "" /min pythonw.exe src\streampilot.py start --dashboard
