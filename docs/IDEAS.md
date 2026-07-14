@@ -89,6 +89,7 @@ Implementation:
 
 **Remaining (needs separate design session):**
 - **OBS process crash** - detect OBS.exe exit and restart the process. Needs design: OBS crash vs intentional close vs WebSocket timeout. Subprocess monitoring, not a heartbeat-pattern fix.
+- **OBS Game Capture window fix verification** - when SP says `OBS Window: REAPPLIED`, the setting may show as "fixed" in WebSocket responses but OBS UI still displays the old window. Need to reproduce and determine root cause: OBS UI lag vs genuine application failure vs SP verification gap. If genuine, may need deeper OBS source verification or longer settle time.
 
 **Design note:** The heartbeat pattern (poll every 2s, correct inline, flag ISSUE) works for any correction where the target service's API is reachable. OBS process restart requires a different mechanism (process supervision) - deliberately deferred.
 
