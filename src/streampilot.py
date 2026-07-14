@@ -10,7 +10,7 @@ from datetime import datetime
 # Ensure src/ is on path when run directly
 sys.path.insert(0, os.path.dirname(__file__))
 
-# pythonw.exe (used by the silent launcher, scripts/run-silent.vbs) has no console,
+# pythonw.exe (used by the silent launcher, scripts/run.bat) has no console,
 # so sys.stdout/stderr are None - any print() call would crash. Give them a sink.
 if sys.stdout is None:
     sys.stdout = open(os.devnull, 'w')
