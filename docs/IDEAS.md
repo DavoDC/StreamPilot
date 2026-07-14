@@ -38,6 +38,17 @@ to match state. See HISTORY.md. Harder follow-ups, not done:
   useful if the second monitor isn't always in view. Simple `Audio()` object,
   but needs a user gesture first (browser autoplay policy) so isn't zero-effort.
 
+## Dashboard UI improvements
+
+**Visual polish and API source indicators**
+- **Game poster/cover image** - display the game's cover art or poster in the dashboard, providing visual context of what's being streamed at a glance.
+- **Program API source icons** - add visual icons representing the data sources:
+  - Twitch icon for game title/status info (sourced from Twitch API)
+  - OBS icon for stream state and capture info (sourced from OBS WebSocket)
+  - SABnzbd icon for download status (sourced from SAB API)
+  - These icons reflect which programs/APIs are providing the displayed information, improving dashboard clarity.
+- **Overall dashboard polish** - refine the dashboard layout, spacing, typography, and visual hierarchy. Ensure icons and poster integrate naturally with existing status displays.
+
 ## P1 - AudioManager (next major feature - start after QOL batch is done)
 
 ## System tray (do after status heartbeat)
