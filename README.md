@@ -35,7 +35,7 @@ If you switch games mid-stream, StreamPilot swaps the capture source and Twitch 
 
 ### Step 1 - Install dependencies
 
-Double-click `scripts\setup\install.bat`.
+Double-click `scripts\setup\install-dependencies.bat`.
 
 ### Step 2 - Configure OBS WebSocket
 
