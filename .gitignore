@@ -13,7 +13,9 @@ build/
 
 # Logs
 data/logs/*.log
-data/logs/status.json
+
+# Runtime state
+data/state/status.json
 
 # IDE
 .vscode/
