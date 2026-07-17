@@ -50,9 +50,18 @@ def cmd_start(args):
     if getattr(args, 'dashboard', False):
         import dashboard_server
         import threading
-        t = threading.Thread(target=dashboard_server.run, kwargs={'open_browser': True}, daemon=True)
+        t = threading.Thread(
+            target=dashboard_server.run,
+            kwargs={'open_browser': True, 'on_quit': daemon.stop},
+            daemon=True,
+        )
         t.start()
     daemon.start()
+    # daemon.start() only returns once the loop has stopped (dashboard Quit
+    # button, or a startup failure) - os._exit guarantees the headless
+    # pythonw.exe process actually terminates instead of lingering with no
+    # window or console to close it from.
+    os._exit(0)
 
 
 def cmd_status(args):

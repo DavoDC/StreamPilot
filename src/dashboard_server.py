@@ -24,6 +24,12 @@ STATUS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'state', 'st
 PORT = 8765
 POLL_MS = 1000  # how often the page re-fetches status.json
 
+# Set by run() before the server starts; called from the request-handling
+# thread when the dashboard's Quit button is confirmed. Module-level (not a
+# Handler field) because ThreadingHTTPServer instantiates a fresh Handler per
+# request - there's nowhere else to stash it without a custom server class.
+_on_quit_callback = None
+
 INDEX_HTML = """<!doctype html>
 <html lang="en">
 <head>
@@ -56,6 +62,37 @@ INDEX_HTML = """<!doctype html>
   .row .label { color: #6b7280; }
   .row .value { font-weight: 600; }
   #footer { font-size: 11px; color: #6b7280; }
+
+  #quitBtn {
+    margin-top: 2px;
+    background: none; border: 1px solid #262b34; border-radius: 6px;
+    color: #565e6b; font-size: 12px; padding: 5px 14px;
+    cursor: pointer; transition: border-color 0.2s ease, color 0.2s ease;
+  }
+  #quitBtn:hover, #quitBtn:focus-visible { border-color: #4b5563; color: #9ca3af; }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(10, 12, 15, 0.6);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .overlay[hidden] { display: none; }
+
+  #quitDialog {
+    background: #1a1e26; border: 1px solid #262b34; border-radius: 10px;
+    padding: 22px 24px; max-width: 300px; text-align: left;
+  }
+  #quitDialog:focus { outline: none; }
+  #quitTitle { font-size: 16px; font-weight: 700; color: #e5e7eb; margin-bottom: 8px; }
+  #quitDesc { font-size: 13px; color: #9ca3af; line-height: 1.5; }
+  .quitActions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .quitActions button {
+    font-size: 13px; padding: 7px 16px; border-radius: 6px; cursor: pointer;
+    border: 1px solid #2a2f38; background: #12151a; color: #c9d1d9;
+  }
+  #quitCancel:hover, #quitCancel:focus-visible { border-color: #4b5563; }
+  #quitConfirm { background: #3a1418; border-color: #6b2530; color: #ff8787; }
+  #quitConfirm:hover, #quitConfirm:focus-visible { background: #4a1a20; border-color: #ff5d5d; color: #ffb3b3; }
+  .quitActions button:disabled { opacity: 0.5; cursor: default; }
 </style>
 </head>
 <body>
@@ -67,6 +104,18 @@ INDEX_HTML = """<!doctype html>
     <div class="row"><span class="label">SABnzbd</span><span class="value" id="sabnzbd">-</span></div>
   </div>
   <div id="footer">waiting for daemon...</div>
+  <button id="quitBtn" type="button">Quit</button>
+
+  <div id="quitOverlay" class="overlay" hidden>
+    <div id="quitDialog" role="alertdialog" aria-modal="true" aria-labelledby="quitTitle" aria-describedby="quitDesc" tabindex="-1">
+      <div id="quitTitle">Quit StreamPilot?</div>
+      <div id="quitDesc">This stops the stream, resumes SABnzbd, and closes StreamPilot.</div>
+      <div class="quitActions">
+        <button id="quitCancel" type="button">Cancel</button>
+        <button id="quitConfirm" type="button">Quit</button>
+      </div>
+    </div>
+  </div>
 <script>
 const COLORS = { OK: "#3fd67a", ISSUE: "#ff5d5d", IDLE: "#6b7280", OFFLINE: "#4b5563" };
 const TITLE_DOTS = { OK: "🟢", ISSUE: "🔴", IDLE: "⚪", OFFLINE: "⚫" };
@@ -116,6 +165,39 @@ async function tick() {
 }
 tick();
 setInterval(tick, __POLL_MS__);
+
+const quitBtn = document.getElementById("quitBtn");
+const quitOverlay = document.getElementById("quitOverlay");
+const quitDialog = document.getElementById("quitDialog");
+const quitCancel = document.getElementById("quitCancel");
+const quitConfirm = document.getElementById("quitConfirm");
+const quitDesc = document.getElementById("quitDesc");
+
+function onQuitKeydown(e) {
+  if (e.key === "Escape") closeQuitDialog();
+}
+function openQuitDialog() {
+  quitOverlay.hidden = false;
+  quitDialog.focus();
+  document.addEventListener("keydown", onQuitKeydown);
+}
+function closeQuitDialog() {
+  quitOverlay.hidden = true;
+  document.removeEventListener("keydown", onQuitKeydown);
+  quitBtn.focus();
+}
+
+quitBtn.addEventListener("click", openQuitDialog);
+quitCancel.addEventListener("click", closeQuitDialog);
+quitOverlay.addEventListener("click", (e) => {
+  if (e.target === quitOverlay) closeQuitDialog();
+});
+quitConfirm.addEventListener("click", () => {
+  quitCancel.disabled = true;
+  quitConfirm.disabled = true;
+  quitDesc.textContent = "Stopping the stream and closing StreamPilot...";
+  fetch("/quit", { method: "POST" }).catch(() => {});
+});
 </script>
 </body>
 </html>
@@ -153,8 +235,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
+    def do_POST(self):
+        if self.path == "/quit":
+            if _on_quit_callback:
+                _on_quit_callback()
+            body = b'{"ok": true}'
+            self.send_response(202)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_error(404)
 
-def run(port: int = PORT, open_browser: bool = True):
+
+def run(port: int = PORT, open_browser: bool = True, on_quit=None):
+    global _on_quit_callback
+    _on_quit_callback = on_quit
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://localhost:{port}/"
     print(f"[StreamPilot Dashboard] Serving at {url}")
