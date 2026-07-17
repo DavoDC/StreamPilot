@@ -18,6 +18,7 @@ Auto-manages OBS streaming + SABnzbd when you launch a known game.
 4. StreamPilot detects the game, sets your OBS Game Capture source, sets the Twitch category, and starts the stream automatically
 5. StreamPilot automatically monitors SABnzbd and pauses it if it is running to prevent it from affecting network performance in-game.
 6. Exit the game - StreamPilot stops the stream and resumes SABnzbd
+7. Done for the night? Click **Quit** on the dashboard and confirm - StreamPilot stops the stream, resumes SABnzbd, and closes itself. `run.bat` launches with no console window, so this is the only way to shut it down other than Task Manager.
 
 If you switch games mid-stream, StreamPilot swaps the capture source and Twitch category without interrupting the stream.
 

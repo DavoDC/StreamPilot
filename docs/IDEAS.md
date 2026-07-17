@@ -53,21 +53,18 @@ to match state. See HISTORY.md. Harder follow-ups, not done:
 
 ## System tray (do after status heartbeat)
 
-**Note (2026-07-14):** `run.bat` now launches headless via `pythonw.exe` (no
-terminal window exists at all) - the old "accidental terminal close kills the
-daemon" risk is already gone, since the daemon is a detached process with no
-window tied to it. Tray's remaining value is narrower than originally scoped:
+**Note (2026-07-17):** Clean shutdown is now covered by the dashboard's Quit
+button (stop stream, resume SABnzbd, close process - see HISTORY.md). Tray's
+remaining value is narrower still - just the pre-game bookend:
 
 1. **Pre-game confirmation** - before launching a game, David can glance at the tray and know the daemon is active, without needing the browser dashboard tab open/visible.
-2. **Clean shutdown control** - right-click > Stop, since there's no window to close anymore (Task Manager is currently the only way to stop it).
 
 Implementation:
 - `pystray` + `Pillow` for tray icon
 - **Dynamic icon** - tick (all OK) or cross (issue) visible in taskbar while alt-tabbed to Discord or elsewhere
 - Icon ready: `assets/StreamPilotIconNoBG.ico` (transparent background) + `assets/StreamPilotIconOriginal.png`
-- Right-click menu: Status, Stop StreamPilot (clean shutdown)
 - Tray tooltip: current state (Streaming: Marvel Rivals / Idle)
-- The tray icon covers the bookends (pre-game + shutdown); the browser dashboard covers in-game monitoring from second screen. Both are needed.
+- The tray icon covers pre-game; the browser dashboard covers in-game monitoring and shutdown. Both are needed.
 
 **Note on full-screen coverage:** tray IS covered when game is fullscreen on primary monitor, and Windows may not show it on the secondary. This is expected - tray's job is pre-game and post-game, not in-game. The dashboard on second screen covers in-game.
 
