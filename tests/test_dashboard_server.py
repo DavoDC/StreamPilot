@@ -1,6 +1,9 @@
 """Tests for dashboard_server.py's pure logic (no real socket/server started)."""
 
+import http.client
+import http.server
 import json
+import threading
 
 import dashboard_server
 import status_file
@@ -39,3 +42,58 @@ def test_make_handler_only_serves_two_known_routes():
     # listing / arbitrary file serving - config.json must never be reachable.
     import http.server
     assert not issubclass(dashboard_server.Handler, http.server.SimpleHTTPRequestHandler)
+
+
+def test_index_html_contains_quit_confirmation_dialog():
+    html = dashboard_server.INDEX_HTML
+    assert 'id="quitBtn"' in html
+    assert 'id="quitDialog"' in html
+    assert 'id="quitCancel"' in html
+    assert 'id="quitConfirm"' in html
+    assert "/quit" in html
+
+
+def _run_server():
+    server = http.server.HTTPServer(("127.0.0.1", 0), dashboard_server.Handler)
+    port = server.server_address[1]
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+    return server, port
+
+
+def test_post_quit_invokes_callback_and_returns_202():
+    called = threading.Event()
+    dashboard_server._on_quit_callback = called.set
+    server, port = _run_server()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn.request("POST", "/quit")
+        resp = conn.getresponse()
+        assert resp.status == 202
+        assert called.wait(timeout=1)
+    finally:
+        server.shutdown()
+        dashboard_server._on_quit_callback = None
+
+
+def test_post_quit_with_no_callback_registered_still_returns_202():
+    dashboard_server._on_quit_callback = None
+    server, port = _run_server()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn.request("POST", "/quit")
+        resp = conn.getresponse()
+        assert resp.status == 202
+    finally:
+        server.shutdown()
+
+
+def test_post_unknown_route_returns_404():
+    server, port = _run_server()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn.request("POST", "/nope")
+        resp = conn.getresponse()
+        assert resp.status == 404
+    finally:
+        server.shutdown()
