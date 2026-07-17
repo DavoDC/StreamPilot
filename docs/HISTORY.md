@@ -2,6 +2,39 @@
 
 ---
 
+## 2026-07-17 - Dashboard Quit button (clean shutdown from the browser)
+
+Since `run.bat` launches headless via `pythonw.exe`, there was no window to
+close and no console to Ctrl+C - Task Manager was the only way to stop
+StreamPilot. Added a Quit control to the dashboard itself instead of building
+the system tray early (tray's shutdown-control rationale is now covered here;
+see IDEAS.md tray section).
+
+- **`dashboard_server.py`** gained a `POST /quit` route and an `on_quit`
+  callback param on `run()`. The dashboard's existing "reassurance" design
+  language (dark panel, muted default state) carried over to the new
+  control: a small, unobtrusive "Quit" button below the status panel opens a
+  confirmation dialog (not a native `confirm()` popup) explaining exactly
+  what will happen - "This stops the stream, resumes SABnzbd, and closes
+  StreamPilot" - with Cancel as the calm default and Quit visually distinct
+  (red) as the deliberate action. Prevents an accidental click from killing
+  a live stream.
+- **`daemon.py`** needed no changes - `stop()` already existed, and
+  `_on_no_game()` (already run in `start()`'s `finally` block) already does
+  exactly the stop-stream/resume-SAB sequence the quit flow needs.
+- **`streampilot.py`**'s `cmd_start` now passes `daemon.stop` as the dashboard
+  thread's `on_quit` callback, and calls `os._exit(0)` after `daemon.start()`
+  returns - nothing previously called `daemon.stop()` in practice, so nothing
+  guaranteed the headless process actually terminated once the polling loop
+  stopped.
+- Verified live: ran an isolated test server on a separate port (never
+  touching the port the real running daemon was already bound to, since
+  David was streaming at the time) and drove the button through Chrome -
+  Cancel closes cleanly, Quit disables the buttons, updates the copy to
+  "Stopping the stream and closing StreamPilot...", and fires the POST.
+
+---
+
 ## 2026-07-14 - Silent launch (no terminal), stale-instance kill, status.json moved
 
 David wanted the desktop shortcut to launch with zero visible console window and to
