@@ -97,6 +97,39 @@ def test_on_game_launch_per_game_title_override(daemon):
     assert kwargs["title"] == "Custom Title Here"
 
 
+def test_on_game_launch_records_title_and_tags_for_dashboard(daemon):
+    """Whatever is sent to Twitch must be readable back for the dashboard -
+    David should never have to check Twitch itself to confirm it's set."""
+    daemon.cfg["twitch"]["base_tags"] = ["English", "Australia"]
+    daemon.games["game.exe"]["tags"] = ["MyGame"]
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.obs.is_streaming.return_value = False
+
+    daemon._on_game_launch("game.exe")
+
+    assert daemon._current_title == "Davo plays My Game!"
+    assert daemon._current_tags == ["English", "Australia", "MyGame"]
+
+
+def test_on_no_game_clears_dashboard_title_and_tags(daemon):
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+    daemon._current_title = "Davo plays My Game!"
+    daemon._current_tags = ["English"]
+    daemon.obs.is_streaming.return_value = True
+
+    daemon._on_no_game()
+
+    assert daemon._current_title is None
+    assert daemon._current_tags is None
+
+
 def test_on_game_launch_stops_then_starts_stream_on_switch(daemon):
     """Game-per-VOD: if a stream is live when a game launches, end it and start a fresh one."""
     daemon.obs = MagicMock()
@@ -341,6 +374,31 @@ def test_print_heartbeat_calls_live_sources(daemon):
     daemon.twitch.get_current_game_name.assert_called_once()
     daemon.sab.is_paused.assert_called_once()
     mock_log.info.assert_called_once()
+
+
+def test_print_heartbeat_writes_title_and_tags_to_status_file(daemon):
+    """Dashboard rule: any Twitch-side setting the daemon controls must be
+    written to status.json so the dashboard is the single source of truth."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+    daemon._current_title = "Davo plays My Game!"
+    daemon._current_tags = ["English", "Australia"]
+
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    with patch("daemon.log"), patch("daemon.status_file.write_status") as mock_write:
+        daemon._print_heartbeat()
+
+    _, kwargs = mock_write.call_args
+    assert kwargs["title"] == "Davo plays My Game!"
+    assert kwargs["tags"] == ["English", "Australia"]
 
 
 def test_print_heartbeat_reapplies_window_on_mismatch(daemon):

@@ -47,6 +47,8 @@ class Daemon:
 
         self._active_game_exe = None
         self._running = False
+        self._current_title = None
+        self._current_tags = None
 
     def _ensure_obs_running(self) -> bool:
         """Launch OBS if not running, wait for WebSocket. Returns True if already connected."""
@@ -248,6 +250,8 @@ class Daemon:
                 poll_interval=self.poll_interval,
                 obs_window_ok=obs_window_ok,
                 stream_restarted=stream_restarted,
+                title=self._current_title,
+                tags=self._current_tags,
             )
         except OSError as e:
             log.warning(f"Could not write dashboard status file: {e}")
@@ -276,6 +280,10 @@ class Daemon:
         self.twitch.set_channel_info(
             game_id=game["twitch_game_id"], title=title, tags=tags or None
         )
+        # Dashboard-visible: whatever we last SENT to Twitch, so David can
+        # confirm title/tags on the dashboard without checking Twitch itself.
+        self._current_title = title
+        self._current_tags = tags
 
         if self.obs.is_streaming():
             self.obs.stop_stream()
@@ -298,6 +306,9 @@ class Daemon:
         if self.sab_enabled and self.sab:
             self.sab.resume()
             log.info("SABnzbd resumed")
+
+        self._current_title = None
+        self._current_tags = None
 
     def get_status(self) -> dict:
         streaming = self.obs.is_streaming() if self.obs._client else False
