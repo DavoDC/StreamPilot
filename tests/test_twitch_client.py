@@ -167,3 +167,66 @@ def test_search_game_robust_both_empty(client):
     with patch("twitch_client.requests.get", return_value=mock_resp):
         results = client.search_game_robust("Unknown XYZ Game")
     assert results == []
+
+
+# --- set_channel_info ---
+
+def test_set_channel_info_sends_all_fields_in_one_patch(client):
+    client._broadcaster_id = "123456"
+    mock_resp = MagicMock()
+    mock_resp.status_code = 204
+    with patch("twitch_client.requests.patch", return_value=mock_resp) as mock_patch:
+        client.set_channel_info(game_id="17074", title="Davo plays Rivals!", tags=["English", "Ranked"])
+    _, kwargs = mock_patch.call_args
+    assert kwargs["json"] == {
+        "game_id": "17074",
+        "title": "Davo plays Rivals!",
+        "tags": ["English", "Ranked"],
+    }
+    assert kwargs["params"] == {"broadcaster_id": "123456"}
+
+
+def test_set_channel_info_omits_none_fields(client):
+    client._broadcaster_id = "123456"
+    mock_resp = MagicMock()
+    mock_resp.status_code = 204
+    with patch("twitch_client.requests.patch", return_value=mock_resp) as mock_patch:
+        client.set_channel_info(title="Davo plays Rivals!")
+    _, kwargs = mock_patch.call_args
+    assert kwargs["json"] == {"title": "Davo plays Rivals!"}
+
+
+def test_set_channel_info_validates_first(client):
+    validate_resp = MagicMock()
+    validate_resp.status_code = 200
+    validate_resp.json.return_value = {"user_id": "99"}
+    patch_resp = MagicMock()
+    patch_resp.status_code = 204
+    with patch("twitch_client.requests.get", return_value=validate_resp):
+        with patch("twitch_client.requests.patch", return_value=patch_resp):
+            client.set_channel_info(game_id="17074")
+    assert client._broadcaster_id == "99"
+
+
+def test_set_channel_info_logs_warning_on_failure(client, caplog):
+    client._broadcaster_id = "123456"
+    mock_resp = MagicMock()
+    mock_resp.status_code = 400
+    mock_resp.text = "bad request"
+    with patch("twitch_client.requests.patch", return_value=mock_resp):
+        with caplog.at_level("WARNING"):
+            client.set_channel_info(title="Davo plays Rivals!")
+    assert any("400" in r.message for r in caplog.records)
+
+
+def test_set_channel_info_network_error_does_not_raise(client):
+    client._broadcaster_id = "123456"
+    with patch("twitch_client.requests.patch", side_effect=Exception("timeout")):
+        client.set_channel_info(title="Davo plays Rivals!")  # Should not raise
+
+
+def test_set_game_delegates_to_set_channel_info(client):
+    client._broadcaster_id = "123456"
+    with patch.object(client, "set_channel_info") as mock_sci:
+        client.set_game("17074")
+    mock_sci.assert_called_once_with(game_id="17074")
