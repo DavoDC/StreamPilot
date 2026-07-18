@@ -8,7 +8,9 @@
   },
   "twitch": {
     "client_id": "YOUR_TWITCH_CLIENT_ID",
-    "oauth_token": "YOUR_TWITCH_OAUTH_TOKEN"
+    "oauth_token": "YOUR_TWITCH_OAUTH_TOKEN",
+    "title_template": "Davo plays {game}!",
+    "base_tags": ["English", "Australia"]
   },
   "sabnzbd": {
     "enabled": true,
@@ -21,7 +23,8 @@
     "DeadByDaylight-Win64-Shipping.exe": {
       "name": "Dead by Daylight",
       "twitch_game_id": "17074",
-      "obs_window": "Dead by Daylight [...]:UnrealWindow:DeadByDaylight-Win64-Shipping.exe"
+      "obs_window": "Dead by Daylight [...]:UnrealWindow:DeadByDaylight-Win64-Shipping.exe",
+      "tags": ["DeadByDaylight", "Horror"]
     }
   }
 }
