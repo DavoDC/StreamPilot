@@ -270,7 +270,12 @@ class Daemon:
         title = build_title(name, game, self.twitch_cfg)
         tags = build_tags(game, self.twitch_cfg)
         log.info(f"Setting Twitch title: {title}")
-        self.twitch.set_channel_info(game_id=game["twitch_game_id"], title=title, tags=tags)
+        # Only send tags when we actually have replacements - passing an empty
+        # list would wipe any existing Twitch tags, so with nothing configured
+        # we leave the channel's current tags untouched (tags=None omits them).
+        self.twitch.set_channel_info(
+            game_id=game["twitch_game_id"], title=title, tags=tags or None
+        )
 
         if self.obs.is_streaming():
             self.obs.stop_stream()

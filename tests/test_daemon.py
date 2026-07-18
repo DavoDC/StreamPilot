@@ -54,8 +54,10 @@ def test_on_game_launch_starts_stream_when_not_live(daemon):
     daemon._on_game_launch("game.exe")
 
     daemon.obs.set_game_capture_window.assert_called_once_with("My Game:GameClass:game.exe")
+    # No base_tags or per-game tags configured -> tags omitted (None), so existing
+    # Twitch tags are preserved rather than wiped by an empty list.
     daemon.twitch.set_channel_info.assert_called_once_with(
-        game_id="12345", title="Davo plays My Game!", tags=[]
+        game_id="12345", title="Davo plays My Game!", tags=None
     )
     daemon.obs.start_stream.assert_called_once()
     daemon.sab.pause.assert_called_once()
