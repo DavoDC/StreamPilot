@@ -11,6 +11,7 @@ HEARTBEAT_EVERY = 1  # every poll; API calls in heartbeat provide natural thrott
 from obs_client import OBSClient
 from twitch_client import TwitchClient
 from sabnzbd_client import SABnzbdClient
+from stream_meta import build_title, build_tags
 import status_file
 
 log = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ class Daemon:
             password=cfg["obs"]["password"],
             game_capture_source=cfg["obs"]["game_capture_source"],
         )
+        self.twitch_cfg = cfg.get("twitch", {})
         self.twitch = TwitchClient(
             client_id=cfg["twitch"]["client_id"],
             oauth_token=cfg["twitch"]["oauth_token"],
@@ -264,7 +266,11 @@ class Daemon:
         log.info(f"Game detected: {name} ({exe})")
 
         self.obs.set_game_capture_window(game["obs_window"])
-        self.twitch.set_game(game["twitch_game_id"])
+
+        title = build_title(name, game, self.twitch_cfg)
+        tags = build_tags(game, self.twitch_cfg)
+        log.info(f"Setting Twitch title: {title}")
+        self.twitch.set_channel_info(game_id=game["twitch_game_id"], title=title, tags=tags)
 
         if self.obs.is_streaming():
             self.obs.stop_stream()

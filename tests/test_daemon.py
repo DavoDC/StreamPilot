@@ -54,9 +54,45 @@ def test_on_game_launch_starts_stream_when_not_live(daemon):
     daemon._on_game_launch("game.exe")
 
     daemon.obs.set_game_capture_window.assert_called_once_with("My Game:GameClass:game.exe")
-    daemon.twitch.set_game.assert_called_once_with("12345")
+    daemon.twitch.set_channel_info.assert_called_once_with(
+        game_id="12345", title="Davo plays My Game!", tags=[]
+    )
     daemon.obs.start_stream.assert_called_once()
     daemon.sab.pause.assert_called_once()
+
+
+def test_on_game_launch_sets_dynamic_title_and_tags_from_config(daemon):
+    """title_template, base_tags, and per-game tags are combined into set_channel_info."""
+    daemon.cfg["twitch"]["title_template"] = "Now playing {game}!"
+    daemon.cfg["twitch"]["base_tags"] = ["English", "Australia"]
+    daemon.games["game.exe"]["tags"] = ["MarvelRivals", "Rivals"]
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.obs.is_streaming.return_value = False
+
+    daemon._on_game_launch("game.exe")
+
+    daemon.twitch.set_channel_info.assert_called_once_with(
+        game_id="12345",
+        title="Now playing My Game!",
+        tags=["English", "Australia", "MarvelRivals", "Rivals"],
+    )
+
+
+def test_on_game_launch_per_game_title_override(daemon):
+    daemon.games["game.exe"]["title"] = "Custom Title Here"
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.obs.is_streaming.return_value = False
+
+    daemon._on_game_launch("game.exe")
+
+    _, kwargs = daemon.twitch.set_channel_info.call_args
+    assert kwargs["title"] == "Custom Title Here"
 
 
 def test_on_game_launch_stops_then_starts_stream_on_switch(daemon):
@@ -172,6 +208,7 @@ def test_sab_disabled_does_not_call_sab(daemon):
     daemon._on_game_launch("game.exe")
 
     daemon.sab.pause.assert_not_called()
+    daemon.twitch.set_channel_info.assert_called_once()
 
 
 # --- Heartbeat tests ---
