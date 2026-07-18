@@ -56,11 +56,21 @@ INDEX_HTML = """<!doctype html>
   #badge { font-size: 28px; font-weight: 700; letter-spacing: 1px; }
   #panel {
     background: #1a1e26; border-radius: 10px; padding: 14px 20px;
-    min-width: 220px;
+    min-width: 220px; max-width: 340px;
   }
   .row { display: flex; justify-content: space-between; gap: 20px; padding: 6px 0; font-size: 14px; }
   .row .label { color: #6b7280; flex-shrink: 0; }
   .row .value { font-weight: 600; text-align: right; word-break: break-word; }
+  #tagsRow { flex-direction: column; align-items: flex-start; gap: 6px; }
+  #tagsRow .label { flex-shrink: unset; }
+  #tags {
+    display: flex; flex-wrap: wrap; gap: 6px; width: 100%;
+  }
+  #tags:empty::before, #tags.empty::before { content: "-"; font-weight: 600; color: #c9d1d9; }
+  .tag {
+    background: #262b34; color: #9ca3af; font-size: 11px; font-weight: 600;
+    padding: 3px 9px; border-radius: 999px; line-height: 1.4;
+  }
   #footer { font-size: 11px; color: #6b7280; }
 
   #quitBtn {
@@ -102,7 +112,7 @@ INDEX_HTML = """<!doctype html>
     <div class="row"><span class="label">Game</span><span class="value" id="game">-</span></div>
     <div class="row"><span class="label">Category</span><span class="value" id="category">-</span></div>
     <div class="row"><span class="label">Title</span><span class="value" id="title">-</span></div>
-    <div class="row"><span class="label">Tags</span><span class="value" id="tags">-</span></div>
+    <div class="row" id="tagsRow"><span class="label">Tags</span><span class="value" id="tags"></span></div>
     <div class="row"><span class="label">SABnzbd</span><span class="value" id="sabnzbd">-</span></div>
   </div>
   <div id="footer">waiting for daemon...</div>
@@ -129,6 +139,18 @@ function setFavicon(color) {
   document.getElementById("favicon").href = "data:image/svg+xml," + encodeURIComponent(svg);
 }
 
+function renderTags(tags) {
+  const el = document.getElementById("tags");
+  el.innerHTML = "";
+  if (!tags || !tags.length) return;  // :empty CSS rule shows the "-" placeholder
+  for (const tag of tags) {
+    const chip = document.createElement("span");
+    chip.className = "tag";
+    chip.textContent = tag;
+    el.appendChild(chip);
+  }
+}
+
 async function tick() {
   let s = null;
   try {
@@ -153,7 +175,7 @@ async function tick() {
     document.getElementById("game").textContent = "-";
     document.getElementById("category").textContent = "-";
     document.getElementById("title").textContent = "-";
-    document.getElementById("tags").textContent = "-";
+    renderTags(null);
     document.getElementById("sabnzbd").textContent = "-";
     document.getElementById("footer").textContent = "No signal from daemon - is it running?";
     document.title = `${TITLE_DOTS[state]} Offline - StreamPilot`;
@@ -162,7 +184,7 @@ async function tick() {
     document.getElementById("game").textContent = game;
     document.getElementById("category").textContent = s.category || "Unknown";
     document.getElementById("title").textContent = s.title || "-";
-    document.getElementById("tags").textContent = (s.tags && s.tags.length) ? s.tags.join(", ") : "-";
+    renderTags(s.tags);
     document.getElementById("sabnzbd").textContent = s.sabnzbd || "-";
     document.getElementById("footer").textContent =
       `updated ${Math.max(0, Math.round(age))}s ago  |  polling every ${s.poll_interval}s`;
