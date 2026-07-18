@@ -59,8 +59,8 @@ INDEX_HTML = """<!doctype html>
     min-width: 220px;
   }
   .row { display: flex; justify-content: space-between; gap: 20px; padding: 6px 0; font-size: 14px; }
-  .row .label { color: #6b7280; }
-  .row .value { font-weight: 600; }
+  .row .label { color: #6b7280; flex-shrink: 0; }
+  .row .value { font-weight: 600; text-align: right; word-break: break-word; }
   #footer { font-size: 11px; color: #6b7280; }
 
   #quitBtn {
@@ -101,6 +101,8 @@ INDEX_HTML = """<!doctype html>
   <div id="panel">
     <div class="row"><span class="label">Game</span><span class="value" id="game">-</span></div>
     <div class="row"><span class="label">Category</span><span class="value" id="category">-</span></div>
+    <div class="row"><span class="label">Title</span><span class="value" id="title">-</span></div>
+    <div class="row"><span class="label">Tags</span><span class="value" id="tags">-</span></div>
     <div class="row"><span class="label">SABnzbd</span><span class="value" id="sabnzbd">-</span></div>
   </div>
   <div id="footer">waiting for daemon...</div>
@@ -150,6 +152,8 @@ async function tick() {
   if (stale) {
     document.getElementById("game").textContent = "-";
     document.getElementById("category").textContent = "-";
+    document.getElementById("title").textContent = "-";
+    document.getElementById("tags").textContent = "-";
     document.getElementById("sabnzbd").textContent = "-";
     document.getElementById("footer").textContent = "No signal from daemon - is it running?";
     document.title = `${TITLE_DOTS[state]} Offline - StreamPilot`;
@@ -157,6 +161,8 @@ async function tick() {
     const game = s.game || "Idle";
     document.getElementById("game").textContent = game;
     document.getElementById("category").textContent = s.category || "Unknown";
+    document.getElementById("title").textContent = s.title || "-";
+    document.getElementById("tags").textContent = (s.tags && s.tags.length) ? s.tags.join(", ") : "-";
     document.getElementById("sabnzbd").textContent = s.sabnzbd || "-";
     document.getElementById("footer").textContent =
       `updated ${Math.max(0, Math.round(age))}s ago  |  polling every ${s.poll_interval}s`;
@@ -209,7 +215,7 @@ def status_json_bytes(status_path=STATUS_PATH) -> bytes:
     if the daemon hasn't written anything yet."""
     data = status_file.read_status(status_path)
     if data is None:
-        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "sabnzbd": None, "poll_interval": 2}
+        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2}
     return json.dumps(data).encode("utf-8")
 
 
