@@ -4,6 +4,75 @@
 
 > MANDATORY: Run `/dev-session StreamPilot` to start work. That skill IS the workflow - it picks the top item, confirms scope, implements, tests, and closes out correctly. Fix P0 bugs first. Never work out of order.
 
+## HIGHEST PRIORITY - Viewer Growth: Dynamic Stream Optimization! (added 2026-07-18)
+
+**The problem:** Stream settings are static and generic. Title is "Davo Gaming", the
+go-live text is "Davo went live!", and tags are a stale fixed list (ssf2, Fortnite,
+oblivionremastered, etc.) that don't match whatever is actually being played. Twitch
+discovery is driven by **category + title keywords + tags** - so a stale title and
+mismatched tags actively suppress how many new viewers can find the stream. The program
+already knows the exact game (it sets the category from `config.games[exe].name` on every
+launch), so leaving the title and tags static is pure wasted signal.
+
+**The key leverage (why this is cheap):** `twitch_client.set_game()` already sends a
+`PATCH /helix/channels` on every game launch, but only includes `game_id`. Twitch's
+"Modify Channel Information" endpoint accepts `game_id`, `title`, AND `tags` in that
+**same single request** - so dynamic title + dynamic tags cost **ZERO extra API calls**.
+Everything below rides on the PATCH that already fires.
+
+### QUICK WINS - do these first (top of the priority stack)
+
+1. **DYNAMIC TITLE!! (implement first - highest priority)** - auto-set the stream title
+   from the game on launch, e.g. `Davo plays Marvel Rivals!`. Config-driven template
+   `title_template` (default `"Davo plays {game}!"`) with optional per-game `title`
+   override. Truncate to Twitch's 140-char limit. Fires on the existing PATCH. This alone
+   turns "Davo Gaming" (invisible in search) into a keyword-rich, game-matched title.
+2. **DYNAMIC TAGS PER GAME!** - replace the stale global tag list with `base_tags`
+   (e.g. English, Australia - always applied) + per-game `tags` from config
+   (e.g. MarvelRivals, Rivals, Hero Shooter). Set in the SAME PATCH. Sanitize to Twitch
+   rules (max 10 tags, each <=25 chars, no spaces/special chars, dedupe).
+   *(This supersedes and pulls up the old "Set Twitch tags per game" Low-priority item.)*
+3. **Title template variety / rotation** - instead of the identical title every session,
+   keep a small pool of templates per game (or global) and pick one per launch, e.g.
+   `"Davo plays {game}!"`, `"{game} ranked grind!"`, `"Chill {game} w/ Davo"`. Keeps the
+   channel looking fresh to repeat browsers. Cheap: just a list + random choice.
+4. **Dynamic go-live notification text** - the "Davo went live!" text can also be
+   game-aware, e.g. `"Davo is live on {game}!"`. (Set via the same channel-info flow.)
+
+### DEEPER INVESTIGATION - optimize later (own dev-session)
+
+Broader "optimize the stream to attract viewers via the program" brainstorm - not quick,
+worth a dedicated session:
+
+- **Title/tag performance tracking** - log title + tag set alongside peak/avg viewer count
+  per VOD (data already flows through the daemon), so over time we learn which titles and
+  tags actually correlate with viewers. Turns guessing into evidence. Needs a small
+  per-session stats log + a later analysis pass.
+- **Auto-generate tags from game metadata** - pull genre/theme tags from IGDB (or Twitch's
+  own category tag suggestions) so a newly added game gets good tags without manual config.
+- **Trending / seasonal tag research** - periodically surface which tags are trending in a
+  game's category and suggest additions.
+- **Time/schedule-aware titles** - vary title by time of day or day of week
+  (e.g. "Late night {game}", "Weekend {game} grind") for relevance.
+- **Emote/emoji in titles** - a leading emoji can improve click-through; test whether it
+  helps or hurts discovery.
+- **Keyword hooks per game** - curated high-search-volume phrases per game
+  (e.g. hero names, modes, patch names) baked into the title/tag pool.
+- **Language/region tuning** - confirm `broadcaster_language` is set (also part of the same
+  PATCH) and matches the tag strategy.
+- **Tie-in with dashboard cover-art idea** - the game poster idea under "Dashboard UI
+  improvements" pairs naturally with this: show the live title + tags on the dashboard so
+  David can see at a glance exactly how the stream is presented to viewers.
+
+**Design note (config schema for the quick wins):**
+```
+"twitch": { ..., "title_template": "Davo plays {game}!", "base_tags": ["English", "Australia"] }
+"games": { "<exe>": { ..., "title": "<optional override>", "tags": ["MarvelRivals", "Rivals"] } }
+```
+Title = `game.get("title") or title_template.format(game=name)` (then truncate to 140).
+Tags = `dedupe(base_tags + game.get("tags", []))[:10]`, each sanitized. Zero config = still
+works (falls back to template + base_tags only). All applied in the existing PATCH.
+
 ## P0 - Blocking bugs
 
 *(none currently - OBS window staleness fixed: heartbeat now verifies + reapplies.
@@ -115,5 +184,4 @@ Implementation:
 
 ## Low priority
 
-- **Set Twitch tags per game** - currently tags are global. Allow per-game tag overrides in config.
 - **SABnzbd per-game config for offline games** - in config, flag games that SHOULDN'T pause SAB. Only multiplayer games need SAB paused; offline/single-player games should leave it running. No offline games currently, but worth designing for.
