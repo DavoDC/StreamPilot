@@ -23,6 +23,28 @@ def test_status_json_bytes_missing_file_returns_offline_shape(tmp_path):
     assert data["status"] == "IDLE"
 
 
+def test_status_json_bytes_includes_title_and_tags(tmp_path):
+    path = tmp_path / "status.json"
+    status_file.write_status(
+        path, status="OK", game="Marvel Rivals", streaming=True, category="Marvel Rivals",
+        sabnzbd="Paused", poll_interval=2, title="Davo plays Marvel Rivals!",
+        tags=["English", "Australia", "MarvelRivals"],
+    )
+    data = json.loads(dashboard_server.status_json_bytes(path))
+    assert data["title"] == "Davo plays Marvel Rivals!"
+    assert data["tags"] == ["English", "Australia", "MarvelRivals"]
+
+
+def test_index_html_renders_title_and_tags_rows():
+    """Dashboard rule: any daemon-controlled Twitch setting must be visible on
+    the dashboard so David never needs to check Twitch/OBS directly."""
+    html = dashboard_server.INDEX_HTML
+    assert 'id="title"' in html
+    assert 'id="tags"' in html
+    assert "s.title" in html
+    assert "s.tags" in html
+
+
 def test_index_html_contains_expected_markers():
     html = dashboard_server.INDEX_HTML
     assert "<html" in html.lower()
