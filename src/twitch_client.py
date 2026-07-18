@@ -39,26 +39,42 @@ class TwitchClient:
             log.warning(f"Twitch validate failed: {e}")
             return False
 
-    def set_game(self, game_id: str):
-        """Set the stream category by Twitch game ID."""
+    def set_channel_info(self, game_id: str = None, title: str = None, tags: list = None):
+        """Set category, title, and/or tags in a single PATCH to /channels.
+
+        Only non-None fields are included in the request body, so callers
+        can update any subset of category/title/tags without touching the
+        others.
+        """
         if not self._broadcaster_id:
             if not self.validate():
-                log.error("Cannot set Twitch game - token invalid")
+                log.error("Cannot set Twitch channel info - token invalid")
                 return
+        body = {}
+        if game_id is not None:
+            body["game_id"] = game_id
+        if title is not None:
+            body["title"] = title
+        if tags is not None:
+            body["tags"] = tags
         try:
             resp = requests.patch(
                 f"{HELIX_BASE}/channels",
                 headers=self._headers(),
                 params={"broadcaster_id": self._broadcaster_id},
-                json={"game_id": game_id},
+                json=body,
                 timeout=5,
             )
             if resp.status_code == 204:
-                log.info(f"Twitch category set to game ID: {game_id}")
+                log.info(f"Twitch channel info updated: {body}")
             else:
-                log.warning(f"Twitch set_game failed ({resp.status_code}): {resp.text}")
+                log.warning(f"Twitch set_channel_info failed ({resp.status_code}): {resp.text}")
         except Exception as e:
-            log.warning(f"Twitch set_game error: {e}")
+            log.warning(f"Twitch set_channel_info error: {e}")
+
+    def set_game(self, game_id: str):
+        """Set the stream category by Twitch game ID."""
+        self.set_channel_info(game_id=game_id)
 
     def get_current_game_name(self) -> str | None:
         """Return the live Twitch channel category name, or None if unavailable."""
