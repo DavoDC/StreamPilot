@@ -2,6 +2,32 @@
 
 ---
 
+## 2026-07-19 - Hot-reload dev mode + 3-option Quit dialog
+
+**Hot-reload (`--watch`):** new opt-in CLI flag (`start --watch`, never used by
+`run.bat`) starts `src/hot_reload.py`'s file-watcher - polls every `.py` file
+under `src/` once a second, and the moment any changes, restarts the whole
+process in place via `os.execv` (picks up ANY code change, not just HTML/CSS,
+since Python doesn't hot-reload imported modules on its own). Restarting the
+process does not stop OBS's actual stream (separate process, only reconnects
+over WebSocket) - safe mid-stream. `Daemon.build_id` (set once per process
+start) rides along on every `status.json` heartbeat; the dashboard's `tick()`
+JS remembers the first value it sees and calls `location.reload()` once a
+later poll shows a different one, so an already-open dashboard tab reloads
+itself within about a second of a restart - no manual F5. Supersedes the
+"Live-reload the dashboard" idea that was in IDEAS.md.
+
+**3-option Quit dialog:** the single "Quit" confirm from 2026-07-17 (below)
+is now Cancel / "Keep streaming" / "End stream". "Keep streaming" closes only
+the StreamPilot process - OBS keeps streaming, SABnzbd stays paused (resuming
+it while the stream continues would tank bandwidth, defeating the whole point
+of the pause). "End stream" is the original behaviour (stop stream, resume
+SABnzbd, close). `POST /quit` now reads `end_stream` (bool) from a JSON body,
+default `true`; `Daemon.stop(end_stream=...)` decides whether `start()`'s
+shutdown path calls `_on_no_game()`.
+
+---
+
 ## 2026-07-17 - Dashboard Quit button (clean shutdown from the browser)
 
 Since `run.bat` launches headless via `pythonw.exe`, there was no window to
