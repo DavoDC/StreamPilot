@@ -109,6 +109,27 @@ to match state. See HISTORY.md. Harder follow-ups, not done:
 
 ## Dashboard UI improvements
 
+**Live-reload the dashboard without restarting the daemon (raised 2026-07-19)**
+Right now `INDEX_HTML` in `dashboard_server.py` is a Python string baked into
+the module at import time - editing it has no effect on an already-running
+process, and the daemon+dashboard share one process, so picking up a change
+currently means restarting the whole daemon (interrupting the live game
+session detection, even though it doesn't stop OBS itself). Two levels of fix,
+cheapest first:
+- **Quick win: serve the HTML from disk on every request** instead of a
+  baked-in string. Move `INDEX_HTML` into a real `dashboard.html` file (or
+  just `open()` + read the current triple-quoted string from a `.py` module
+  reloaded via `importlib.reload`) and read it fresh in `do_GET`. Then a
+  browser refresh (F5) alone picks up any HTML/CSS/JS edit - no process
+  restart needed at all. Near-zero cost, biggest single win.
+- **True hot-reload (no manual refresh either)**: add a tiny version/mtime
+  check - `tick()` already polls `/status.json` every second, so piggyback a
+  `dashboard_version` field (e.g. file mtime) onto that response; if the
+  client's cached version doesn't match, `location.reload()`. No new
+  websocket/SSE infra needed, reuses the existing poll loop.
+- Only relevant while actively developing the dashboard UI - not a
+  live-streaming feature, doesn't need to be fast-tracked.
+
 **Visual polish and API source indicators**
 - **Game poster/cover image** - display the game's cover art or poster in the dashboard, providing visual context of what's being streamed at a glance.
 - **Program API source icons** - add visual icons representing the data sources:
