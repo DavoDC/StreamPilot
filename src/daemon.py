@@ -13,6 +13,7 @@ from twitch_client import TwitchClient
 from sabnzbd_client import SABnzbdClient
 from stream_meta import build_title, build_tags
 import status_file
+import window_safety
 
 log = logging.getLogger(__name__)
 
@@ -109,6 +110,7 @@ class Daemon:
             return
 
         self.twitch.validate()
+        self._reconcile_existing_session()
         self._running = True
 
         try:
@@ -121,6 +123,25 @@ class Daemon:
             else:
                 log.info("Quit requested with stream kept running - leaving OBS/SABnzbd as-is.")
             self.obs.disconnect()
+
+    def _reconcile_existing_session(self):
+        """Adopt an already-live stream instead of restarting it.
+
+        A fresh Daemon always starts with _active_game_exe=None, so without
+        this check, every process restart (hot-reload via --watch, or a
+        manual relaunch while a game is already running) would treat an
+        in-progress session as a brand-new game launch: _on_game_launch()
+        stops the live stream ("Ending previous VOD") and immediately starts
+        a new one, splitting the VOD and briefly erroring (OBS rejects
+        StartStream while still mid-teardown) for no reason - the game never
+        actually changed. If the detected game's stream is already running,
+        just adopt it; the heartbeat's existing window/category drift checks
+        still run every cycle as normal, so nothing is left unverified.
+        """
+        detected = self._detect_game()
+        if detected and self.obs.is_streaming():
+            self._active_game_exe = detected
+            log.info(f"Resuming existing session for {self.games[detected]['name']} - stream already live, not restarting it")
 
     def stop(self, end_stream: bool = True):
         """Stop the polling loop. end_stream=False leaves OBS streaming and
@@ -155,6 +176,7 @@ class Daemon:
         obs_window_ok: bool = True,
         sab_corrected: bool = False,
         stream_restarted: bool = False,
+        blacklisted_window: str | None = None,
     ) -> dict:
         """Turn raw heartbeat readings into the shared status shape consumed by
         both the terminal log line and the dashboard JSON file."""
@@ -175,7 +197,7 @@ class Daemon:
 
         issue = game_active and (
             not obs_streaming or not sab_paused or sab_paused is None
-            or not obs_window_ok or sab_corrected or stream_restarted
+            or not obs_window_ok or sab_corrected or stream_restarted or blacklisted_window
         )
         status = "ISSUE" if issue else ("OK" if game_active else "IDLE")
 
@@ -187,6 +209,7 @@ class Daemon:
             "status": status,
             "obs_window_ok": obs_window_ok,
             "stream_restarted": stream_restarted,
+            "blacklisted_window": blacklisted_window,
         }
 
     def _format_heartbeat(
@@ -198,13 +221,16 @@ class Daemon:
         obs_window_ok: bool = True,
         sab_corrected: bool = False,
         stream_restarted: bool = False,
+        blacklisted_window: str | None = None,
     ) -> str:
-        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted)
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window)
         line = f"Status: {c['status'] if c['game_active'] else 'OK'} | Streaming: {c['game_str']} | Category: {c['cat_str']} | SABnzbd: {c['sab_str']}"
         if c["game_active"] and not c["obs_window_ok"]:
             line += " | OBS Window: REAPPLIED"
         if c["game_active"] and c["stream_restarted"]:
             line += " | Stream: RESTARTED"
+        if c["blacklisted_window"]:
+            line += f" | SAFETY: BLOCKED non-game window '{c['blacklisted_window']}' - stream force-stopped"
         return line
 
     def _print_heartbeat(self):
@@ -215,6 +241,7 @@ class Daemon:
         obs_window_ok = True
         sab_corrected = False
         stream_restarted = False
+        blacklisted_window = None
 
         if self._active_game_exe:
             # OBS connectivity - attempt reconnect before other OBS calls
@@ -230,13 +257,28 @@ class Daemon:
             # OBS window verification + correction
             expected = self.games[self._active_game_exe]["obs_window"]
             actual = self.obs.get_game_capture_window()
+
+            # SAFETY: never stream a blacklisted window (browser/desktop/
+            # terminal) - Twitch is public. Checked against OBS's ACTUAL live
+            # window every heartbeat, independent of how it got there (config
+            # edited by hand, OBS meddled with directly) - force-stop
+            # immediately; the reapply below then restores the expected
+            # (safe) game window in this same cycle.
+            if window_safety.is_blacklisted(actual):
+                log.error(f"SAFETY: blacklisted window captured ('{actual}') - force-stopping stream")
+                self.obs.stop_stream()
+                obs_streaming = False
+                blacklisted_window = actual
+
             if actual != expected:
                 log.warning(f"OBS window mismatch (expected '{expected}', got '{actual}') - reapplying")
                 self.obs.set_game_capture_window(expected)
                 obs_window_ok = False
 
-            # Stream correction: only when WebSocket is alive (avoids restart-on-crash loop)
-            if obs_live and not obs_streaming:
+            # Stream correction: only when WebSocket is alive (avoids restart-on-crash loop).
+            # Skipped when we just force-stopped for a blacklisted window - restarting
+            # immediately would defeat the whole point of stopping it.
+            if obs_live and not obs_streaming and not blacklisted_window:
                 log.warning("Stream stopped while game active - restarting")
                 self.obs.start_stream()
                 stream_restarted = True
@@ -249,8 +291,8 @@ class Daemon:
         else:
             obs_streaming = self.obs.is_streaming()
 
-        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted)
-        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted))
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window)
+        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window))
         try:
             status_file.write_status(
                 STATUS_PATH,
@@ -265,13 +307,21 @@ class Daemon:
                 title=self._current_title,
                 tags=self._current_tags,
                 build_id=self.build_id,
+                blacklisted_window=blacklisted_window,
             )
         except OSError as e:
             log.warning(f"Could not write dashboard status file: {e}")
 
     def _detect_game(self):
-        """Return exe name of first known running game, or None."""
-        running = {p.name() for p in psutil.process_iter(['name'])}
+        """Return exe name of first known running game, or None.
+
+        Reads the pre-fetched p.info['name'] (from process_iter's attrs=)
+        rather than calling p.name() live - a process can exit between being
+        listed and a live .name() call, raising psutil.NoSuchProcess and
+        crashing the whole scan. The cached attrs value has no such race
+        (psutil silently drops any process whose attrs failed to populate).
+        """
+        running = {p.info['name'] for p in psutil.process_iter(['name']) if p.info.get('name')}
         for exe in self.games:
             if exe in running:
                 return exe
