@@ -2,10 +2,30 @@
 
 ---
 
+## 2026-07-19 - Hot-reload on by default via run.bat + desktop shortcut maker
+
+Flipped `--watch` from opt-in to the default: `run.bat` (the desktop shortcut
+target) now always launches `streampilot.py start --dashboard --watch`, so
+David can edit source and see the change land in the running program within
+~1-2s while actively streaming, with no separate dev-mode launch step.
+
+Added `scripts/setup/make-desktop-shortcut.ps1` (+ `tests/test-desktop-shortcut.ps1`),
+matching the Claude Code shortcut-maker pattern already used in the workspace
+repo - removes any existing `StreamPilot*.lnk` on the Desktop first (two stale
+duplicates, "StreamPilot.lnk" and "StreamPilot (2).lnk", were cleaned up as
+part of shipping this), then creates exactly one shortcut pointing at
+`run.bat`. The shortcut carries no launch args itself - `run.bat` is the
+single source of truth, so this script never needs updating again just
+because the launch command changes. Verified: 8/8 checks pass.
+
+Desktop-shortcut polish ideas (`.bat` double-click wrapper, add-game wizard
+offering to run this at first-time setup, etc.) captured in IDEAS.md, not
+implemented.
+
 ## 2026-07-19 - Hot-reload dev mode + 3-option Quit dialog
 
-**Hot-reload (`--watch`):** new opt-in CLI flag (`start --watch`, never used by
-`run.bat`) starts `src/hot_reload.py`'s file-watcher - polls every `.py` file
+**Hot-reload (`--watch`):** new opt-in CLI flag (`start --watch`, superseded
+same day by the default-on flip above) starts `src/hot_reload.py`'s file-watcher - polls every `.py` file
 under `src/` once a second, and the moment any changes, restarts the whole
 process in place via `os.execv` (picks up ANY code change, not just HTML/CSS,
 since Python doesn't hot-reload imported modules on its own). Restarting the
