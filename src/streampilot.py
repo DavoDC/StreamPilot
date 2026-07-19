@@ -19,6 +19,7 @@ if sys.stderr is None:
 
 import config as cfg_module
 from daemon import Daemon
+import window_safety
 
 LOG_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'logs')
 WINDOW_LIST_LIMIT = 40  # add-game window picker cap - was 20, silently dropped windows on a busy desktop
@@ -49,10 +50,14 @@ def cmd_start(args):
     daemon = Daemon(cfg)
     if getattr(args, 'dashboard', False):
         import dashboard_server
+        import hot_reload
         import threading
+        # A hot-reload self-restart (--watch) carries this env var forward via
+        # os.execv - only the true first launch should pop open a new browser tab.
+        is_hot_reload_restart = os.environ.get(hot_reload.RESTART_ENV_VAR) == "1"
         t = threading.Thread(
             target=dashboard_server.run,
-            kwargs={'open_browser': True, 'on_quit': daemon.stop},
+            kwargs={'open_browser': not is_hot_reload_restart, 'on_quit': daemon.stop},
             daemon=True,
         )
         t.start()
@@ -124,6 +129,10 @@ def cmd_add_game(args):
             proc = psutil.Process(pid)
             exe = proc.name()
             cls = win32gui.GetClassName(hwnd)
+            # Safety: never offer a browser/desktop/terminal window as a "game" -
+            # Twitch is public. See src/window_safety.py and CLAUDE.md's Safety section.
+            if window_safety.is_blacklisted(exe):
+                return
             windows.append((title, cls, exe))
         except Exception:
             pass

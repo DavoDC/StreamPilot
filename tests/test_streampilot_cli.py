@@ -54,3 +54,45 @@ def test_cmd_start_skips_watcher_when_watch_flag_absent():
          patch.dict("sys.modules", {"hot_reload": fake_hot_reload}):
         streampilot.cmd_start(args)
     fake_hot_reload.start_watcher.assert_not_called()
+
+
+def test_cmd_start_opens_browser_on_normal_launch():
+    """First launch (no hot-reload restart env var) must still open the tab."""
+    args = _parse(['start', '--dashboard'])
+    mock_daemon = MagicMock()
+    fake_hot_reload = MagicMock()
+    fake_hot_reload.RESTART_ENV_VAR = "STREAMPILOT_HOT_RELOAD_RESTART"
+    fake_dashboard_server = MagicMock()
+    with patch("streampilot.setup_logging"), \
+         patch("streampilot.cfg_module.load", return_value={}), \
+         patch("streampilot.Daemon", return_value=mock_daemon), \
+         patch("streampilot.os._exit"), \
+         patch("threading.Thread") as mock_thread_cls, \
+         patch.dict("os.environ", {}, clear=False), \
+         patch.dict("sys.modules", {"hot_reload": fake_hot_reload, "dashboard_server": fake_dashboard_server}):
+        import os as os_module
+        os_module.environ.pop("STREAMPILOT_HOT_RELOAD_RESTART", None)
+        streampilot.cmd_start(args)
+
+    _, kwargs = mock_thread_cls.call_args
+    assert kwargs["kwargs"]["open_browser"] is True
+
+
+def test_cmd_start_skips_browser_on_hot_reload_restart():
+    """A --watch self-restart must NOT pop open another browser tab."""
+    args = _parse(['start', '--dashboard'])
+    mock_daemon = MagicMock()
+    fake_hot_reload = MagicMock()
+    fake_hot_reload.RESTART_ENV_VAR = "STREAMPILOT_HOT_RELOAD_RESTART"
+    fake_dashboard_server = MagicMock()
+    with patch("streampilot.setup_logging"), \
+         patch("streampilot.cfg_module.load", return_value={}), \
+         patch("streampilot.Daemon", return_value=mock_daemon), \
+         patch("streampilot.os._exit"), \
+         patch("threading.Thread") as mock_thread_cls, \
+         patch.dict("os.environ", {"STREAMPILOT_HOT_RELOAD_RESTART": "1"}), \
+         patch.dict("sys.modules", {"hot_reload": fake_hot_reload, "dashboard_server": fake_dashboard_server}):
+        streampilot.cmd_start(args)
+
+    _, kwargs = mock_thread_cls.call_args
+    assert kwargs["kwargs"]["open_browser"] is False
