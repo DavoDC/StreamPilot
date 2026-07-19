@@ -1,6 +1,7 @@
 # test-desktop-shortcut.ps1
-# Verifies the StreamPilot desktop shortcut is correctly configured.
-# Run after scripts/setup/make-desktop-shortcut.ps1 to confirm everything is wired up.
+# Verifies the two StreamPilot desktop shortcuts (one per monitor) are
+# correctly configured. Run after scripts/setup/make-desktop-shortcut.ps1 to
+# confirm everything is wired up.
 
 $pass = 0
 $fail = 0
@@ -19,21 +20,26 @@ function Assert($label, $condition, $detail = "") {
 $repoDir      = Split-Path -Parent $PSScriptRoot
 $runBat       = "$repoDir\scripts\run.bat"
 $icoPath      = "$repoDir\assets\StreamPilotIconICO.ico"
-$desktopShortcut = "$env:USERPROFILE\Desktop\StreamPilot.lnk"
+$expectedNames = @("StreamPilot.lnk", "StreamPilot 2.lnk")
 
 Write-Host "`nStreamPilot shortcut tests`n" -ForegroundColor Cyan
 
-Assert "run.bat exists"              (Test-Path $runBat)          $runBat
-Assert "Icon exists"                 (Test-Path $icoPath)         $icoPath
-Assert "Desktop shortcut exists"     (Test-Path $desktopShortcut) $desktopShortcut
+Assert "run.bat exists"  (Test-Path $runBat)  $runBat
+Assert "Icon exists"     (Test-Path $icoPath) $icoPath
 
-$dupes = Get-ChildItem "$env:USERPROFILE\Desktop" -Filter "StreamPilot*.lnk" -ErrorAction SilentlyContinue
-Assert "No duplicate StreamPilot shortcuts" ($dupes.Count -eq 1) "Found $($dupes.Count): $($dupes.Name -join ', ')"
+$found = Get-ChildItem "$env:USERPROFILE\Desktop" -Filter "StreamPilot*.lnk" -ErrorAction SilentlyContinue
+Assert "Exactly 2 StreamPilot shortcuts (one per monitor)" ($found.Count -eq 2) "Found $($found.Count): $($found.Name -join ', ')"
 
 $shell = New-Object -ComObject WScript.Shell
-$sc = $shell.CreateShortcut($desktopShortcut)
-Assert "Shortcut target is run.bat"  ($sc.TargetPath -eq $runBat)           "Got: $($sc.TargetPath)"
-Assert "Icon set correctly"          ($sc.IconLocation -like "*$([System.IO.Path]::GetFileName($icoPath))*") "Got: $($sc.IconLocation)"
+foreach ($name in $expectedNames) {
+    $path = "$env:USERPROFILE\Desktop\$name"
+    Assert "$name exists" (Test-Path $path) $path
+    if (Test-Path $path) {
+        $sc = $shell.CreateShortcut($path)
+        Assert "$name target is run.bat" ($sc.TargetPath -eq $runBat) "Got: $($sc.TargetPath)"
+        Assert "$name icon set correctly" ($sc.IconLocation -like "*$([System.IO.Path]::GetFileName($icoPath))*") "Got: $($sc.IconLocation)"
+    }
+}
 
 $runBatContent = Get-Content $runBat -Raw
 Assert "run.bat launches with --watch (hot-reload on by default)" ($runBatContent -match '--watch')
