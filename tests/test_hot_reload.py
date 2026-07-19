@@ -46,6 +46,25 @@ def test_watch_loop_restarts_process_when_a_file_changes(tmp_path):
     mock_execv.assert_called_once()
 
 
+def test_watch_loop_sets_restart_env_var_before_execv(tmp_path):
+    """Must set the restart flag BEFORE execv - streampilot.py reads it after
+    the re-exec to decide whether to skip opening another browser tab."""
+    baseline = {"a.py": 100.0}
+    changed = {"a.py": 200.0}
+    os.environ.pop(hot_reload.RESTART_ENV_VAR, None)
+
+    with patch("hot_reload.time.sleep"), \
+         patch("hot_reload.snapshot", side_effect=[baseline, changed]), \
+         patch("hot_reload.os.execv", side_effect=SystemExit):
+        try:
+            hot_reload.watch_loop("fake_dir", poll_interval=0)
+        except SystemExit:
+            pass
+
+    assert os.environ.get(hot_reload.RESTART_ENV_VAR) == "1"
+    os.environ.pop(hot_reload.RESTART_ENV_VAR, None)
+
+
 def test_watch_loop_does_not_restart_when_nothing_changed(tmp_path):
     """No change between polls -> no restart. Loop is stopped for the test
     via a sleep side_effect that raises after the second poll."""
