@@ -67,7 +67,10 @@ def cmd_start(args):
         t.start()
     if getattr(args, 'watch', False):
         import hot_reload
-        hot_reload.start_watcher(os.path.dirname(__file__))
+        hot_reload.start_watcher(
+            os.path.dirname(__file__),
+            extra_files=[os.path.abspath(cfg_module.CONFIG_PATH)],
+        )
     daemon.start()
     # daemon.start() only returns once the loop has stopped (dashboard Quit
     # button, or a startup failure) - os._exit guarantees the headless
