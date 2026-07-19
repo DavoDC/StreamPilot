@@ -147,21 +147,38 @@ The shortcut itself carries no launch args - `run.bat` is the single source of t
 so changing hot-reload behaviour means editing `run.bat`, not the shortcut.
 `src/hot_reload.py` polls every `.py` file under `src/` (plus `config.json` via
 `extra_files=` - not a `.py` file and not under `src/`, but still worth reacting to)
-once a second (`snapshot()`/`watch_loop()`, stdlib only). Two safety features before it
-actually restarts, both because a save mid-edit must never crash a live process silently:
-**debounce** (2s default, `DEBOUNCE_SECONDS`) - a burst of edits building one feature
-collapses into a single restart once the file set has been quiet, not one restart per
-save; and a **syntax gate** (`check_syntax()`, in-memory `compile()`, no bytecode-cache
-side effect) - if anything doesn't parse, the watcher logs a warning and keeps the old
-(working) process running, re-checking every poll, instead of restarting into a
-guaranteed crash. Neither catches a semantic/runtime bug (that's what the psutil-race
-incident above was) - see `feedback_live_process_hotreload_verify_liveness.md` for the
-verification discipline that covers the rest. Once ready, it calls
-`os.execv(sys.executable, sys.argv)` to restart the whole process in place with the
-same args - this reloads **all** code, not just the dashboard HTML, since Python
-doesn't hot-reload imported modules on its own. Restarting the StreamPilot process
-does NOT stop the actual OBS stream (OBS is a separate process, only reconnects over
-WebSocket) - safe to use while a real stream is live.
+once a second (`snapshot()`/`watch_loop()`, stdlib only).
+
+**Two ways a restart triggers - use the explicit one when building a feature:**
+- **Explicit "reload now" signal (preferred):** touch/create
+  `data/state/reload.trigger` (any content, even empty) - the very next poll consumes
+  it (deletes the file) and restarts immediately, no waiting. This is the mechanism
+  for a deliberate multi-file/multi-minute feature build: keep editing across several
+  files for as long as needed (a long pause mid-build never auto-restarts anything),
+  then touch the trigger once everything is actually wired up and ready.
+  From Claude's Bash tool: `touch "C:/Users/David/GitHubRepos/StreamPilot/data/state/reload.trigger"`
+  (create the file if the `touch` command isn't available - content doesn't matter, only
+  its existence).
+- **Passive fallback (long debounce, 30s default - `DEBOUNCE_SECONDS`):** if nobody
+  signals, the watcher eventually restarts on its own once the file set has gone quiet
+  for that long - a lazy safety net for a quick one-line edit nobody explicitly
+  triggers, not the primary path. Deliberately long: a short debounce would auto-restart
+  mid-feature-build into syntax-valid-but-half-wired code, which is the exact failure
+  this two-path design avoids (raised by David 2026-07-19 after the first version used
+  a 2s debounce as the only mechanism).
+
+Either path is gated by a **syntax check** (`check_syntax()`, in-memory `compile()`, no
+bytecode-cache side effect) before actually restarting - if anything doesn't parse, the
+watcher logs a warning and keeps the old (working) process running, re-checking every
+poll, instead of restarting into a guaranteed crash. This does NOT catch a semantic/
+runtime bug (that's what the psutil-race incident above was) - see
+`feedback_live_process_hotreload_verify_liveness.md` for the verification discipline
+that covers the rest. Once ready, it calls `os.execv(sys.executable, sys.argv)` to
+restart the whole process in place with the same args - this reloads **all** code, not
+just the dashboard HTML, since Python doesn't hot-reload imported modules on its own.
+Restarting the StreamPilot process does NOT stop the actual OBS stream (OBS is a
+separate process, only reconnects over WebSocket) - safe to use while a real stream is
+live.
 The already-open dashboard browser tab then reloads **itself**: `Daemon.build_id`
 (a timestamp set once per process start) rides along on every `status.json`
 heartbeat; the dashboard's `tick()` JS remembers the first `build_id` it sees and

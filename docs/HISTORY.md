@@ -2,6 +2,24 @@
 
 ---
 
+## 2026-07-19 - hot_reload.py: explicit "reload now" trigger, replaces fixed 2s debounce
+
+David's concern with the previous fix: a real feature build is a series of edits over
+several minutes with pauses well over the old 2s debounce window (reading a file,
+thinking, running tests) - a short passive debounce risks auto-restarting mid-build into
+syntax-valid-but-half-wired code. Fix: a deliberate signal, not a timer.
+
+- **`data/state/reload.trigger`** - touch/create this file (any content) and the very
+  next poll consumes it and restarts immediately, after the existing syntax check. No
+  sockets/ports - simplest possible local IPC, same "simple state file" convention as
+  `status.json` right beside it (gitignored the same way).
+- **`DEBOUNCE_SECONDS` bumped 2 -> 30** - now purely a lazy passive fallback for a quick
+  one-line edit nobody explicitly signals, not the primary mechanism.
+- Both paths still gated by the syntax check from the previous fix.
+
+Going forward: build a feature across as many edits/files as needed (no auto-restart
+risk mid-build), then touch the trigger file once it's actually ready.
+
 ## 2026-07-19 - hot_reload.py: watch config.json, debounce, syntax gate
 
 Prompted by two things David raised after the previous fixes landed: (1) the
