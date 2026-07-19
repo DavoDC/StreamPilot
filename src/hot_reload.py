@@ -17,6 +17,12 @@ log = logging.getLogger(__name__)
 
 POLL_SECONDS = 1.0
 
+# Set on os.environ right before a self-restart, inherited by the re-exec'd
+# process automatically (execv carries the current env forward). streampilot.py
+# reads this to skip re-opening a browser tab on every hot-reload restart -
+# only the true first launch should do that.
+RESTART_ENV_VAR = "STREAMPILOT_HOT_RELOAD_RESTART"
+
 
 def snapshot(watch_dir: str) -> dict:
     """Return {path: mtime} for every .py file under watch_dir."""
@@ -41,6 +47,7 @@ def watch_loop(watch_dir: str, poll_interval: float = POLL_SECONDS):
         current = snapshot(watch_dir)
         if current != baseline:
             log.info("Code change detected under %s - restarting StreamPilot...", watch_dir)
+            os.environ[RESTART_ENV_VAR] = "1"
             os.execv(sys.executable, [sys.executable] + sys.argv)
 
 
