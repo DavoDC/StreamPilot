@@ -89,19 +89,21 @@ INDEX_HTML = """<!doctype html>
 
   #quitDialog {
     background: #1a1e26; border: 1px solid #262b34; border-radius: 10px;
-    padding: 22px 24px; max-width: 300px; text-align: left;
+    padding: 22px 24px; max-width: 320px; text-align: left;
   }
   #quitDialog:focus { outline: none; }
   #quitTitle { font-size: 16px; font-weight: 700; color: #e5e7eb; margin-bottom: 8px; }
   #quitDesc { font-size: 13px; color: #9ca3af; line-height: 1.5; }
-  .quitActions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .quitActions { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
   .quitActions button {
-    font-size: 13px; padding: 7px 16px; border-radius: 6px; cursor: pointer;
-    border: 1px solid #2a2f38; background: #12151a; color: #c9d1d9;
+    font-size: 13px; padding: 8px 16px; border-radius: 6px; cursor: pointer;
+    border: 1px solid #2a2f38; background: #12151a; color: #c9d1d9; text-align: center;
   }
   #quitCancel:hover, #quitCancel:focus-visible { border-color: #4b5563; }
-  #quitConfirm { background: #3a1418; border-color: #6b2530; color: #ff8787; }
-  #quitConfirm:hover, #quitConfirm:focus-visible { background: #4a1a20; border-color: #ff5d5d; color: #ffb3b3; }
+  #quitKeepStream { border-color: #1f3a52; color: #7cc4ff; }
+  #quitKeepStream:hover, #quitKeepStream:focus-visible { background: #12212e; border-color: #3fa1ff; color: #a9d8ff; }
+  #quitEndStream { background: #3a1418; border-color: #6b2530; color: #ff8787; }
+  #quitEndStream:hover, #quitEndStream:focus-visible { background: #4a1a20; border-color: #ff5d5d; color: #ffb3b3; }
   .quitActions button:disabled { opacity: 0.5; cursor: default; }
 </style>
 </head>
@@ -121,10 +123,11 @@ INDEX_HTML = """<!doctype html>
   <div id="quitOverlay" class="overlay" hidden>
     <div id="quitDialog" role="alertdialog" aria-modal="true" aria-labelledby="quitTitle" aria-describedby="quitDesc" tabindex="-1">
       <div id="quitTitle">Quit StreamPilot?</div>
-      <div id="quitDesc">This stops the stream, resumes SABnzbd, and closes StreamPilot.</div>
+      <div id="quitDesc">Choose what happens to your stream.</div>
       <div class="quitActions">
         <button id="quitCancel" type="button">Cancel</button>
-        <button id="quitConfirm" type="button">Quit</button>
+        <button id="quitKeepStream" type="button">Keep streaming</button>
+        <button id="quitEndStream" type="button">End stream</button>
       </div>
     </div>
   </div>
@@ -151,6 +154,8 @@ function renderTags(tags) {
   }
 }
 
+let lastBuildId = null;  // tracks the running process - see hot_reload.py
+
 async function tick() {
   let s = null;
   try {
@@ -162,6 +167,17 @@ async function tick() {
   const age = s ? now - s.timestamp : Infinity;
   const maxAge = s ? Math.max((s.poll_interval || 2) * STALE_MULT, STALE_FLOOR) : 0;
   const stale = !s || age > maxAge;
+
+  // The server behind this tab restarted (code change via --watch, or a
+  // manual restart) - reload so we pick up new HTML/CSS/JS immediately.
+  if (!stale && s.build_id) {
+    if (lastBuildId === null) {
+      lastBuildId = s.build_id;
+    } else if (s.build_id !== lastBuildId) {
+      location.reload();
+      return;
+    }
+  }
 
   const state = stale ? "OFFLINE" : (s.status || "IDLE");
   const color = COLORS[state] || "#f5a623";
@@ -198,7 +214,8 @@ const quitBtn = document.getElementById("quitBtn");
 const quitOverlay = document.getElementById("quitOverlay");
 const quitDialog = document.getElementById("quitDialog");
 const quitCancel = document.getElementById("quitCancel");
-const quitConfirm = document.getElementById("quitConfirm");
+const quitKeepStream = document.getElementById("quitKeepStream");
+const quitEndStream = document.getElementById("quitEndStream");
 const quitDesc = document.getElementById("quitDesc");
 
 function onQuitKeydown(e) {
@@ -214,17 +231,28 @@ function closeQuitDialog() {
   document.removeEventListener("keydown", onQuitKeydown);
   quitBtn.focus();
 }
+function confirmQuit(endStream, inProgressMessage) {
+  quitCancel.disabled = true;
+  quitKeepStream.disabled = true;
+  quitEndStream.disabled = true;
+  quitDesc.textContent = inProgressMessage;
+  fetch("/quit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ end_stream: endStream }),
+  }).catch(() => {});
+}
 
 quitBtn.addEventListener("click", openQuitDialog);
 quitCancel.addEventListener("click", closeQuitDialog);
 quitOverlay.addEventListener("click", (e) => {
   if (e.target === quitOverlay) closeQuitDialog();
 });
-quitConfirm.addEventListener("click", () => {
-  quitCancel.disabled = true;
-  quitConfirm.disabled = true;
-  quitDesc.textContent = "Stopping the stream and closing StreamPilot...";
-  fetch("/quit", { method: "POST" }).catch(() => {});
+quitKeepStream.addEventListener("click", () => {
+  confirmQuit(false, "Closing StreamPilot - your stream keeps running...");
+});
+quitEndStream.addEventListener("click", () => {
+  confirmQuit(true, "Stopping the stream and closing StreamPilot...");
 });
 </script>
 </body>
@@ -237,7 +265,7 @@ def status_json_bytes(status_path=STATUS_PATH) -> bytes:
     if the daemon hasn't written anything yet."""
     data = status_file.read_status(status_path)
     if data is None:
-        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2}
+        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2, "build_id": None}
     return json.dumps(data).encode("utf-8")
 
 
@@ -265,8 +293,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/quit":
+            end_stream = True
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            if length:
+                try:
+                    payload = json.loads(self.rfile.read(length))
+                    end_stream = bool(payload.get("end_stream", True))
+                except (json.JSONDecodeError, ValueError):
+                    pass
             if _on_quit_callback:
-                _on_quit_callback()
+                _on_quit_callback(end_stream=end_stream)
             body = b'{"ok": true}'
             self.send_response(202)
             self.send_header("Content-Type", "application/json")
