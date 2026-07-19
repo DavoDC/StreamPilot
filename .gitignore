@@ -16,6 +16,7 @@ data/logs/*.log
 
 # Runtime state
 data/state/status.json
+data/state/reload.trigger
 
 # IDE
 .vscode/
