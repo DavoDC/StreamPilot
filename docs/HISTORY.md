@@ -2,6 +2,39 @@
 
 ---
 
+## 2026-07-19 - Live-tested hot-reload against David's real stream: 3 bugs found and fixed
+
+David ran `--watch` live while actually streaming Palworld and had Claude exercise it
+end-to-end (test UI/code changes, browser auto-reload verification via MCP). Surfaced
+three real bugs that unit tests alone hadn't caught:
+
+1. **New browser tab on every restart** - `os.execv` re-runs `cmd_start`, which always
+   passed `open_browser=True`. Fixed: `hot_reload.py` sets an env var before `execv`;
+   `cmd_start` checks it and only opens a tab on the true first launch.
+2. **Stream stopped/restarted on every hot-reload (VOD-splitting bug)** - a fresh
+   `Daemon` forgets `_active_game_exe`, so a restart while a game was already running
+   looked like a fresh launch and ran the full stop+restart flow, briefly erroring
+   ("Ending previous VOD" -> OBS rejects `StartStream` mid-teardown -> heartbeat
+   flips to ISSUE -> self-heals). This is what David saw as "OK briefly said ISSUE".
+   Fixed: `_reconcile_existing_session()` adopts an already-live session instead.
+3. **The daemon actually crashed and stayed down** - `_detect_game()`'s live `p.name()`
+   call raced against `psutil.NoSuchProcess` (a process can exit between listing and
+   the call). Under `pythonw.exe` the traceback was swallowed silently and the process
+   just died, taking the dashboard with it - unnoticed for several minutes. Fixed by
+   reading psutil's pre-fetched `p.info['name']` instead of live-querying `.name()`.
+
+General lesson (workspace-wide, not StreamPilot-specific): a green pytest run does not
+prove a live `--watch`-driven process survived an edit, since mocks can't reproduce real
+external-library races. Captured in
+`ClaudeOnly/memory/feedback/feedback_live_process_hotreload_verify_liveness.md` and
+`.claude/rules/enforced-rules.md`.
+
+Also added: window-capture safety blacklist (`src/window_safety.py`) - config
+validation, add-game wizard, and a live heartbeat check all refuse to ever stream a
+browser/desktop/terminal window, since Twitch is public. See CLAUDE.md's safety section.
+
+---
+
 ## 2026-07-19 - Hot-reload on by default via run.bat + desktop shortcut maker
 
 Flipped `--watch` from opt-in to the default: `run.bat` (the desktop shortcut

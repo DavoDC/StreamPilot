@@ -26,6 +26,29 @@ Single scene with two sources:
 - `Application Audio Output Capture` - captures audio from a list of exes (one-time setup per new game)
 - `Game Capture` - target exe changes per game (StreamPilot automates this)
 
+## Safety: never stream a non-game window (rule, added 2026-07-19)
+
+**Twitch is completely public. StreamPilot must never let OBS's Game Capture window
+resolve to a browser, the raw desktop, or a terminal/editor** - any of those could leak
+private tabs, files, or credentials to the whole audience. Enforced in three places
+(`src/window_safety.py` is the single shared blacklist all three read from - extend the
+list there, never duplicate it):
+1. **Config validation** (`config.py::_validate`) - daemon refuses to start if any
+   `games` entry's exe key or `obs_window` resolves to a blacklisted exe.
+2. **add-game wizard** (`streampilot.py::cmd_add_game`) - refuses to save a blacklisted
+   window, before it ever reaches config.json.
+3. **Live heartbeat check** (`daemon.py::_print_heartbeat`, the important one) - reads
+   OBS's ACTUAL current Game Capture window every cycle and force-stops the stream
+   immediately if it's ever blacklisted, regardless of how it got there (config edited
+   by hand, OBS meddled with directly, a future bug elsewhere). The normal window-mismatch
+   correction then reapplies the expected (safe) game window in the same cycle; the
+   stream-restart-if-stopped correction is skipped for that cycle so it doesn't
+   immediately undo the force-stop.
+Default blacklist: common browsers (chrome/edge/firefox/brave/opera/iexplore), raw
+desktop (explorer.exe, dwm.exe), terminals/editors (cmd/powershell/pwsh/WindowsTerminal/
+notepad/Code), and OBS itself (obs64/obs32 - capturing OBS's own window is a meaningless
+mirror loop).
+
 ## Dashboard is the source of truth (rule)
 
 **Whenever a new feature sets or changes a Twitch/OBS setting (title, tags, category, anything else), it MUST be surfaced on the browser dashboard in the same change.** The dashboard exists so David never has to open Twitch or OBS to confirm something is set correctly - it's the single centralised view. Concretely: add the value to the daemon's dashboard-facing state (`self._current_*` in `daemon.py`, cleared in `_on_no_game`), include it in the `status_file.write_status(...)` call in `_print_heartbeat`, and add a row to `INDEX_HTML` in `dashboard_server.py` (both the static row markup and the JS `tick()` function that fills it in). Applied for Title and Tags (2026-07-18) - see `_current_title`/`_current_tags` in `daemon.py` and the Title/Tags rows in `dashboard_server.py`.
@@ -128,6 +151,35 @@ This is the concrete case the "dashboard live-reload" idea in `docs/IDEAS.md`
 proposed generalizing further (serving HTML from disk, etc.) - the `--watch` +
 `build_id` mechanism above is the version actually shipped (2026-07-19).
 
+**Restart doesn't re-open a new browser tab.** `os.execv` re-runs `cmd_start` from
+scratch, which used to unconditionally pass `open_browser=True` - every hot-reload
+restart popped a fresh tab. `hot_reload.py` now sets `STREAMPILOT_HOT_RELOAD_RESTART=1`
+on `os.environ` right before `execv` (inherited by the re-exec'd process automatically);
+`cmd_start` checks it and only opens a tab on the true first launch.
+
+**Restart adopts an already-live session instead of restarting the stream.** A fresh
+`Daemon` always starts with `_active_game_exe=None`; without `_reconcile_existing_session()`
+(called once in `start()` before the loop), every restart while a game was already
+running would look like a brand-new launch and call `_on_game_launch()` - stopping the
+live stream ("Ending previous VOD") and immediately restarting it, splitting the VOD and
+briefly erroring (OBS rejects `StartStream` mid-teardown) for no reason. The reconcile
+check adopts the existing session (`_detect_game()` + `obs.is_streaming()`) when a known
+game is already live, so the heartbeat resumes monitoring without touching OBS.
+
+**Incident (2026-07-19): the daemon crashed and stayed down** while iterating with
+`--watch` live. Root cause: `_detect_game()` called `p.name()` live on each process in
+`psutil.process_iter(['name'])` - a process can exit between being listed and that call,
+raising `psutil.NoSuchProcess` uncaught. Under `pythonw.exe` (headless, stdout/stderr
+redirected to devnull per this file's CLI-entry-point guard) the traceback was invisible
+and the process just vanished, taking the dashboard down with it (`Get-Process pythonw`
+showed nothing running). Fixed by reading psutil's pre-fetched `p.info['name']` (from the
+`attrs=['name']` already requested) instead of live-querying `.name()` - psutil silently
+drops any process whose attrs failed to populate, so this has no race. General lesson
+captured workspace-wide: `ClaudeOnly/memory/feedback/feedback_live_process_hotreload_verify_liveness.md`
+- a green pytest run does not prove a live `--watch`-driven process survived an edit;
+verify liveness (`curl http://localhost:8765/status.json`, `Get-Process pythonw`, or tail
+the newest `data/logs/*.log`) after each risky edit, not just at the end.
+
 ## Repo Structure
 
 ```
@@ -141,6 +193,7 @@ StreamPilot/
 │   ├── status_file.py       # Daemon<->dashboard JSON contract (write/read/staleness)
 │   ├── dashboard_server.py  # Local web dashboard (stdlib http.server, no deps)
 │   ├── hot_reload.py        # --watch file-watcher + self-restart (os.execv)
+│   ├── window_safety.py     # Blacklist: never stream a browser/desktop/terminal
 │   └── config.py            # Loader + validator
 ├── assets/
 │   ├── StreamPilotIconICO.ico    # Program icon (desktop shortcut, tray)
