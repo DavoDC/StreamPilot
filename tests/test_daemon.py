@@ -645,6 +645,28 @@ def test_print_heartbeat_no_window_check_when_idle(daemon):
     daemon.obs.get_game_capture_window.assert_not_called()
 
 
+def test_print_heartbeat_does_not_show_stale_category_when_idle(daemon):
+    """Regression: Category must not show a leftover value (e.g. "Palworld")
+    once the game has closed and Game shows "Idle" - the dashboard looked
+    inconsistent/stale. Also skips the Twitch API call entirely while idle."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = None
+
+    daemon.obs.is_streaming.return_value = False
+    daemon.twitch.get_current_game_name.return_value = "Palworld"  # what Twitch still reports
+    daemon.sab.is_paused.return_value = None
+
+    with patch("daemon.status_file.write_status") as mock_write:
+        daemon._print_heartbeat()
+
+    daemon.twitch.get_current_game_name.assert_not_called()
+    _, kwargs = mock_write.call_args
+    assert kwargs["category"] is None
+
+
 def test_format_heartbeat_obs_window_wrong_shows_issue(daemon):
     line = daemon._format_heartbeat(
         game_name="My Game",

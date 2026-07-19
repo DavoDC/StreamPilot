@@ -243,7 +243,10 @@ class Daemon:
 
     def _print_heartbeat(self):
         game_name = self.games.get(self._active_game_exe, {}).get("name") if self._active_game_exe else None
-        twitch_category = self.twitch.get_current_game_name()
+        # Only fetch/show the Twitch category while a game is active - otherwise
+        # it's whatever was last set, stale and misleading next to "Idle" (also
+        # skips a pointless API call while idle).
+        twitch_category = self.twitch.get_current_game_name() if self._active_game_exe else None
         sab_paused = self.sab.is_paused() if (self.sab_enabled and self.sab) else None
 
         obs_window_ok = True
