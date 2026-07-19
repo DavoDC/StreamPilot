@@ -39,7 +39,7 @@ Single scene with two sources:
 - Unknown game: Windows toast notification - "Run 'streampilot config add-game'"
 - SABnzbd unreachable: logs warning + prints prompt to pause manually
 - **Heartbeat homeostasis (every 2s when game active):** verifies + self-heals all critical state - OBS WebSocket reconnect, OBS window reapply, stream restart if dropped, SABnzbd repause if drifted. Each correction shows as named field in `Status: ISSUE` line. Pattern: `observe -> compare -> correct -> flag`. Guard: stream restart only fires if `is_connected()` - prevents restart loop when OBS process is dead.
-- **Dashboard (`src/dashboard_server.py`):** every heartbeat, the daemon also writes `data/state/status.json` (`src/status_file.py` - atomic write, gitignored; lives under `data/state/` not `data/logs/` since it's live runtime state, not a timestamped log). The dashboard is a tiny local web server (Python stdlib `http.server`, zero new deps, no Flask/FastAPI/Node) serving a single-file HTML/CSS/JS page that polls `/status.json` every second - opens at `http://localhost:8765/` in a browser tab, no socket/IPC coupling to the daemon, same "write state, read state" pattern as AudioManager's GUI. **Security: the handler serves exactly two routes** (`/` and `/status.json`) rather than the directory tree, so `config.json`'s secrets (OAuth token, OBS password, SABnzbd API key) can never be reached through it - never switch this to `SimpleHTTPRequestHandler`. Shows a big OK/ISSUE/IDLE/OFFLINE badge, a continuously-pulsing heartbeat dot (CSS animation - proves the page itself is alive, independent of daemon state), and Game/Category/Title/Tags/SABnzbd rows. OFFLINE (grey) fires if no fresh write within `poll_interval * 4` (min 8s) - catches a dead/crashed daemon so the dashboard never shows stale reassurance. The browser **tab title and favicon also reflect state** (colored dot + game name in the title, recolored favicon) so David can monitor by glancing at the tab without it being focused. **`run.bat` (the desktop shortcut target) always starts both** - it self-elevates (OBS game capture needs admin rights), kills any previously running `streampilot.py` instance (avoids stacking duplicates across dev restarts or repeat clicks), then runs `streampilot.py start --dashboard` via `pythonw.exe` so no console window ever appears. One click, no terminal, dashboard opens automatically.
+- **Dashboard (`src/dashboard_server.py`):** every heartbeat, the daemon also writes `data/state/status.json` (`src/status_file.py` - atomic write, gitignored; lives under `data/state/` not `data/logs/` since it's live runtime state, not a timestamped log). The dashboard is a tiny local web server (Python stdlib `http.server`, zero new deps, no Flask/FastAPI/Node) serving a single-file HTML/CSS/JS page that polls `/status.json` every second - opens at `http://localhost:8765/` in a browser tab, no socket/IPC coupling to the daemon, same "write state, read state" pattern as AudioManager's GUI. **Security: the handler serves exactly two routes** (`/` and `/status.json`) rather than the directory tree, so `config.json`'s secrets (OAuth token, OBS password, SABnzbd API key) can never be reached through it - never switch this to `SimpleHTTPRequestHandler`. Shows a big OK/ISSUE/IDLE/OFFLINE badge, a continuously-pulsing heartbeat dot (CSS animation - proves the page itself is alive, independent of daemon state), and Game/Category/Title/Tags/SABnzbd rows. OFFLINE (grey) fires if no fresh write within `poll_interval * 4` (min 8s) - catches a dead/crashed daemon so the dashboard never shows stale reassurance. The browser **tab title and favicon also reflect state** (colored dot + game name in the title, recolored favicon) so David can monitor by glancing at the tab without it being focused. **`run.bat` (the desktop shortcut target) always starts both** - it self-elevates (OBS game capture needs admin rights), kills any previously running `streampilot.py` instance (avoids stacking duplicates across dev restarts or repeat clicks), then runs `streampilot.py start --dashboard` via `pythonw.exe` so no console window ever appears. One click, no terminal, dashboard opens automatically. **Quit button** opens a 3-option dialog - Cancel, "Keep streaming" (`end_stream: false`: closes StreamPilot only, OBS stream and SABnzbd pause state untouched), "End stream" (`end_stream: true`: stops the stream, resumes SABnzbd, closes StreamPilot - the original behaviour). POST `/quit` reads `end_stream` from the JSON body (defaults `true` if absent/malformed); `Daemon.stop(end_stream=...)` decides whether `start()`'s shutdown path calls `_on_no_game()`.
 
 ## Stack
 
@@ -100,6 +100,27 @@ Users run `scripts/run.bat` (and `scripts/setup/add-game.bat`) - these are thin 
 | `pythonw src/streampilot.py start --dashboard` (daemon + dashboard, one process, no console) | `scripts/run.bat` (the desktop shortcut target) |
 | `python src/streampilot.py dashboard` (reopen the dashboard tab without restarting the daemon) | manual CLI only, no `.bat` - rarely needed |
 | `python src/streampilot.py config add-game` | `scripts/setup/add-game.bat` |
+| `python src/streampilot.py start --dashboard --watch` (dev mode: auto-restart on code change) | manual CLI only, dev sessions - never `run.bat` |
+
+## Dev mode: hot-reload (`--watch`)
+
+**Opt-in only** - `run.bat` never passes `--watch`, so a normal streaming session is
+never touched by this. When developing against a live-running instance:
+`src/hot_reload.py` polls every `.py` file under `src/` once a second
+(`snapshot()`/`watch_loop()`, stdlib only); the moment any mtime changes it calls
+`os.execv(sys.executable, sys.argv)` to restart the whole process in place with the
+same args - this reloads **all** code, not just the dashboard HTML, since Python
+doesn't hot-reload imported modules on its own. Restarting the StreamPilot process
+does NOT stop the actual OBS stream (OBS is a separate process, only reconnects over
+WebSocket) - safe to use while a real stream is live.
+The already-open dashboard browser tab then reloads **itself**: `Daemon.build_id`
+(a timestamp set once per process start) rides along on every `status.json`
+heartbeat; the dashboard's `tick()` JS remembers the first `build_id` it sees and
+calls `location.reload()` the moment a later poll shows a different one - so a code
+change shows up in the open tab within about a second of the restart, no manual F5.
+This is the concrete case the "dashboard live-reload" idea in `docs/IDEAS.md`
+proposed generalizing further (serving HTML from disk, etc.) - the `--watch` +
+`build_id` mechanism above is the version actually shipped (2026-07-19).
 
 ## Repo Structure
 
