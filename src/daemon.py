@@ -49,6 +49,11 @@ class Daemon:
         self._running = False
         self._current_title = None
         self._current_tags = None
+        self._end_stream_on_stop = True
+        # Changes every process start (including a hot-reload self-restart) so
+        # the dashboard can tell "the server behind me restarted" and reload
+        # itself - see hot_reload.py and the build_id check in dashboard JS.
+        self.build_id = str(time.time())
 
     def _ensure_obs_running(self) -> bool:
         """Launch OBS if not running, wait for WebSocket. Returns True if already connected."""
@@ -111,10 +116,17 @@ class Daemon:
         except KeyboardInterrupt:
             log.info("Daemon stopped by user.")
         finally:
-            self._on_no_game()
+            if self._end_stream_on_stop:
+                self._on_no_game()
+            else:
+                log.info("Quit requested with stream kept running - leaving OBS/SABnzbd as-is.")
             self.obs.disconnect()
 
-    def stop(self):
+    def stop(self, end_stream: bool = True):
+        """Stop the polling loop. end_stream=False leaves OBS streaming and
+        SABnzbd paused untouched (dashboard's "Keep streaming" quit option) -
+        only the StreamPilot process itself exits."""
+        self._end_stream_on_stop = end_stream
         self._running = False
 
     def _loop(self):
@@ -252,6 +264,7 @@ class Daemon:
                 stream_restarted=stream_restarted,
                 title=self._current_title,
                 tags=self._current_tags,
+                build_id=self.build_id,
             )
         except OSError as e:
             log.warning(f"Could not write dashboard status file: {e}")

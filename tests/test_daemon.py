@@ -401,6 +401,69 @@ def test_print_heartbeat_writes_title_and_tags_to_status_file(daemon):
     assert kwargs["tags"] == ["English", "Australia"]
 
 
+def test_print_heartbeat_writes_build_id_to_status_file(daemon):
+    """build_id lets the dashboard detect a process restart (hot-reload or
+    manual) and reload itself - must be present on every heartbeat write."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = None
+    daemon.obs.is_streaming.return_value = False
+
+    with patch("daemon.log"), patch("daemon.status_file.write_status") as mock_write:
+        daemon._print_heartbeat()
+
+    _, kwargs = mock_write.call_args
+    assert kwargs["build_id"] == daemon.build_id
+
+
+def test_stop_defaults_to_ending_stream(daemon):
+    daemon.stop()
+    assert daemon._end_stream_on_stop is True
+    assert daemon._running is False
+
+
+def test_stop_can_keep_stream_running(daemon):
+    daemon.stop(end_stream=False)
+    assert daemon._end_stream_on_stop is False
+    assert daemon._running is False
+
+
+def test_start_skips_on_no_game_when_keeping_stream(daemon):
+    """'Keep streaming' quit option: OBS stream and SABnzbd pause state must
+    be left untouched - only the daemon loop and OBS websocket disconnect."""
+    daemon.obs = MagicMock()
+    daemon.obs.is_connected.return_value = True
+    daemon.sab = MagicMock()
+    daemon._end_stream_on_stop = False
+
+    with patch.object(daemon, "_ensure_steam_running"), \
+         patch.object(daemon, "_ensure_obs_running", return_value=True), \
+         patch.object(daemon, "_loop"), \
+         patch.object(daemon, "_on_no_game") as mock_on_no_game:
+        daemon.start()
+
+    mock_on_no_game.assert_not_called()
+    daemon.obs.disconnect.assert_called_once()
+
+
+def test_start_calls_on_no_game_when_ending_stream(daemon):
+    daemon.obs = MagicMock()
+    daemon.obs.is_connected.return_value = True
+    daemon.sab = MagicMock()
+    daemon._end_stream_on_stop = True
+
+    with patch.object(daemon, "_ensure_steam_running"), \
+         patch.object(daemon, "_ensure_obs_running", return_value=True), \
+         patch.object(daemon, "_loop"), \
+         patch.object(daemon, "_on_no_game") as mock_on_no_game:
+        daemon.start()
+
+    mock_on_no_game.assert_called_once()
+    daemon.obs.disconnect.assert_called_once()
+
+
 def test_print_heartbeat_reapplies_window_on_mismatch(daemon):
     """Heartbeat re-applies window and flags ISSUE when OBS has wrong game captured."""
     daemon.obs = MagicMock()
