@@ -56,6 +56,9 @@ def cmd_start(args):
             daemon=True,
         )
         t.start()
+    if getattr(args, 'watch', False):
+        import hot_reload
+        hot_reload.start_watcher(os.path.dirname(__file__))
     daemon.start()
     # daemon.start() only returns once the loop has stopped (dashboard Quit
     # button, or a startup failure) - os._exit guarantees the headless
@@ -187,6 +190,10 @@ def main():
 
     start_p = sub.add_parser('start', help='Start background polling daemon')
     start_p.add_argument('--dashboard', action='store_true', help='Also open the live dashboard in your browser')
+    start_p.add_argument(
+        '--watch', action='store_true',
+        help='Dev mode: auto-restart on any source code change (src/*.py), dashboard tab reloads itself too'
+    )
     sub.add_parser('status', help='Show current game, stream state, SABnzbd state')
     sub.add_parser('dashboard', help='Open the live reassurance dashboard in your browser')
 
