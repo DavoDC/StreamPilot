@@ -35,6 +35,34 @@ def test_status_json_bytes_includes_title_and_tags(tmp_path):
     assert data["tags"] == ["English", "Australia", "MarvelRivals"]
 
 
+def test_twitch_link_html_empty_when_no_channel():
+    assert dashboard_server._twitch_link_html(None) == ""
+    assert dashboard_server._twitch_link_html("") == ""
+
+
+def test_twitch_link_html_builds_correct_url():
+    html = dashboard_server._twitch_link_html("davo1776")
+    assert 'href="https://www.twitch.tv/davo1776"' in html
+    assert 'target="_blank"' in html
+    assert 'rel="noopener noreferrer"' in html
+
+
+def test_index_html_bytes_includes_twitch_link_when_configured():
+    dashboard_server._twitch_channel = "davo1776"
+    try:
+        html = dashboard_server.index_html_bytes().decode("utf-8")
+        assert "https://www.twitch.tv/davo1776" in html
+    finally:
+        dashboard_server._twitch_channel = None
+
+
+def test_index_html_bytes_omits_twitch_link_when_not_configured():
+    dashboard_server._twitch_channel = None
+    html = dashboard_server.index_html_bytes().decode("utf-8")
+    assert "twitch.tv" not in html
+    assert "__TWITCH_LINK_HTML__" not in html
+
+
 def test_index_html_renders_title_and_tags_rows():
     """Dashboard rule: any daemon-controlled Twitch setting must be visible on
     the dashboard so David never needs to check Twitch/OBS directly."""

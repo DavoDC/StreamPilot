@@ -57,7 +57,11 @@ def cmd_start(args):
         is_hot_reload_restart = os.environ.get(hot_reload.RESTART_ENV_VAR) == "1"
         t = threading.Thread(
             target=dashboard_server.run,
-            kwargs={'open_browser': not is_hot_reload_restart, 'on_quit': daemon.stop},
+            kwargs={
+                'open_browser': not is_hot_reload_restart,
+                'on_quit': daemon.stop,
+                'twitch_channel': cfg.get('twitch', {}).get('channel_name'),
+            },
             daemon=True,
         )
         t.start()

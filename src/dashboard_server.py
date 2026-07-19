@@ -30,6 +30,9 @@ POLL_MS = 1000  # how often the page re-fetches status.json
 # request - there's nowhere else to stash it without a custom server class.
 _on_quit_callback = None
 
+# Same reasoning - set by run(), read by index_html_bytes() per request.
+_twitch_channel = None
+
 INDEX_HTML = """<!doctype html>
 <html lang="en">
 <head>
@@ -72,6 +75,13 @@ INDEX_HTML = """<!doctype html>
     padding: 3px 9px; border-radius: 999px; line-height: 1.4;
   }
   #footer { font-size: 11px; color: #6b7280; }
+
+  #twitchLink {
+    color: #a970ff; font-size: 13px; font-weight: 600; text-decoration: none;
+    padding: 6px 14px; border: 1px solid #3a2a5c; border-radius: 6px;
+    transition: border-color 0.2s ease, color 0.2s ease;
+  }
+  #twitchLink:hover, #twitchLink:focus-visible { border-color: #a970ff; color: #c9a3ff; }
 
   #quitBtn {
     margin-top: 2px;
@@ -117,6 +127,7 @@ INDEX_HTML = """<!doctype html>
     <div class="row" id="tagsRow"><span class="label">Tags</span><span class="value" id="tags"></span></div>
     <div class="row"><span class="label">SABnzbd</span><span class="value" id="sabnzbd">-</span></div>
   </div>
+  __TWITCH_LINK_HTML__
   <div id="footer">waiting for daemon...</div>
   <button id="quitBtn" type="button">Quit</button>
 
@@ -260,6 +271,22 @@ quitEndStream.addEventListener("click", () => {
 """.replace("__POLL_MS__", str(POLL_MS))
 
 
+def _twitch_link_html(channel: str | None) -> str:
+    """Small "Watch on Twitch" link so David can jump straight to the live
+    view without typing the URL - empty string (nothing rendered) if no
+    channel is configured."""
+    if not channel:
+        return ""
+    url = f"https://www.twitch.tv/{channel}"
+    return f'<a id="twitchLink" href="{url}" target="_blank" rel="noopener noreferrer">Watch on Twitch ↗</a>'
+
+
+def index_html_bytes() -> bytes:
+    """Render INDEX_HTML with the current Twitch channel link substituted in."""
+    html = INDEX_HTML.replace("__TWITCH_LINK_HTML__", _twitch_link_html(_twitch_channel))
+    return html.encode("utf-8")
+
+
 def status_json_bytes(status_path=STATUS_PATH) -> bytes:
     """Return the current status as JSON bytes, or an OFFLINE-shaped default
     if the daemon hasn't written anything yet."""
@@ -275,7 +302,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path in ("/", "/index.html"):
-            body = INDEX_HTML.encode("utf-8")
+            body = index_html_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
@@ -313,9 +340,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
 
 
-def run(port: int = PORT, open_browser: bool = True, on_quit=None):
-    global _on_quit_callback
+def run(port: int = PORT, open_browser: bool = True, on_quit=None, twitch_channel: str = None):
+    global _on_quit_callback, _twitch_channel
     _on_quit_callback = on_quit
+    _twitch_channel = twitch_channel
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://localhost:{port}/"
     print(f"[StreamPilot Dashboard] Serving at {url}")
