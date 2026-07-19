@@ -27,14 +27,14 @@ def daemon():
 
 def test_detect_game_found(daemon):
     mock_proc = MagicMock()
-    mock_proc.name.return_value = "game.exe"
+    mock_proc.info = {"name": "game.exe"}
     with patch("daemon.psutil.process_iter", return_value=[mock_proc]):
         assert daemon._detect_game() == "game.exe"
 
 
 def test_detect_game_not_found(daemon):
     mock_proc = MagicMock()
-    mock_proc.name.return_value = "chrome.exe"
+    mock_proc.info = {"name": "chrome.exe"}
     with patch("daemon.psutil.process_iter", return_value=[mock_proc]):
         assert daemon._detect_game() is None
 
@@ -42,6 +42,17 @@ def test_detect_game_not_found(daemon):
 def test_detect_game_empty_process_list(daemon):
     with patch("daemon.psutil.process_iter", return_value=[]):
         assert daemon._detect_game() is None
+
+
+def test_detect_game_ignores_process_with_no_name_populated(daemon):
+    """A process whose attrs failed to populate (psutil drops it silently)
+    must not crash the scan - simulated here as an empty/missing info dict."""
+    vanished_proc = MagicMock()
+    vanished_proc.info = {}
+    mock_proc = MagicMock()
+    mock_proc.info = {"name": "game.exe"}
+    with patch("daemon.psutil.process_iter", return_value=[vanished_proc, mock_proc]):
+        assert daemon._detect_game() == "game.exe"
 
 
 def test_on_game_launch_starts_stream_when_not_live(daemon):
@@ -430,6 +441,54 @@ def test_stop_can_keep_stream_running(daemon):
     assert daemon._running is False
 
 
+def test_reconcile_adopts_already_streaming_session(daemon):
+    """Hot-reload / relaunch while a game is already live must NOT be treated
+    as a fresh launch - that would stop+restart the stream and split the VOD
+    for no reason."""
+    daemon.obs = MagicMock()
+    daemon.obs.is_streaming.return_value = True
+    with patch.object(daemon, "_detect_game", return_value="game.exe"):
+        daemon._reconcile_existing_session()
+
+    assert daemon._active_game_exe == "game.exe"
+
+
+def test_reconcile_does_nothing_when_no_game_detected(daemon):
+    daemon.obs = MagicMock()
+    daemon.obs.is_streaming.return_value = True
+    with patch.object(daemon, "_detect_game", return_value=None):
+        daemon._reconcile_existing_session()
+
+    assert daemon._active_game_exe is None
+
+
+def test_reconcile_does_nothing_when_game_detected_but_not_streaming(daemon):
+    """Game running but stream NOT live (e.g. real crash recovery) - fall
+    through to the normal _loop()-driven _on_game_launch path instead."""
+    daemon.obs = MagicMock()
+    daemon.obs.is_streaming.return_value = False
+    with patch.object(daemon, "_detect_game", return_value="game.exe"):
+        daemon._reconcile_existing_session()
+
+    assert daemon._active_game_exe is None
+
+
+def test_start_calls_reconcile_before_loop(daemon):
+    daemon.obs = MagicMock()
+    daemon.obs.is_connected.return_value = True
+    daemon.sab = MagicMock()
+    daemon._end_stream_on_stop = True
+
+    with patch.object(daemon, "_ensure_steam_running"), \
+         patch.object(daemon, "_ensure_obs_running", return_value=True), \
+         patch.object(daemon, "_reconcile_existing_session") as mock_reconcile, \
+         patch.object(daemon, "_loop"), \
+         patch.object(daemon, "_on_no_game"):
+        daemon.start()
+
+    mock_reconcile.assert_called_once()
+
+
 def test_start_skips_on_no_game_when_keeping_stream(daemon):
     """'Keep streaming' quit option: OBS stream and SABnzbd pause state must
     be left untouched - only the daemon loop and OBS websocket disconnect."""
@@ -485,6 +544,73 @@ def test_print_heartbeat_reapplies_window_on_mismatch(daemon):
     logged_line = mock_log.info.call_args[0][0]
     assert "ISSUE" in logged_line
     assert "OBS Window: REAPPLIED" in logged_line
+
+
+def test_print_heartbeat_force_stops_blacklisted_window(daemon):
+    """Safety: Twitch is public - if OBS's captured window is ever a browser/
+    desktop/terminal, the heartbeat must force-stop the stream immediately,
+    regardless of how it got there (config drift, OBS meddled with directly)."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "Google Chrome:Chrome_WidgetWin_1:chrome.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    with patch("daemon.log") as mock_log:
+        daemon._print_heartbeat()
+
+    daemon.obs.stop_stream.assert_called_once()
+    daemon.obs.start_stream.assert_not_called()
+    logged_line = mock_log.info.call_args[0][0]
+    assert "ISSUE" in logged_line
+    assert "SAFETY: BLOCKED" in logged_line
+    assert "chrome.exe" in logged_line
+
+
+def test_print_heartbeat_reapplies_safe_window_after_blacklist_block(daemon):
+    """The force-stop must not skip the normal window-mismatch correction -
+    the expected (safe) game window still gets reapplied in the same cycle."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "Explorer:CabinetWClass:explorer.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    with patch("daemon.log"):
+        daemon._print_heartbeat()
+
+    daemon.obs.set_game_capture_window.assert_called_once_with("My Game:GameClass:game.exe")
+
+
+def test_print_heartbeat_no_blacklist_action_for_a_safe_game_window(daemon):
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    with patch("daemon.log"):
+        daemon._print_heartbeat()
+
+    daemon.obs.stop_stream.assert_not_called()
 
 
 def test_print_heartbeat_no_window_check_when_idle(daemon):
