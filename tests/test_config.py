@@ -52,6 +52,34 @@ def test_missing_config_file_exits(tmp_path, monkeypatch):
         cfg_module.load()
 
 
+def test_validate_fails_blacklisted_game_exe(tmp_path, monkeypatch):
+    """Safety: never let a browser be configured as a 'game' - Twitch is public."""
+    data = {
+        "obs": {"host": "localhost", "port": 4455, "password": "pw", "game_capture_source": "Game Capture"},
+        "twitch": {"client_id": "cid", "oauth_token": "tok"},
+        "games": {"chrome.exe": {"name": "Chrome", "twitch_game_id": "1", "obs_window": "Chrome:Chrome_WidgetWin_1:chrome.exe"}},
+    }
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps(data))
+    monkeypatch.setattr(cfg_module, "CONFIG_PATH", str(cfg_path))
+    with pytest.raises(SystemExit):
+        cfg_module.load()
+
+
+def test_validate_fails_blacklisted_obs_window(tmp_path, monkeypatch):
+    """Even if the exe key looks fine, a blacklisted obs_window must still fail."""
+    data = {
+        "obs": {"host": "localhost", "port": 4455, "password": "pw", "game_capture_source": "Game Capture"},
+        "twitch": {"client_id": "cid", "oauth_token": "tok"},
+        "games": {"game.exe": {"name": "Game", "twitch_game_id": "1", "obs_window": "Explorer:CabinetWClass:explorer.exe"}},
+    }
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps(data))
+    monkeypatch.setattr(cfg_module, "CONFIG_PATH", str(cfg_path))
+    with pytest.raises(SystemExit):
+        cfg_module.load()
+
+
 def test_add_game_writes_to_config(tmp_path, monkeypatch):
     data = {
         "obs": {"host": "localhost", "port": 4455, "password": "pw", "game_capture_source": "GC"},
