@@ -453,6 +453,21 @@ def test_reconcile_adopts_already_streaming_session(daemon):
     assert daemon._active_game_exe == "game.exe"
 
 
+def test_reconcile_populates_dashboard_title_and_tags(daemon):
+    """Regression: _on_game_launch() is the only other place _current_title/
+    _current_tags get set. Reconcile deliberately skips _on_game_launch (that's
+    what avoids restarting the stream) so it must set them itself, or the
+    dashboard shows '-' for Title/Tags on every hot-reload restart."""
+    daemon.cfg["twitch"]["base_tags"] = ["English"]
+    daemon.obs = MagicMock()
+    daemon.obs.is_streaming.return_value = True
+    with patch.object(daemon, "_detect_game", return_value="game.exe"):
+        daemon._reconcile_existing_session()
+
+    assert daemon._current_title == "Davo plays My Game!"
+    assert daemon._current_tags == ["English"]
+
+
 def test_reconcile_does_nothing_when_no_game_detected(daemon):
     daemon.obs = MagicMock()
     daemon.obs.is_streaming.return_value = True

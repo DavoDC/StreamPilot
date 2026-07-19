@@ -141,7 +141,15 @@ class Daemon:
         detected = self._detect_game()
         if detected and self.obs.is_streaming():
             self._active_game_exe = detected
-            log.info(f"Resuming existing session for {self.games[detected]['name']} - stream already live, not restarting it")
+            game = self.games[detected]
+            # _on_game_launch() is the only other place these get set - since
+            # we're deliberately skipping it here (that's what avoids the
+            # stream restart), recompute them locally for the dashboard.
+            # Pure functions, no Twitch API call - title/tags on Twitch itself
+            # are untouched (they were already set correctly before restart).
+            self._current_title = build_title(game["name"], game, self.twitch_cfg)
+            self._current_tags = build_tags(game, self.twitch_cfg)
+            log.info(f"Resuming existing session for {game['name']} - stream already live, not restarting it")
 
     def stop(self, end_stream: bool = True):
         """Stop the polling loop. end_stream=False leaves OBS streaming and
