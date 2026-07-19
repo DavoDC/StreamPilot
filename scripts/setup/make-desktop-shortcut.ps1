@@ -1,12 +1,14 @@
 # make-desktop-shortcut.ps1
 # Creates two StreamPilot desktop shortcuts - one to drag to each monitor, so
 # David can launch from whichever screen he's looking at (same multi-copy
-# pattern as the Claude Code shortcut maker in the workspace repo). Safe to
-# re-run any time - always removes any existing StreamPilot*.lnk on the
-# Desktop first (clears out stray duplicates), then creates exactly the two
-# named below. Explicitly named (not left to Windows' auto "(2)" suffix) so
-# there's never ambiguity about which files are real - an auto-suffixed
-# duplicate left a 0-byte ghost icon in Explorer's cache after deletion once.
+# pattern and "(2)" naming as the Claude Code shortcut maker in the workspace
+# repo). Safe to re-run any time - always removes any existing
+# StreamPilot*.lnk on the Desktop first (clears out stray duplicates), then
+# creates exactly the two named below. Both names are explicit/deliberate
+# here (the script always manages exactly these two), unlike a one-off
+# Explorer-generated "(2)" copy - that's what left a 0-byte ghost icon in
+# Explorer's cache after deletion once; a plain desktop refresh (F5) clears
+# that if it ever recurs.
 #
 # Run: powershell -ExecutionPolicy Bypass -File "...\scripts\setup\make-desktop-shortcut.ps1"
 # Verify: powershell -ExecutionPolicy Bypass -File "...\tests\test-desktop-shortcut.ps1"
@@ -15,7 +17,7 @@ $repoDir      = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $scriptsDir   = "$repoDir\scripts"
 $runBat       = "$scriptsDir\run.bat"
 $icoPath      = "$repoDir\assets\StreamPilotIconICO.ico"
-$shortcutNames = @("StreamPilot.lnk", "StreamPilot 2.lnk")
+$shortcutNames = @("StreamPilot.lnk", "StreamPilot (2).lnk")
 
 if (-not (Test-Path $runBat)) {
     Write-Error "run.bat not found at $runBat"

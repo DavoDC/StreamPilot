@@ -20,7 +20,7 @@ function Assert($label, $condition, $detail = "") {
 $repoDir      = Split-Path -Parent $PSScriptRoot
 $runBat       = "$repoDir\scripts\run.bat"
 $icoPath      = "$repoDir\assets\StreamPilotIconICO.ico"
-$expectedNames = @("StreamPilot.lnk", "StreamPilot 2.lnk")
+$expectedNames = @("StreamPilot.lnk", "StreamPilot (2).lnk")
 
 Write-Host "`nStreamPilot shortcut tests`n" -ForegroundColor Cyan
 
