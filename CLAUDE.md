@@ -159,13 +159,13 @@ once a second (`snapshot()`/`watch_loop()`, stdlib only).
   From Claude's Bash tool: `touch "C:/Users/David/GitHubRepos/StreamPilot/data/state/reload.trigger"`
   (create the file if the `touch` command isn't available - content doesn't matter, only
   its existence).
-- **Passive fallback (long debounce, 30s default - `DEBOUNCE_SECONDS`):** if nobody
-  signals, the watcher eventually restarts on its own once the file set has gone quiet
-  for that long - a lazy safety net for a quick one-line edit nobody explicitly
-  triggers, not the primary path. Deliberately long: a short debounce would auto-restart
-  mid-feature-build into syntax-valid-but-half-wired code, which is the exact failure
-  this two-path design avoids (raised by David 2026-07-19 after the first version used
-  a 2s debounce as the only mechanism).
+- **Passive fallback (very long debounce, 1 hour default - `DEBOUNCE_SECONDS`):** if
+  nobody signals, the watcher eventually restarts on its own once the file set has gone
+  quiet for that long - purely a "someone forgot to touch the trigger" backstop, not a
+  mechanism a real feature build should ever race against. Deliberately this long: even
+  a 30s debounce is still short enough to interrupt a genuine multi-minute build, which
+  is the exact failure this two-path design avoids (raised by David 2026-07-19, twice -
+  first the 2s-only version, then again when 30s turned out to still be too short).
 
 Either path is gated by a **syntax check** (`check_syntax()`, in-memory `compile()`, no
 bytecode-cache side effect) before actually restarting - if anything doesn't parse, the

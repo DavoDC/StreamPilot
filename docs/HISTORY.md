@@ -20,6 +20,13 @@ syntax-valid-but-half-wired code. Fix: a deliberate signal, not a timer.
 Going forward: build a feature across as many edits/files as needed (no auto-restart
 risk mid-build), then touch the trigger file once it's actually ready.
 
+**Same day, follow-up:** 30s still wasn't long enough - a 3-minute feature build could
+still race it. Since the trigger is the intended primary mechanism (confirmed working
+live: touched the file, restarted within ~2s per the log line "Reload triggered
+explicitly..."), the passive fallback isn't something a real build should ever be
+racing at all. Bumped `DEBOUNCE_SECONDS` 30 -> 3600 (1 hour) - purely a "forgot to
+signal" backstop now.
+
 ## 2026-07-19 - hot_reload.py: watch config.json, debounce, syntax gate
 
 Prompted by two things David raised after the previous fixes landed: (1) the
