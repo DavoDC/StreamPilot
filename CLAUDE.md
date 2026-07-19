@@ -145,8 +145,18 @@ creates one clean one pointing at `run.bat`) - re-run it any time the shortcut g
 missing or gets manually duplicated; verify with `tests/test-desktop-shortcut.ps1`.
 The shortcut itself carries no launch args - `run.bat` is the single source of truth,
 so changing hot-reload behaviour means editing `run.bat`, not the shortcut.
-`src/hot_reload.py` polls every `.py` file under `src/` once a second
-(`snapshot()`/`watch_loop()`, stdlib only); the moment any mtime changes it calls
+`src/hot_reload.py` polls every `.py` file under `src/` (plus `config.json` via
+`extra_files=` - not a `.py` file and not under `src/`, but still worth reacting to)
+once a second (`snapshot()`/`watch_loop()`, stdlib only). Two safety features before it
+actually restarts, both because a save mid-edit must never crash a live process silently:
+**debounce** (2s default, `DEBOUNCE_SECONDS`) - a burst of edits building one feature
+collapses into a single restart once the file set has been quiet, not one restart per
+save; and a **syntax gate** (`check_syntax()`, in-memory `compile()`, no bytecode-cache
+side effect) - if anything doesn't parse, the watcher logs a warning and keeps the old
+(working) process running, re-checking every poll, instead of restarting into a
+guaranteed crash. Neither catches a semantic/runtime bug (that's what the psutil-race
+incident above was) - see `feedback_live_process_hotreload_verify_liveness.md` for the
+verification discipline that covers the rest. Once ready, it calls
 `os.execv(sys.executable, sys.argv)` to restart the whole process in place with the
 same args - this reloads **all** code, not just the dashboard HTML, since Python
 doesn't hot-reload imported modules on its own. Restarting the StreamPilot process
