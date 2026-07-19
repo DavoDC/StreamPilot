@@ -4,6 +4,8 @@ import json
 import os
 import sys
 
+import window_safety
+
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'config.json')
 CONFIG_EXAMPLE_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'config.example.json')
 
@@ -35,6 +37,14 @@ def _validate(cfg: dict):
                 _fail(f"Missing key: '{section}.{key}'")
     if 'games' not in cfg or not isinstance(cfg['games'], dict):
         _fail("Missing or invalid 'games' section")
+
+    # Safety: never let a browser/desktop/terminal window be configured as a
+    # "game" - Twitch is public, streaming one of those leaks private content.
+    for exe, game in cfg['games'].items():
+        if window_safety.is_blacklisted(exe):
+            _fail(f"'{exe}' is blacklisted (see src/window_safety.py) - refusing to stream it as a game")
+        if window_safety.is_blacklisted(game.get('obs_window')):
+            _fail(f"games.{exe}.obs_window resolves to a blacklisted exe - refusing to stream it")
 
 
 def _fail(msg: str):
