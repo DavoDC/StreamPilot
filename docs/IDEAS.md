@@ -131,7 +131,7 @@ remaining value is narrower still - just the pre-game bookend:
 Implementation:
 - `pystray` + `Pillow` for tray icon
 - **Dynamic icon** - tick (all OK) or cross (issue) visible in taskbar while alt-tabbed to Discord or elsewhere
-- Icon ready: `assets/StreamPilotIconNoBG.ico` (transparent background) + `assets/StreamPilotIconOriginal.png`
+- Icon ready: `assets/StreamPilotIconICO.ico` + `assets/StreamPilotIconPNG.png`
 - Tray tooltip: current state (Streaming: Marvel Rivals / Idle)
 - The tray icon covers pre-game; the browser dashboard covers in-game monitoring and shutdown. Both are needed.
 
@@ -175,6 +175,30 @@ Implementation:
 
 - Review all docs (README, CLAUDE.md, IDEAS.md, any setup guides) - consolidate, remove duplication, tighten language. No data loss. Reduce total doc surface area. Specific pain point: README's linear step format doesn't reflect how the program actually works - particularly SABnzbd integration, which isn't a sequential setup step but a background behaviour. Restructure around how the program behaves, not a setup checklist.
 - Add inline icon to the README heading - same pattern as Sonarr's README (`<img>` tag next to the `#` heading). Icon assets are already in `assets/`.
+
+## Desktop shortcut / setup polish (raised 2026-07-19, not urgent)
+
+`scripts/setup/make-desktop-shortcut.ps1` (shipped 2026-07-19) is deliberately
+minimal - just enough to clean duplicates and regenerate the one shortcut.
+Future polish, do not implement yet:
+- **`.bat` double-click wrapper** - `make-desktop-shortcut.bat` that calls
+  `powershell -ExecutionPolicy Bypass -File make-desktop-shortcut.ps1`, so
+  David doesn't need to remember the powershell invocation - same pattern as
+  `scripts/setup/add-game.bat` wrapping other logic. Low effort, quality of
+  life only.
+- **Also drop a copy of the shortcut in the repo** (mirrors the Claude Code
+  shortcut setup, which keeps a copy in both `ClaudeOnly/setup/shortcut/` and
+  the workspace root alongside the Desktop one) - makes it obvious the
+  shortcut is reproducible/version-controllable rather than a one-off manual
+  Desktop artifact. Not clearly needed for a single-shortcut single-target
+  tool like StreamPilot; only worth doing if the Desktop copy ever goes
+  missing/gets manually edited again.
+- **Add-game wizard could offer to (re)run the shortcut maker** at the end of
+  first-time setup, so a fresh `git clone` + config fill-in doesn't need a
+  separate manual step to get the Desktop icon.
+- **Auto-start with Windows task (see Medium priority below) could reuse this
+  script's target resolution** (`run.bat` path lookup) instead of hardcoding
+  a separate path if that item is ever implemented.
 
 ## Medium priority
 

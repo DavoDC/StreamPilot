@@ -39,7 +39,7 @@ Single scene with two sources:
 - Unknown game: Windows toast notification - "Run 'streampilot config add-game'"
 - SABnzbd unreachable: logs warning + prints prompt to pause manually
 - **Heartbeat homeostasis (every 2s when game active):** verifies + self-heals all critical state - OBS WebSocket reconnect, OBS window reapply, stream restart if dropped, SABnzbd repause if drifted. Each correction shows as named field in `Status: ISSUE` line. Pattern: `observe -> compare -> correct -> flag`. Guard: stream restart only fires if `is_connected()` - prevents restart loop when OBS process is dead.
-- **Dashboard (`src/dashboard_server.py`):** every heartbeat, the daemon also writes `data/state/status.json` (`src/status_file.py` - atomic write, gitignored; lives under `data/state/` not `data/logs/` since it's live runtime state, not a timestamped log). The dashboard is a tiny local web server (Python stdlib `http.server`, zero new deps, no Flask/FastAPI/Node) serving a single-file HTML/CSS/JS page that polls `/status.json` every second - opens at `http://localhost:8765/` in a browser tab, no socket/IPC coupling to the daemon, same "write state, read state" pattern as AudioManager's GUI. **Security: the handler serves exactly two routes** (`/` and `/status.json`) rather than the directory tree, so `config.json`'s secrets (OAuth token, OBS password, SABnzbd API key) can never be reached through it - never switch this to `SimpleHTTPRequestHandler`. Shows a big OK/ISSUE/IDLE/OFFLINE badge, a continuously-pulsing heartbeat dot (CSS animation - proves the page itself is alive, independent of daemon state), and Game/Category/Title/Tags/SABnzbd rows. OFFLINE (grey) fires if no fresh write within `poll_interval * 4` (min 8s) - catches a dead/crashed daemon so the dashboard never shows stale reassurance. The browser **tab title and favicon also reflect state** (colored dot + game name in the title, recolored favicon) so David can monitor by glancing at the tab without it being focused. **`run.bat` (the desktop shortcut target) always starts both** - it self-elevates (OBS game capture needs admin rights), kills any previously running `streampilot.py` instance (avoids stacking duplicates across dev restarts or repeat clicks), then runs `streampilot.py start --dashboard` via `pythonw.exe` so no console window ever appears. One click, no terminal, dashboard opens automatically. **Quit button** opens a 3-option dialog - Cancel, "Keep streaming" (`end_stream: false`: closes StreamPilot only, OBS stream and SABnzbd pause state untouched), "End stream" (`end_stream: true`: stops the stream, resumes SABnzbd, closes StreamPilot - the original behaviour). POST `/quit` reads `end_stream` from the JSON body (defaults `true` if absent/malformed); `Daemon.stop(end_stream=...)` decides whether `start()`'s shutdown path calls `_on_no_game()`.
+- **Dashboard (`src/dashboard_server.py`):** every heartbeat, the daemon also writes `data/state/status.json` (`src/status_file.py` - atomic write, gitignored; lives under `data/state/` not `data/logs/` since it's live runtime state, not a timestamped log). The dashboard is a tiny local web server (Python stdlib `http.server`, zero new deps, no Flask/FastAPI/Node) serving a single-file HTML/CSS/JS page that polls `/status.json` every second - opens at `http://localhost:8765/` in a browser tab, no socket/IPC coupling to the daemon, same "write state, read state" pattern as AudioManager's GUI. **Security: the handler serves exactly two routes** (`/` and `/status.json`) rather than the directory tree, so `config.json`'s secrets (OAuth token, OBS password, SABnzbd API key) can never be reached through it - never switch this to `SimpleHTTPRequestHandler`. Shows a big OK/ISSUE/IDLE/OFFLINE badge, a continuously-pulsing heartbeat dot (CSS animation - proves the page itself is alive, independent of daemon state), and Game/Category/Title/Tags/SABnzbd rows. OFFLINE (grey) fires if no fresh write within `poll_interval * 4` (min 8s) - catches a dead/crashed daemon so the dashboard never shows stale reassurance. The browser **tab title and favicon also reflect state** (colored dot + game name in the title, recolored favicon) so David can monitor by glancing at the tab without it being focused. **`run.bat` (the desktop shortcut target) always starts both** - it self-elevates (OBS game capture needs admin rights), kills any previously running `streampilot.py` instance (avoids stacking duplicates across dev restarts or repeat clicks), then runs `streampilot.py start --dashboard --watch` via `pythonw.exe` so no console window ever appears (hot-reload on by default - see "Dev mode: hot-reload"). One click, no terminal, dashboard opens automatically. **Quit button** opens a 3-option dialog - Cancel, "Keep streaming" (`end_stream: false`: closes StreamPilot only, OBS stream and SABnzbd pause state untouched), "End stream" (`end_stream: true`: stops the stream, resumes SABnzbd, closes StreamPilot - the original behaviour). POST `/quit` reads `end_stream` from the JSON body (defaults `true` if absent/malformed); `Daemon.stop(end_stream=...)` decides whether `start()`'s shutdown path calls `_on_no_game()`.
 
 ## Stack
 
@@ -97,15 +97,21 @@ Users run `scripts/run.bat` (and `scripts/setup/add-game.bat`) - these are thin 
 
 | Command | Invoked by |
 |---|---|
-| `pythonw src/streampilot.py start --dashboard` (daemon + dashboard, one process, no console) | `scripts/run.bat` (the desktop shortcut target) |
+| `pythonw src/streampilot.py start --dashboard --watch` (daemon + dashboard + hot-reload, one process, no console) | `scripts/run.bat` (the desktop shortcut target) - hot-reload is on by DEFAULT (2026-07-19) |
 | `python src/streampilot.py dashboard` (reopen the dashboard tab without restarting the daemon) | manual CLI only, no `.bat` - rarely needed |
 | `python src/streampilot.py config add-game` | `scripts/setup/add-game.bat` |
-| `python src/streampilot.py start --dashboard --watch` (dev mode: auto-restart on code change) | manual CLI only, dev sessions - never `run.bat` |
+| `python src/streampilot.py start --dashboard` (no `--watch`) | manual CLI only - only if you deliberately want hot-reload OFF |
 
-## Dev mode: hot-reload (`--watch`)
+## Dev mode: hot-reload (`--watch`) - on by default via `run.bat`
 
-**Opt-in only** - `run.bat` never passes `--watch`, so a normal streaming session is
-never touched by this. When developing against a live-running instance:
+**On by default, not opt-in** - `run.bat` (and therefore the desktop shortcut) always
+passes `--watch`, so David can edit source while actively streaming and see the change
+land within ~1-2s, without a separate dev-mode launch step. `scripts/setup/make-desktop-shortcut.ps1`
+regenerates the Desktop shortcut (removes any existing `StreamPilot*.lnk` first, then
+creates one clean one pointing at `run.bat`) - re-run it any time the shortcut goes
+missing or gets manually duplicated; verify with `tests/test-desktop-shortcut.ps1`.
+The shortcut itself carries no launch args - `run.bat` is the single source of truth,
+so changing hot-reload behaviour means editing `run.bat`, not the shortcut.
 `src/hot_reload.py` polls every `.py` file under `src/` once a second
 (`snapshot()`/`watch_loop()`, stdlib only); the moment any mtime changes it calls
 `os.execv(sys.executable, sys.argv)` to restart the whole process in place with the
@@ -134,10 +140,11 @@ StreamPilot/
 │   ├── sabnzbd_client.py    # SABnzbd API
 │   ├── status_file.py       # Daemon<->dashboard JSON contract (write/read/staleness)
 │   ├── dashboard_server.py  # Local web dashboard (stdlib http.server, no deps)
+│   ├── hot_reload.py        # --watch file-watcher + self-restart (os.execv)
 │   └── config.py            # Loader + validator
 ├── assets/
-│   ├── StreamPilotIconNoBG.ico   # Program icon (transparent background)
-│   └── StreamPilotIconOriginal.png
+│   ├── StreamPilotIconICO.ico    # Program icon (desktop shortcut, tray)
+│   └── StreamPilotIconPNG.png
 ├── config/
 │   ├── config.example.json
 │   └── config.json          # gitignored
@@ -145,12 +152,13 @@ StreamPilot/
 │   ├── IDEAS.md
 │   └── HISTORY.md
 ├── scripts/
-│   ├── run.bat
+│   ├── run.bat              # desktop shortcut target - launches with --watch by default
 │   ├── run-tests.bat
 │   └── setup/
 │       ├── add-game.bat
-│       └── install-dependencies.bat
-├── tests/
+│       ├── install-dependencies.bat
+│       └── make-desktop-shortcut.ps1  # (re)creates the Desktop shortcut, cleans duplicates
+├── tests/                   # pytest suite + test-desktop-shortcut.ps1 (shortcut verification)
 └── data/
     ├── logs/            # timestamped daemon logs
     └── state/           # status.json - live daemon<->dashboard heartbeat
