@@ -2,6 +2,31 @@
 
 ---
 
+## 2026-07-19 - hot_reload.py: watch config.json, debounce, syntax gate
+
+Prompted by two things David raised after the previous fixes landed: (1) the
+"Watch on Twitch" feature needed a source-file touch to pick up because
+config.json isn't watched by `--watch` (only `.py` files were), and (2) a
+general concern that restarting on every single save risks hot-reloading a
+half-written feature mid-edit.
+
+- `extra_files=` param on `snapshot()`/`watch_loop()`/`start_watcher()` -
+  `streampilot.py` passes `[config.CONFIG_PATH]` so a config edit now
+  triggers a restart same as a code edit, no more manual touch needed.
+- **Debounce** (2s default) - a burst of several saves building one feature
+  now collapses into a single restart once the file set goes quiet, instead
+  of restarting after every individual save.
+- **Syntax gate** (`check_syntax()`) - before restarting, every changed `.py`
+  file must actually compile (in-memory `compile()`, no bytecode-cache file
+  written). A syntax error just means "not ready yet" - the watcher logs a
+  warning and keeps the old working process running, re-checking each poll,
+  rather than restarting into a guaranteed crash.
+
+Neither catches a semantic/runtime bug (only a genuine syntax error) - the
+psutil-race crash earlier this session would NOT have been caught by this,
+that's what the liveness-verification discipline
+(`feedback_live_process_hotreload_verify_liveness.md`) is for.
+
 ## 2026-07-19 - "Watch on Twitch" dashboard link
 
 New `twitch.channel_name` config key (set to `davo1776`) renders a small "Watch on
