@@ -44,9 +44,12 @@ import time
 log = logging.getLogger(__name__)
 
 POLL_SECONDS = 1.0
-# Long on purpose - the explicit trigger (touch TRIGGER_PATH) is the fast
-# path; this is only a lazy safety net for changes nobody signals.
-DEBOUNCE_SECONDS = 30.0
+# Very long on purpose - the explicit trigger (touch TRIGGER_PATH) is the
+# only mechanism that should normally fire; this is purely a "someone forgot
+# to signal" backstop, not something a real feature build should ever race
+# against. A build can run for a long time between saves (reading, thinking,
+# testing) with zero risk of an unwanted mid-build restart.
+DEBOUNCE_SECONDS = 3600.0
 
 # Touch this file to reload immediately (checked every poll, consumed/deleted
 # on read). Lives beside status.json - same "simple local state file"
