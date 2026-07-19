@@ -62,7 +62,8 @@ mirror loop).
 - Unknown game: Windows toast notification - "Run 'streampilot config add-game'"
 - SABnzbd unreachable: logs warning + prints prompt to pause manually
 - **Heartbeat homeostasis (every 2s when game active):** verifies + self-heals all critical state - OBS WebSocket reconnect, OBS window reapply, stream restart if dropped, SABnzbd repause if drifted. Each correction shows as named field in `Status: ISSUE` line. Pattern: `observe -> compare -> correct -> flag`. Guard: stream restart only fires if `is_connected()` - prevents restart loop when OBS process is dead.
-- **Dashboard (`src/dashboard_server.py`):** every heartbeat, the daemon also writes `data/state/status.json` (`src/status_file.py` - atomic write, gitignored; lives under `data/state/` not `data/logs/` since it's live runtime state, not a timestamped log). The dashboard is a tiny local web server (Python stdlib `http.server`, zero new deps, no Flask/FastAPI/Node) serving a single-file HTML/CSS/JS page that polls `/status.json` every second - opens at `http://localhost:8765/` in a browser tab, no socket/IPC coupling to the daemon, same "write state, read state" pattern as AudioManager's GUI. **Security: the handler serves exactly two routes** (`/` and `/status.json`) rather than the directory tree, so `config.json`'s secrets (OAuth token, OBS password, SABnzbd API key) can never be reached through it - never switch this to `SimpleHTTPRequestHandler`. Shows a big OK/ISSUE/IDLE/OFFLINE badge, a continuously-pulsing heartbeat dot (CSS animation - proves the page itself is alive, independent of daemon state), and Game/Category/Title/Tags/SABnzbd rows. OFFLINE (grey) fires if no fresh write within `poll_interval * 4` (min 8s) - catches a dead/crashed daemon so the dashboard never shows stale reassurance. The browser **tab title and favicon also reflect state** (colored dot + game name in the title, recolored favicon) so David can monitor by glancing at the tab without it being focused. **`run.bat` (the desktop shortcut target) always starts both** - it self-elevates (OBS game capture needs admin rights), kills any previously running `streampilot.py` instance (avoids stacking duplicates across dev restarts or repeat clicks), then runs `streampilot.py start --dashboard --watch` via `pythonw.exe` so no console window ever appears (hot-reload on by default - see "Dev mode: hot-reload"). One click, no terminal, dashboard opens automatically. **Quit button** opens a 3-option dialog - Cancel, "Keep streaming" (`end_stream: false`: closes StreamPilot only, OBS stream and SABnzbd pause state untouched), "End stream" (`end_stream: true`: stops the stream, resumes SABnzbd, closes StreamPilot - the original behaviour). POST `/quit` reads `end_stream` from the JSON body (defaults `true` if absent/malformed); `Daemon.stop(end_stream=...)` decides whether `start()`'s shutdown path calls `_on_no_game()`.
+- **Dashboard (`src/dashboard_server.py`):** every heartbeat, the daemon also writes `data/state/status.json` (`src/status_file.py` - atomic write, gitignored; lives under `data/state/` not `data/logs/` since it's live runtime state, not a timestamped log). The dashboard is a tiny local web server (Python stdlib `http.server`, zero new deps, no Flask/FastAPI/Node) serving a single-file HTML/CSS/JS page that polls `/status.json` every second - opens at `http://localhost:8765/` in a browser tab, no socket/IPC coupling to the daemon, same "write state, read state" pattern as AudioManager's GUI. **Security: the handler serves exactly two routes** (`/` and `/status.json`) rather than the directory tree, so `config.json`'s secrets (OAuth token, OBS password, SABnzbd API key) can never be reached through it - never switch this to `SimpleHTTPRequestHandler`. Shows a big OK/ISSUE/IDLE/OFFLINE badge, a continuously-pulsing heartbeat dot (CSS animation - proves the page itself is alive, independent of daemon state), and Game/Category/Title/Tags/SABnzbd rows, plus a "Watch on Twitch ↗" link
+(`twitch.channel_name` in config - see the Config section). OFFLINE (grey) fires if no fresh write within `poll_interval * 4` (min 8s) - catches a dead/crashed daemon so the dashboard never shows stale reassurance. The browser **tab title and favicon also reflect state** (colored dot + game name in the title, recolored favicon) so David can monitor by glancing at the tab without it being focused. **`run.bat` (the desktop shortcut target) always starts both** - it self-elevates (OBS game capture needs admin rights), kills any previously running `streampilot.py` instance (avoids stacking duplicates across dev restarts or repeat clicks), then runs `streampilot.py start --dashboard --watch` via `pythonw.exe` so no console window ever appears (hot-reload on by default - see "Dev mode: hot-reload"). One click, no terminal, dashboard opens automatically. **Quit button** opens a 3-option dialog - Cancel, "Keep streaming" (`end_stream: false`: closes StreamPilot only, OBS stream and SABnzbd pause state untouched), "End stream" (`end_stream: true`: stops the stream, resumes SABnzbd, closes StreamPilot - the original behaviour). POST `/quit` reads `end_stream` from the JSON body (defaults `true` if absent/malformed); `Daemon.stop(end_stream=...)` decides whether `start()`'s shutdown path calls `_on_no_game()`.
 
 ## Stack
 
@@ -86,7 +87,8 @@ mirror loop).
     "client_id": "...",
     "oauth_token": "...",
     "title_template": "Davo plays {game}!",
-    "base_tags": ["English", "Australia"]
+    "base_tags": ["English", "Australia"],
+    "channel_name": "davo1776"
   },
   "sabnzbd": {
     "enabled": true,
@@ -113,6 +115,14 @@ mirror loop).
 - `twitch.base_tags` - list of tags always applied, combined with each game's `tags`.
 - Per game: `title` - overrides the template entirely for that game. `tags` - added on top of `base_tags`.
 - Tags are sanitized to Twitch's rules: alphanumeric only, max 25 chars each, max 10 tags total, case-insensitive dedupe.
+
+**`twitch.channel_name`** (optional, e.g. `"davo1776"`) - renders a "Watch on Twitch ↗"
+link on the dashboard (`https://www.twitch.tv/{channel_name}`) so David can jump straight
+to the live view. Passed from `config.py` -> `streampilot.py::cmd_start` ->
+`dashboard_server.run(twitch_channel=...)`, substituted into `INDEX_HTML`'s
+`__TWITCH_LINK_HTML__` placeholder by `index_html_bytes()` per request (not baked in at
+import time, since it's config-driven, unlike everything else in `INDEX_HTML`). Omitted
+entirely (no link rendered) if not configured.
 
 ## CLI Commands
 

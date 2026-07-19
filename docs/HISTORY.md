@@ -2,6 +2,21 @@
 
 ---
 
+## 2026-07-19 - "Watch on Twitch" dashboard link
+
+New `twitch.channel_name` config key (set to `davo1776`) renders a small "Watch on
+Twitch ↗" link on the dashboard so David can jump straight to the live view without
+typing the URL. Unlike Title/Tags (which change per game and flow through the daemon's
+heartbeat/status.json), the channel name is a constant per user, so it's rendered
+directly into `INDEX_HTML` via a template placeholder (`index_html_bytes()`) at request
+time instead of round-tripping through the daemon - simpler, no extra moving parts.
+Omitted entirely if not configured.
+
+Note while shipping this: config.json isn't watched by hot-reload (`--watch` only
+watches `.py` files), so a config-only change needs a `.py` file touched (or the daemon
+restarted normally) to take effect - not a bug, just a reminder for next time a
+config-driven dashboard feature is added.
+
 ## 2026-07-19 - Live-tested hot-reload against David's real stream: 3 bugs found and fixed
 
 David ran `--watch` live while actually streaming Palworld and had Claude exercise it
