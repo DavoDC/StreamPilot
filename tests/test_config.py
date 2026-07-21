@@ -80,6 +80,27 @@ def test_validate_fails_blacklisted_obs_window(tmp_path, monkeypatch):
         cfg_module.load()
 
 
+def test_load_handles_non_ascii_unicode_in_config(tmp_path, monkeypatch):
+    """Regression: config.json written with literal unicode (e.g. per-game
+    emoji, not \\uXXXX-escaped) must load on Windows regardless of the
+    system's default codepage. Crashed 2026-07-21 when emoji were added to
+    config.json - open() with no encoding fell back to cp1252 and raised
+    UnicodeDecodeError on the multi-byte UTF-8 sequences. Silent under
+    pythonw (stderr to devnull) - StreamPilot just vanished on hot-reload."""
+    data = {
+        "obs": {"host": "localhost", "port": 4455, "password": "pw", "game_capture_source": "Game Capture"},
+        "twitch": {"client_id": "cid", "oauth_token": "tok"},
+        "games": {
+            "game.exe": {"name": "Game", "twitch_game_id": "1", "obs_window": "Game:Class:game.exe", "emoji": "🐰"}
+        },
+    }
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(cfg_module, "CONFIG_PATH", str(cfg_path))
+    cfg = cfg_module.load()
+    assert cfg["games"]["game.exe"]["emoji"] == "🐰"
+
+
 def test_add_game_writes_to_config(tmp_path, monkeypatch):
     data = {
         "obs": {"host": "localhost", "port": 4455, "password": "pw", "game_capture_source": "GC"},
