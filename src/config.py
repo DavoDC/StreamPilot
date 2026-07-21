@@ -18,7 +18,7 @@ def load() -> dict:
         print(f"[StreamPilot] config.json not found at: {path}")
         print(f"  Copy {example} to config/config.json and fill in your credentials.")
         sys.exit(1)
-    with open(path, 'r') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         cfg = json.load(f)
     _validate(cfg)
     return cfg
@@ -56,13 +56,13 @@ def _fail(msg: str):
 def add_game(exe: str, name: str, twitch_game_id: str, obs_window: str):
     """Add or update a game entry in config.json."""
     path = os.path.abspath(CONFIG_PATH)
-    with open(path, 'r') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         cfg = json.load(f)
     cfg.setdefault('games', {})[exe] = {
         'name': name,
         'twitch_game_id': twitch_game_id,
         'obs_window': obs_window,
     }
-    with open(path, 'w') as f:
+    with open(path, 'w', encoding='utf-8') as f:
         json.dump(cfg, f, indent=2)
     print(f"[StreamPilot] Added game: {name} ({exe})")

@@ -29,7 +29,7 @@ def write_status(path, *, status: str, game, streaming: bool, category, sabnzbd:
     path = str(path)
     tmp_path = path + ".tmp"
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(tmp_path, "w") as f:
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(data, f)
     os.replace(tmp_path, path)
 
@@ -37,7 +37,7 @@ def write_status(path, *, status: str, game, streaming: bool, category, sabnzbd:
 def read_status(path):
     """Return the status dict, or None if missing/corrupt."""
     try:
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return None
