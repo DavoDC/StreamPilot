@@ -54,8 +54,6 @@ worth a dedicated session:
   game's category and suggest additions.
 - **Time/schedule-aware titles** - vary title by time of day or day of week
   (e.g. "Late night {game}", "Weekend {game} grind") for relevance.
-- **Emote/emoji in titles** - a leading emoji can improve click-through; test whether it
-  helps or hurts discovery.
 - **Keyword hooks per game** - curated high-search-volume phrases per game
   (e.g. hero names, modes, patch names) baked into the title/tag pool.
 - **Language/region tuning** - confirm `broadcaster_language` is set (also part of the same
