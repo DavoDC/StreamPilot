@@ -447,6 +447,7 @@ def test_reconcile_adopts_already_streaming_session(daemon):
     for no reason."""
     daemon.obs = MagicMock()
     daemon.obs.is_streaming.return_value = True
+    daemon.twitch = MagicMock()
     with patch.object(daemon, "_detect_game", return_value="game.exe"):
         daemon._reconcile_existing_session()
 
@@ -461,6 +462,7 @@ def test_reconcile_populates_dashboard_title_and_tags(daemon):
     daemon.cfg["twitch"]["base_tags"] = ["English"]
     daemon.obs = MagicMock()
     daemon.obs.is_streaming.return_value = True
+    daemon.twitch = MagicMock()
     with patch.object(daemon, "_detect_game", return_value="game.exe"):
         daemon._reconcile_existing_session()
 
@@ -468,13 +470,33 @@ def test_reconcile_populates_dashboard_title_and_tags(daemon):
     assert daemon._current_tags == ["English"]
 
 
+def test_reconcile_reapplies_title_tags_to_twitch(daemon):
+    """A hot-reload restart must re-PATCH the freshly-built title/tags to
+    Twitch itself (not just the dashboard) - e.g. an emoji/template tweak
+    should take effect on the live title immediately, without waiting for
+    the game to exit and relaunch. No game_id - category is untouched, and
+    the stream itself is never restarted."""
+    daemon.cfg["twitch"]["base_tags"] = ["English"]
+    daemon.obs = MagicMock()
+    daemon.obs.is_streaming.return_value = True
+    daemon.twitch = MagicMock()
+    with patch.object(daemon, "_detect_game", return_value="game.exe"):
+        daemon._reconcile_existing_session()
+
+    daemon.twitch.set_channel_info.assert_called_once_with(
+        title="Davo plays My Game!", tags=["English"]
+    )
+
+
 def test_reconcile_does_nothing_when_no_game_detected(daemon):
     daemon.obs = MagicMock()
     daemon.obs.is_streaming.return_value = True
+    daemon.twitch = MagicMock()
     with patch.object(daemon, "_detect_game", return_value=None):
         daemon._reconcile_existing_session()
 
     assert daemon._active_game_exe is None
+    daemon.twitch.set_channel_info.assert_not_called()
 
 
 def test_reconcile_does_nothing_when_game_detected_but_not_streaming(daemon):
@@ -482,10 +504,12 @@ def test_reconcile_does_nothing_when_game_detected_but_not_streaming(daemon):
     through to the normal _loop()-driven _on_game_launch path instead."""
     daemon.obs = MagicMock()
     daemon.obs.is_streaming.return_value = False
+    daemon.twitch = MagicMock()
     with patch.object(daemon, "_detect_game", return_value="game.exe"):
         daemon._reconcile_existing_session()
 
     assert daemon._active_game_exe is None
+    daemon.twitch.set_channel_info.assert_not_called()
 
 
 def test_start_calls_reconcile_before_loop(daemon):

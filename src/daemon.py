@@ -142,14 +142,18 @@ class Daemon:
         if detected and self.obs.is_streaming():
             self._active_game_exe = detected
             game = self.games[detected]
-            # _on_game_launch() is the only other place these get set - since
-            # we're deliberately skipping it here (that's what avoids the
-            # stream restart), recompute them locally for the dashboard.
-            # Pure functions, no Twitch API call - title/tags on Twitch itself
-            # are untouched (they were already set correctly before restart).
-            self._current_title = build_title(game["name"], game, self.twitch_cfg)
-            self._current_tags = build_tags(game, self.twitch_cfg)
-            log.info(f"Resuming existing session for {game['name']} - stream already live, not restarting it")
+            title = build_title(game["name"], game, self.twitch_cfg)
+            tags = build_tags(game, self.twitch_cfg)
+            # Re-PATCH title/tags to Twitch (no game_id - category is already
+            # correct, and no stream restart) so a code-only change (e.g. a
+            # title-building tweak) takes effect on the live title immediately,
+            # not just on the dashboard, without waiting for the game to exit
+            # and relaunch. Cheap and idempotent - same PATCH _on_game_launch
+            # already sends, just without touching the category.
+            self.twitch.set_channel_info(title=title, tags=tags or None)
+            self._current_title = title
+            self._current_tags = tags
+            log.info(f"Resuming existing session for {game['name']} - stream already live, not restarting it. Reapplied title/tags to Twitch.")
 
     def stop(self, end_stream: bool = True):
         """Stop the polling loop. end_stream=False leaves OBS streaming and
