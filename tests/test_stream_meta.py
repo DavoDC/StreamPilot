@@ -40,6 +40,26 @@ def test_build_title_no_twitch_cfg_uses_default():
     assert title == "Davo plays Minecraft!"
 
 
+def test_build_title_appends_per_game_emoji():
+    pass
+
+
+def test_build_title_no_emoji_key_no_suffix():
+    pass
+
+
+def test_build_title_emoji_dropped_if_over_140_chars():
+    pass
+
+
+def test_build_title_emoji_with_custom_title_override():
+    pass
+
+
+def test_build_title_empty_emoji_string_no_suffix():
+    pass
+
+
 # --- build_tags ---
 
 def test_build_tags_base_and_game_combined():
