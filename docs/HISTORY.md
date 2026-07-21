@@ -2,6 +2,21 @@
 
 ---
 
+## 2026-07-18 - Dynamic per-game title + tags (belatedly recorded 2026-07-21)
+
+Shipped in `2bea232` but never moved out of IDEAS.md at the time - caught during a
+`/refine-ideas` pass that cross-checked IDEAS.md against the actual code.
+
+- **`stream_meta.py::build_title`/`build_tags`** - stream title and tags now derive from
+  the game being played instead of a static "Davo Gaming" + stale fixed tag list.
+- **Title:** `twitch.title_template` (default `"Davo plays {game}!"`) with an optional
+  per-game `title` override, truncated to Twitch's 140-char limit.
+- **Tags:** `twitch.base_tags` (always applied) combined with per-game `tags`, sanitized
+  to Twitch's rules (alphanumeric only, max 25 chars each, max 10 total, case-insensitive
+  dedupe).
+- Zero extra API calls - both ride the same `PATCH /helix/channels` that already set the
+  category on every game launch.
+
 ## 2026-07-21 - Per-game emoji suffix on stream title
 
 Pulled forward from the "Emote/emoji in titles" brainstorm item (deeper-investigation

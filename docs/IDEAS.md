@@ -1,6 +1,6 @@
 # StreamPilot - Ideas and TODOs
 
-**Status:** Feature-complete for current use. AudioManager MVP now complete, so StreamPilot can receive enhancements again. Critical bugs always welcome.
+**Status:** Actively enhanced (viewer-growth title/tags/emoji work shipped 2026-07-18/21). Critical bugs always welcome.
 
 > MANDATORY: Run `/dev-session StreamPilot` to start work. That skill IS the workflow - it picks the top item, confirms scope, implements, tests, and closes out correctly. Fix P0 bugs first. Never work out of order.
 
@@ -20,24 +20,21 @@ launch), so leaving the title and tags static is pure wasted signal.
 **same single request** - so dynamic title + dynamic tags cost **ZERO extra API calls**.
 Everything below rides on the PATCH that already fires.
 
-### QUICK WINS - do these first (top of the priority stack)
+**Shipped 2026-07-18** (see HISTORY.md): dynamic per-game title (`title_template` +
+per-game `title` override) and dynamic per-game tags (`base_tags` + per-game `tags`),
+both riding the existing category PATCH. Per-game emoji title suffix shipped 2026-07-21.
+Remaining from this brainstorm:
 
-1. **DYNAMIC TITLE!! (implement first - highest priority)** - auto-set the stream title
-   from the game on launch, e.g. `Davo plays Marvel Rivals!`. Config-driven template
-   `title_template` (default `"Davo plays {game}!"`) with optional per-game `title`
-   override. Truncate to Twitch's 140-char limit. Fires on the existing PATCH. This alone
-   turns "Davo Gaming" (invisible in search) into a keyword-rich, game-matched title.
-2. **DYNAMIC TAGS PER GAME!** - replace the stale global tag list with `base_tags`
-   (e.g. English, Australia - always applied) + per-game `tags` from config
-   (e.g. MarvelRivals, Rivals, Hero Shooter). Set in the SAME PATCH. Sanitize to Twitch
-   rules (max 10 tags, each <=25 chars, no spaces/special chars, dedupe).
-   *(This supersedes and pulls up the old "Set Twitch tags per game" Low-priority item.)*
-3. **Title template variety / rotation** - instead of the identical title every session,
-   keep a small pool of templates per game (or global) and pick one per launch, e.g.
-   `"Davo plays {game}!"`, `"{game} ranked grind!"`, `"Chill {game} w/ Davo"`. Keeps the
-   channel looking fresh to repeat browsers. Cheap: just a list + random choice.
-4. **Dynamic go-live notification text** - the "Davo went live!" text can also be
-   game-aware, e.g. `"Davo is live on {game}!"`. (Set via the same channel-info flow.)
+1. **Title template variety / rotation (top remaining item - cheapest lever left)** -
+   instead of the identical title every session, keep a small pool of templates per game
+   (or global) and pick one per launch, e.g. `"Davo plays {game}!"`, `"{game} ranked
+   grind!"`, `"Chill {game} w/ Davo"`. Keeps the channel looking fresh to repeat browsers.
+   Cheap: just a list + random choice.
+2. **Dynamic go-live notification text - NEEDS RESEARCH, not just implementation.**
+   The "Davo went live!" text is normally a Twitch Creator Dashboard setting, not part of
+   the Helix "Modify Channel Information" endpoint `set_channel_info` already uses -
+   unclear whether this is settable via API at all. Confirm the endpoint exists before
+   scoping this as a dev-session item.
 
 ### DEEPER INVESTIGATION - optimize later (own dev-session)
 
@@ -62,14 +59,8 @@ worth a dedicated session:
   improvements" pairs naturally with this: show the live title + tags on the dashboard so
   David can see at a glance exactly how the stream is presented to viewers.
 
-**Design note (config schema for the quick wins):**
-```
-"twitch": { ..., "title_template": "Davo plays {game}!", "base_tags": ["English", "Australia"] }
-"games": { "<exe>": { ..., "title": "<optional override>", "tags": ["MarvelRivals", "Rivals"] } }
-```
-Title = `game.get("title") or title_template.format(game=name)` (then truncate to 140).
-Tags = `dedupe(base_tags + game.get("tags", []))[:10]`, each sanitized. Zero config = still
-works (falls back to template + base_tags only). All applied in the existing PATCH.
+*(Config schema for title/tags/emoji is documented in CLAUDE.md's Config section, not
+duplicated here - it's shipped, not a plan.)*
 
 ## P0 - Blocking bugs
 
@@ -83,11 +74,15 @@ both fixed 2026-07-13, see HISTORY.md)*
   an immediate fix, but on a very busy desktop it could still truncate. If this
   ever bites, swap `questionary.select` for `questionary.autocomplete` (built-in
   fuzzy text filter) instead of raising the cap further.
-- **Twitch token expiry has no proactive warning during normal daemon operation**
-  - add-game now validates and warns up front (fixed), but `daemon.py`'s
-    `start()` also calls `self.twitch.validate()` (line ~102) without checking
-    the result or logging clearly if it fails. Worth a heartbeat-visible warning
-    if the token goes stale mid-session, same pattern as the SABnzbd/OBS checks.
+- **Twitch token expiry has no proactive warning during normal daemon operation
+  (raised in priority 2026-07-21 - real risk, not just polish)** - add-game now
+  validates and warns up front (fixed), but `daemon.py`'s `start()` also calls
+  `self.twitch.validate()` (line ~102) without checking the result or logging clearly
+  if it fails. Worth a heartbeat-visible warning if the token goes stale mid-session,
+  same pattern as the SABnzbd/OBS checks. **Why this matters now:** a stale token
+  means the dynamic title/tag/emoji PATCH silently fails every game launch - the
+  exact feature the 2026-07-18/21 viewer-growth work shipped - with zero visible
+  signal today.
 
 ## Dashboard tab title/favicon - future (harder stuff, easy version shipped 2026-07-13)
 Shipped: tab title shows a colored dot + game name (🟢/🔴/⚪/⚫), favicon recolors
@@ -137,7 +132,14 @@ Implementation:
 
 ## Robustness (golden path stability)
 
-- **Pre-flight checks** - before connecting to OBS or SABnzbd, verify they are actually running. Check process list first; log a clear warning and skip if not found. Observed: starting SP with SABnzbd not running caused a ~13s hang before the connection error was logged (Max retries exceeded). Should fail fast with a clear "SABnzbd not running" message instead.
+- **SABnzbd pre-flight check (top item here - real, reproduced friction)** - before
+  pausing/resuming, verify SABnzbd is actually running. Check process list first; log a
+  clear warning and skip if not found. Observed: starting SP with SABnzbd not running
+  caused a ~13s hang before the connection error was logged (Max retries exceeded).
+  Should fail fast with a clear "SABnzbd not running" message instead.
+  *(OBS's equivalent is already shipped - `daemon.py::_ensure_obs_running()` checks the
+  process list and auto-launches OBS if it's not running, waiting up to 30s for the
+  WebSocket. `_ensure_steam_running()` does the same for Steam. Only SABnzbd lacks this.)*
 - **Handle OBS closing while running** - detect OBS process exit and respond gracefully. Many state combinations need thought: OBS closed intentionally, OBS crashed, OBS restarted externally. All relevant program statuses should be monitored and handled - needs design session before implementing.
 - **Close OBS when StreamPilot exits** - when the daemon shuts down cleanly, OBS should also close automatically. Ensures no zombie OBS session remains after StreamPilot stops.
 
@@ -201,7 +203,7 @@ Future polish, do not implement yet:
 ## Medium priority
 
 - **Auto-start with Windows** - Task Scheduler entry to launch StreamPilot on login.
-- **Windows toast notification for unknown game** - when an unrecognised process is detected, surface a Windows toast so it can be added via the add-game wizard without switching windows.
+- **Windows toast notification for unknown game (confirmed NOT built, 2026-07-21)** - CLAUDE.md's Key Behaviour section wrongly described this as already shipped ("Unknown game: Windows toast notification") - there is no toast/notification code anywhere in `src/`; today an unrecognised process is just silently ignored. CLAUDE.md line corrected 2026-07-21. Still an open idea: surface a Windows toast when an unrecognised process is detected, so it can be added via the add-game wizard without switching windows.
 - **Brainstorm session with Claude** - dedicated session to generate a wide list of improvement ideas for StreamPilot. Purely generative, no implementation. Run as a separate `/dev-session`.
 
 ## Low priority
