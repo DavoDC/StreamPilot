@@ -102,7 +102,8 @@ mirror loop).
       "name": "Dead by Daylight",
       "twitch_game_id": "17074",
       "obs_window": "Dead by Daylight  [...]:UnrealWindow:DeadByDaylight-Win64-Shipping.exe",
-      "tags": ["DeadByDaylight", "Horror"]
+      "tags": ["DeadByDaylight", "Horror"],
+      "emoji": "🔪"
     }
   }
 }
@@ -113,7 +114,7 @@ mirror loop).
 **Dynamic title and tags** (both optional, applied in the same PATCH that sets the category - no extra API calls):
 - `twitch.title_template` - format string with `{game}` placeholder, applied when a game has no per-game `title`. Defaults to `Davo plays {game}!`. Truncated to Twitch's 140-char limit.
 - `twitch.base_tags` - list of tags always applied, combined with each game's `tags`.
-- Per game: `title` - overrides the template entirely for that game. `tags` - added on top of `base_tags`.
+- Per game: `title` - overrides the template entirely for that game. `tags` - added on top of `base_tags`. `emoji` - optional, appended as `" <emoji>"` to the end of the built title (`stream_meta.py::build_title`), e.g. `🐰` for Palworld, `⚡` for Marvel Rivals, `🔪` for Dead by Daylight. Dropped (not truncating the base title) if adding it would exceed the 140-char limit - a half-cut emoji or a chopped word reads worse than no emoji at all.
 - Tags are sanitized to Twitch's rules: alphanumeric only, max 25 chars each, max 10 tags total, case-insensitive dedupe.
 
 **`twitch.channel_name`** (optional, e.g. `"davo1776"`) - renders a "Watch on Twitch ↗"
@@ -134,6 +135,23 @@ Users run `scripts/run.bat` (and `scripts/setup/add-game.bat`) - these are thin 
 | `python src/streampilot.py dashboard` (reopen the dashboard tab without restarting the daemon) | manual CLI only, no `.bat` - rarely needed |
 | `python src/streampilot.py config add-game` | `scripts/setup/add-game.bat` |
 | `python src/streampilot.py start --dashboard` (no `--watch`) | manual CLI only - only if you deliberately want hot-reload OFF |
+
+## Never kill a live running instance (rule)
+
+**If StreamPilot is running while Claude is editing this repo (real stream may be
+live), NEVER kill/stop the process to "apply changes" or to test something** -
+that stops the actual OBS stream and ends the VOD mid-session. Before running
+`run.bat`, `python src/streampilot.py start`, or any command that would start a
+second instance, or before using `taskkill`/`Stop-Process` on `pythonw`/`python`
+for this repo: check first (`Get-Process pythonw -ErrorAction SilentlyContinue`,
+or tail the newest `data/logs/*.log`, or `curl http://localhost:8765/status.json`).
+If it's already running: **use the hot-reload trigger instead** - touch/create
+`data/state/reload.trigger` once the edit is fully wired up (see hot-reload
+section below). This restarts the process in place (adopts the existing session
+via `_reconcile_existing_session()`) without ending the stream. Ask David before
+doing anything that would stop the stream (killing the process, `run.bat`
+double-launch, etc.) if hot-reload genuinely can't apply the change (e.g. a
+change to `run.bat` itself, which isn't watched).
 
 ## Dev mode: hot-reload (`--watch`) - on by default via `run.bat`
 
