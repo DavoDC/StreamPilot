@@ -41,23 +41,34 @@ def test_build_title_no_twitch_cfg_uses_default():
 
 
 def test_build_title_appends_per_game_emoji():
-    pass
+    game_cfg = {"emoji": "🐰"}
+    title = build_title("Palworld", game_cfg, {})
+    assert title == "Davo plays Palworld! 🐰"
 
 
 def test_build_title_no_emoji_key_no_suffix():
-    pass
+    title = build_title("Palworld", {}, {})
+    assert title == "Davo plays Palworld!"
 
 
 def test_build_title_emoji_dropped_if_over_140_chars():
-    pass
+    twitch_cfg = {"title_template": "X" * 140}
+    game_cfg = {"emoji": "🔪"}
+    title = build_title("Dead by Daylight", game_cfg, twitch_cfg)
+    assert title == "X" * 140
+    assert "🔪" not in title
 
 
 def test_build_title_emoji_with_custom_title_override():
-    pass
+    game_cfg = {"title": "Custom Title", "emoji": "⚡"}
+    title = build_title("Marvel Rivals", game_cfg, {})
+    assert title == "Custom Title ⚡"
 
 
 def test_build_title_empty_emoji_string_no_suffix():
-    pass
+    game_cfg = {"emoji": ""}
+    title = build_title("Palworld", game_cfg, {})
+    assert title == "Davo plays Palworld!"
 
 
 # --- build_tags ---
