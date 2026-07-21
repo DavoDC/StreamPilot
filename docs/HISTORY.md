@@ -28,6 +28,13 @@ as the 2026-07-19 psutil incident. Fixed: explicit `encoding='utf-8'` on every
 `config.json`/`status.json` open (`config.py`, `status_file.py`), regression test
 added. See CLAUDE.md's "Always specify encoding='utf-8' on file I/O" rule.
 
+**Follow-up feature (same day):** once fixed and restarted, David noticed the dashboard
+showed the new emoji title but Twitch itself still showed the old one - by design,
+`_reconcile_existing_session()` only recomputed title/tags locally for the dashboard,
+never re-PATCHing Twitch. Added a re-PATCH (title/tags only, no `game_id`, no stream
+restart) so a hot-reload of title-building logic takes effect on the live Twitch title
+immediately instead of waiting for the next game launch. See `daemon.py::_reconcile_existing_session`.
+
 ## 2026-07-19 - hot_reload.py: explicit "reload now" trigger, replaces fixed 2s debounce
 
 David's concern with the previous fix: a real feature build is a series of edits over
