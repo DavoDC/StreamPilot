@@ -2,6 +2,23 @@
 
 ---
 
+## 2026-07-21 - Per-game emoji suffix on stream title
+
+Pulled forward from the "Emote/emoji in titles" brainstorm item (deeper-investigation
+section) - David wanted it built now with a concrete spec: config-driven, per game,
+appended to the end of the title (not a prefix).
+
+- **`stream_meta.py::build_title`** - new optional `emoji` key per game config entry.
+  Appended as `" <emoji>"` after the base title is built and truncated to Twitch's
+  140-char limit. If adding the emoji would push the title over 140 chars, it's
+  **dropped instead of truncating the base title** - a half-cut emoji or a chopped
+  word reads worse than no emoji at all (explicit call from David, not the obvious
+  default of shrinking the base title to make room).
+- Zero extra API calls - rides the same PATCH that already sets title/tags/category.
+- Example games: 🐰 Palworld, ⚡ Marvel Rivals, 🔪 Dead by Daylight.
+- 5 new tests in `test_stream_meta.py` (default suffix, no-emoji no-op, drop-on-overflow,
+  works alongside a custom `title` override, empty-string emoji is a no-op).
+
 ## 2026-07-19 - hot_reload.py: explicit "reload now" trigger, replaces fixed 2s debounce
 
 David's concern with the previous fix: a real feature build is a series of edits over
