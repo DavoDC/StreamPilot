@@ -237,6 +237,10 @@ live stream ("Ending previous VOD") and immediately restarting it, splitting the
 briefly erroring (OBS rejects `StartStream` mid-teardown) for no reason. The reconcile
 check adopts the existing session (`_detect_game()` + `obs.is_streaming()`) when a known
 game is already live, so the heartbeat resumes monitoring without touching OBS.
+**Also re-PATCHes title/tags to Twitch** (no `game_id` - category is untouched, stream
+not restarted) so a code-only change to title-building logic takes effect on the live
+title immediately, not just on the dashboard, without waiting for the next game launch
+(added 2026-07-21, see HISTORY.md).
 
 **Incident (2026-07-19): the daemon crashed and stayed down** while iterating with
 `--watch` live. Root cause: `_detect_game()` called `p.name()` live on each process in
