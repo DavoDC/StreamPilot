@@ -20,13 +20,26 @@ def build_title(name: str, game_cfg: dict, twitch_cfg: dict) -> str:
 
     Uses the per-game 'title' override if set (non-empty); otherwise formats
     twitch_cfg's 'title_template' (default "Davo plays {game}!") with the
-    game name. Always truncated to Twitch's 140-char limit.
+    game name. Truncated to Twitch's 140-char limit.
+
+    If the game has an 'emoji' entry, it's appended as " <emoji>" - but only
+    if it fits within the 140-char limit alongside the (already truncated)
+    base title. The emoji is dropped rather than truncating the base title,
+    since a half-cut emoji or a chopped word reads worse than no emoji.
     """
     title = game_cfg.get("title")
     if not title:
         template = twitch_cfg.get("title_template", DEFAULT_TITLE_TEMPLATE)
         title = template.format(game=name)
-    return title[:TWITCH_TITLE_MAX_LEN]
+    title = title[:TWITCH_TITLE_MAX_LEN]
+
+    emoji = game_cfg.get("emoji")
+    if emoji:
+        with_emoji = f"{title} {emoji}"
+        if len(with_emoji) <= TWITCH_TITLE_MAX_LEN:
+            title = with_emoji
+
+    return title
 
 
 def _sanitize_tag(tag: str) -> str:
