@@ -19,6 +19,15 @@ appended to the end of the title (not a prefix).
 - 5 new tests in `test_stream_meta.py` (default suffix, no-emoji no-op, drop-on-overflow,
   works alongside a custom `title` override, empty-string emoji is a no-op).
 
+**Follow-on incident, same day:** adding the emoji values to the real `config.json`
+crashed the live daemon on the next hot-reload - `config.py::load()` opened
+`config.json` without `encoding='utf-8'`, so it fell back to Windows' cp1252
+codepage and `json.load()` raised `UnicodeDecodeError` on the emoji's UTF-8 bytes.
+Silent under `pythonw` (stderr to devnull) - the process just vanished, same shape
+as the 2026-07-19 psutil incident. Fixed: explicit `encoding='utf-8'` on every
+`config.json`/`status.json` open (`config.py`, `status_file.py`), regression test
+added. See CLAUDE.md's "Always specify encoding='utf-8' on file I/O" rule.
+
 ## 2026-07-19 - hot_reload.py: explicit "reload now" trigger, replaces fixed 2s debounce
 
 David's concern with the previous fix: a real feature build is a series of edits over

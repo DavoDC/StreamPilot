@@ -136,6 +136,23 @@ Users run `scripts/run.bat` (and `scripts/setup/add-game.bat`) - these are thin 
 | `python src/streampilot.py config add-game` | `scripts/setup/add-game.bat` |
 | `python src/streampilot.py start --dashboard` (no `--watch`) | manual CLI only - only if you deliberately want hot-reload OFF |
 
+## Always specify encoding='utf-8' on file I/O (rule, added 2026-07-21)
+
+**Every `open()` call touching `config.json`, `status.json`, or any file that
+could ever hold non-ASCII text (emoji, names, etc.) must pass
+`encoding='utf-8'` explicitly.** Windows' default text encoding is the
+system codepage (cp1252 here), not UTF-8. Without the explicit arg, reading
+a file containing literal UTF-8 multi-byte sequences (not `\uXXXX`-escaped)
+raises `UnicodeDecodeError`. **Incident (2026-07-21):** adding a per-game
+`emoji` field to `config.json` crashed the live daemon on the very next
+hot-reload - `config.py::load()`'s `open(path, 'r')` had no encoding, so
+`json.load()` blew up on the emoji bytes. Invisible under `pythonw` (stderr
+to devnull) - the process just silently died, same failure shape as the
+2026-07-19 psutil incident below. Fixed in `config.py` and `status_file.py`;
+regression test in `tests/test_config.py::test_load_handles_non_ascii_unicode_in_config`.
+`hot_reload.py` already did this correctly (`open(path, "r", encoding="utf-8")`)
+- match that pattern in any new file I/O.
+
 ## Never kill a live running instance (rule)
 
 **If StreamPilot is running while Claude is editing this repo (real stream may be
