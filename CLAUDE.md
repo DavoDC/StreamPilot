@@ -207,9 +207,9 @@ Either path is gated by a **syntax check** (`check_syntax()`, in-memory `compile
 bytecode-cache side effect) before actually restarting - if anything doesn't parse, the
 watcher logs a warning and keeps the old (working) process running, re-checking every
 poll, instead of restarting into a guaranteed crash. This does NOT catch a semantic/
-runtime bug (that's what the psutil-race incident above was) - see
-`feedback_live_process_hotreload_verify_liveness.md` for the verification discipline
-that covers the rest. Once ready, it calls `os.execv(sys.executable, sys.argv)` to
+runtime bug (that's what the psutil-race incident above was) - see the
+maintainer's private notes for the verification discipline that covers the rest.
+Once ready, it calls `os.execv(sys.executable, sys.argv)` to
 restart the whole process in place with the same args - this reloads **all** code, not
 just the dashboard HTML, since Python doesn't hot-reload imported modules on its own.
 Restarting the StreamPilot process does NOT stop the actual OBS stream (OBS is a
@@ -252,8 +252,8 @@ and the process just vanished, taking the dashboard down with it (`Get-Process p
 showed nothing running). Fixed by reading psutil's pre-fetched `p.info['name']` (from the
 `attrs=['name']` already requested) instead of live-querying `.name()` - psutil silently
 drops any process whose attrs failed to populate, so this has no race. General lesson
-captured workspace-wide: `PRIVATE_NOTES/memory/feedback/feedback_live_process_hotreload_verify_liveness.md`
-- a green pytest run does not prove a live `--watch`-driven process survived an edit;
+captured as a general engineering rule in the maintainer's private notes -
+a green pytest run does not prove a live `--watch`-driven process survived an edit;
 verify liveness (`curl http://localhost:8765/status.json`, `Get-Process pythonw`, or tail
 the newest `data/logs/*.log`) after each risky edit, not just at the end.
 
