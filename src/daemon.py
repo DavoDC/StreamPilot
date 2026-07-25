@@ -1,5 +1,6 @@
 """StreamPilot polling daemon - detects game launches and drives OBS/Twitch/SABnzbd."""
 
+import json
 import logging
 import os
 import subprocess
@@ -18,6 +19,7 @@ import window_safety
 log = logging.getLogger(__name__)
 
 STATUS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'state', 'status.json')
+SAB_SETTINGS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'state', 'sab_settings.json')
 
 
 class Daemon:
@@ -51,6 +53,11 @@ class Daemon:
         self._current_title = None
         self._current_tags = None
         self._end_stream_on_stop = True
+        # Dashboard toggle: whether homeostasis actively pauses SABnzbd while
+        # a game is active. Off for overnight "idle streaming" (game running
+        # but not actively played) so downloads keep going. Persisted so it
+        # survives a hot-reload restart (os.execv) mid-session.
+        self.sab_auto_manage = self._load_sab_auto_manage()
         # Changes every process start (including a hot-reload self-restart) so
         # the dashboard can tell "the server behind me restarted" and reload
         # itself - see hot_reload.py and the build_id check in dashboard JS.
@@ -100,6 +107,38 @@ class Daemon:
         log.info(f"Steam not running - launching: {exe_path}")
         steam_dir = os.path.dirname(os.path.abspath(exe_path))
         subprocess.Popen([exe_path], cwd=steam_dir)
+
+    def _load_sab_auto_manage(self) -> bool:
+        """Read the persisted dashboard toggle. Defaults to True (normal
+        homeostasis) if the file is missing or corrupt."""
+        try:
+            with open(SAB_SETTINGS_PATH, "r", encoding="utf-8") as f:
+                return bool(json.load(f).get("auto_manage", True))
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return True
+
+    def _save_sab_auto_manage(self) -> None:
+        try:
+            os.makedirs(os.path.dirname(SAB_SETTINGS_PATH), exist_ok=True)
+            tmp_path = SAB_SETTINGS_PATH + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump({"auto_manage": self.sab_auto_manage}, f)
+            os.replace(tmp_path, SAB_SETTINGS_PATH)
+        except OSError as e:
+            log.warning(f"Could not persist SAB auto-manage setting: {e}")
+
+    def set_sab_auto_manage(self, enabled: bool) -> None:
+        """Dashboard toggle handler. When disabled, StreamPilot never pauses
+        or resumes SABnzbd itself - David controls it manually (idle
+        streaming). Disabling resumes SABnzbd immediately rather than
+        leaving it paused until he does it by hand in SABnzbd's own UI;
+        re-enabling lets the next heartbeat re-pause it if a game is active."""
+        self.sab_auto_manage = enabled
+        self._save_sab_auto_manage()
+        log.info(f"SABnzbd auto-pause {'enabled' if enabled else 'disabled'}")
+        if not enabled and self.sab_enabled and self.sab:
+            self.sab.resume()
+            log.info("SABnzbd resumed - idle-streaming mode")
 
     def start(self):
         log.info("StreamPilot daemon starting...")
@@ -189,6 +228,7 @@ class Daemon:
         sab_corrected: bool = False,
         stream_restarted: bool = False,
         blacklisted_window: str | None = None,
+        sab_auto_manage: bool = True,
     ) -> dict:
         """Turn raw heartbeat readings into the shared status shape consumed by
         both the terminal log line and the dashboard JSON file."""
@@ -196,6 +236,8 @@ class Daemon:
 
         if not self.sab_enabled:
             sab_str = "Disabled"
+        elif not sab_auto_manage:
+            sab_str = "Running (manual)" if sab_paused is not True else "Paused (manual)"
         elif sab_paused is None:
             sab_str = "Unreachable"
         elif sab_corrected:
@@ -207,9 +249,14 @@ class Daemon:
         else:
             sab_str = "Running"
 
+        # SABnzbd only contributes to ISSUE when homeostasis is actually
+        # trying to manage it - David turned that off on purpose for idle
+        # streaming, so a "running during game" state there is expected, not
+        # a fault.
+        sab_issue = sab_auto_manage and (not sab_paused or sab_paused is None or sab_corrected)
         issue = game_active and (
-            not obs_streaming or not sab_paused or sab_paused is None
-            or not obs_window_ok or sab_corrected or stream_restarted or blacklisted_window
+            not obs_streaming or sab_issue
+            or not obs_window_ok or stream_restarted or blacklisted_window
         )
         status = "ISSUE" if issue else ("OK" if game_active else "IDLE")
 
@@ -234,8 +281,9 @@ class Daemon:
         sab_corrected: bool = False,
         stream_restarted: bool = False,
         blacklisted_window: str | None = None,
+        sab_auto_manage: bool = True,
     ) -> str:
-        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window)
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, sab_auto_manage)
         line = f"Status: {c['status'] if c['game_active'] else 'OK'} | Streaming: {c['game_str']} | Category: {c['cat_str']} | SABnzbd: {c['sab_str']}"
         if c["game_active"] and not c["obs_window_ok"]:
             line += " | OBS Window: REAPPLIED"
@@ -298,16 +346,16 @@ class Daemon:
                 self.obs.start_stream()
                 stream_restarted = True
 
-            # SABnzbd correction
-            if self.sab_enabled and self.sab and sab_paused is False:
+            # SABnzbd correction - skipped entirely when auto-manage is off
+            if self.sab_enabled and self.sab and self.sab_auto_manage and sab_paused is False:
                 log.warning("SABnzbd running during active game session - repausing")
                 self.sab.pause()
                 sab_corrected = True
         else:
             obs_streaming = self.obs.is_streaming()
 
-        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window)
-        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window))
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage)
+        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage))
         try:
             status_file.write_status(
                 STATUS_PATH,
@@ -323,6 +371,7 @@ class Daemon:
                 tags=self._current_tags,
                 build_id=self.build_id,
                 blacklisted_window=blacklisted_window,
+                sab_auto_manage=self.sab_auto_manage,
             )
         except OSError as e:
             log.warning(f"Could not write dashboard status file: {e}")
@@ -369,7 +418,7 @@ class Daemon:
         self.obs.start_stream()
         log.info(f"Stream started for {name}")
 
-        if self.sab_enabled and self.sab:
+        if self.sab_enabled and self.sab and self.sab_auto_manage:
             self.sab.pause()
             log.info("SABnzbd paused")
 
@@ -381,7 +430,7 @@ class Daemon:
         if self.obs.is_streaming():
             self.obs.stop_stream()
 
-        if self.sab_enabled and self.sab:
+        if self.sab_enabled and self.sab and self.sab_auto_manage:
             self.sab.resume()
             log.info("SABnzbd resumed")
 
