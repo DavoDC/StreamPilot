@@ -242,18 +242,20 @@ class Daemon:
         both the terminal log line and the dashboard JSON file."""
         game_active = game_name is not None
 
+        # sab_str reflects only current physical truth (Running/Paused), never a
+        # transient "just corrected" annotation - a one-heartbeat label is easy
+        # to miss or asymmetric (e.g. no counterpart on the resume direction).
+        # Corrective actions are still visible in the log line that triggers
+        # them (see _print_heartbeat); sab_corrected here only affects sab_issue
+        # below. See CLAUDE.md "Status/state field design".
         if not self.sab_enabled:
             sab_str = "Disabled"
         elif not sab_auto_manage:
             sab_str = "Running (manual)" if sab_paused is not True else "Paused (manual)"
         elif sab_paused is None:
             sab_str = "Unreachable"
-        elif sab_corrected:
-            sab_str = "REPAUSED"
         elif sab_paused:
             sab_str = "Paused"
-        elif game_active:
-            sab_str = "RUNNING - should be paused"
         else:
             sab_str = "Running"
 
