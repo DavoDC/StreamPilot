@@ -61,6 +61,7 @@ def cmd_start(args):
                 'open_browser': not is_hot_reload_restart,
                 'on_quit': daemon.stop,
                 'twitch_channel': cfg.get('twitch', {}).get('channel_name'),
+                'on_sab_toggle': daemon.set_sab_auto_manage,
             },
             daemon=True,
         )

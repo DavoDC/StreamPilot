@@ -33,6 +33,10 @@ _on_quit_callback = None
 # Same reasoning - set by run(), read by index_html_bytes() per request.
 _twitch_channel = None
 
+# Same pattern as _on_quit_callback - set by run(), called from the request
+# thread when the dashboard's SAB auto-pause toggle is flipped.
+_on_sab_toggle_callback = None
+
 INDEX_HTML = """<!doctype html>
 <html lang="en">
 <head>
@@ -47,6 +51,11 @@ INDEX_HTML = """<!doctype html>
     background: #12151a; color: #c9d1d9;
     font-family: "Segoe UI", system-ui, sans-serif;
   }
+  /* Browsers do NOT make form controls inherit the page font by default -
+     without this, every <button>/<input> renders in the OS UI font instead
+     of matching surrounding text (see docs/DESIGN.md). Apply to any new
+     interactive element instead of repeating font-family per-selector. */
+  button, input { font-family: inherit; }
   #dot {
     width: 28px; height: 28px; border-radius: 50%;
     background: #4b5563; transition: background 0.3s ease;
@@ -75,6 +84,23 @@ INDEX_HTML = """<!doctype html>
     padding: 3px 9px; border-radius: 999px; line-height: 1.4;
   }
   #footer { font-size: 11px; color: #6b7280; }
+
+  .switch { position: relative; display: inline-block; width: 34px; height: 20px; flex-shrink: 0; }
+  .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .switch .slider {
+    position: absolute; inset: 0; background: #262b34; border-radius: 999px;
+    transition: background 0.2s ease;
+  }
+  .switch .slider::before {
+    content: ""; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px;
+    background: #6b7280; border-radius: 50%;
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+  .switch input:checked + .slider { background: #1f3a52; }
+  .switch input:checked + .slider::before { transform: translateX(14px); background: #3fa1ff; }
+  .switch input:disabled { cursor: default; }
+  .switch input:disabled + .slider { opacity: 0.5; }
+  .switch input:focus-visible + .slider { outline: 2px solid #4b5563; outline-offset: 2px; }
 
   #twitchLink {
     color: #a970ff; font-size: 13px; font-weight: 600; text-decoration: none;
@@ -126,6 +152,7 @@ INDEX_HTML = """<!doctype html>
     <div class="row"><span class="label">Title</span><span class="value" id="title">-</span></div>
     <div class="row" id="tagsRow"><span class="label">Tags</span><span class="value" id="tags"></span></div>
     <div class="row"><span class="label">SABnzbd</span><span class="value" id="sabnzbd">-</span></div>
+    <div class="row"><span class="label">SAB auto-pause</span><span class="value"><label class="switch"><input type="checkbox" id="sabToggle" checked><span class="slider"></span></label></span></div>
   </div>
   __TWITCH_LINK_HTML__
   <div id="footer">waiting for daemon...</div>
@@ -167,6 +194,17 @@ function renderTags(tags) {
 
 let lastBuildId = null;  // tracks the running process - see hot_reload.py
 
+const sabToggle = document.getElementById("sabToggle");
+let sabToggleInFlight = false;
+sabToggle.addEventListener("change", () => {
+  sabToggleInFlight = true;
+  fetch("/sab_toggle", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled: sabToggle.checked }),
+  }).catch(() => {}).finally(() => { sabToggleInFlight = false; });
+});
+
 async function tick() {
   let s = null;
   try {
@@ -204,6 +242,7 @@ async function tick() {
     document.getElementById("title").textContent = "-";
     renderTags(null);
     document.getElementById("sabnzbd").textContent = "-";
+    sabToggle.disabled = true;
     document.getElementById("footer").textContent = "No signal from daemon - is it running?";
     document.title = `${TITLE_DOTS[state]} Offline - StreamPilot`;
   } else {
@@ -213,6 +252,10 @@ async function tick() {
     document.getElementById("title").textContent = s.title || "-";
     renderTags(s.tags);
     document.getElementById("sabnzbd").textContent = s.sabnzbd || "-";
+    sabToggle.disabled = false;
+    if (!sabToggleInFlight) {
+      sabToggle.checked = s.sab_auto_manage !== undefined ? s.sab_auto_manage : true;
+    }
     document.getElementById("footer").textContent =
       `updated ${Math.max(0, Math.round(age))}s ago  |  polling every ${s.poll_interval}s`;
     document.title = `${TITLE_DOTS[state]} ${game} - StreamPilot`;
@@ -336,14 +379,35 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif self.path == "/sab_toggle":
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            enabled = None
+            if length:
+                try:
+                    payload = json.loads(self.rfile.read(length))
+                    enabled = payload.get("enabled")
+                except (json.JSONDecodeError, ValueError):
+                    pass
+            if not isinstance(enabled, bool):
+                self.send_error(400, "Missing or invalid 'enabled' boolean")
+                return
+            if _on_sab_toggle_callback:
+                _on_sab_toggle_callback(enabled=enabled)
+            body = b'{"ok": true}'
+            self.send_response(202)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         else:
             self.send_error(404)
 
 
-def run(port: int = PORT, open_browser: bool = True, on_quit=None, twitch_channel: str = None):
-    global _on_quit_callback, _twitch_channel
+def run(port: int = PORT, open_browser: bool = True, on_quit=None, twitch_channel: str = None, on_sab_toggle=None):
+    global _on_quit_callback, _twitch_channel, _on_sab_toggle_callback
     _on_quit_callback = on_quit
     _twitch_channel = twitch_channel
+    _on_sab_toggle_callback = on_sab_toggle
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://localhost:{port}/"
     print(f"[StreamPilot Dashboard] Serving at {url}")
