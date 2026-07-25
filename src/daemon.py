@@ -58,6 +58,11 @@ class Daemon:
         # but not actively played) so downloads keep going. Persisted so it
         # survives a hot-reload restart (os.execv) mid-session.
         self.sab_auto_manage = self._load_sab_auto_manage()
+        # Set for exactly one heartbeat after the dashboard toggle turns
+        # auto-pause ON - see set_sab_auto_manage(). Suppresses the ISSUE
+        # flag for that heartbeat's corrective re-pause, since it's the
+        # direct, expected result of the user's own click, not a fault.
+        self._sab_just_enabled = False
         # Changes every process start (including a hot-reload self-restart) so
         # the dashboard can tell "the server behind me restarted" and reload
         # itself - see hot_reload.py and the build_id check in dashboard JS.
@@ -136,6 +141,8 @@ class Daemon:
         self.sab_auto_manage = enabled
         self._save_sab_auto_manage()
         log.info(f"SABnzbd auto-pause {'enabled' if enabled else 'disabled'}")
+        if enabled:
+            self._sab_just_enabled = True
         if not enabled and self.sab_enabled and self.sab:
             self.sab.resume()
             log.info("SABnzbd resumed - idle-streaming mode")
@@ -229,6 +236,7 @@ class Daemon:
         stream_restarted: bool = False,
         blacklisted_window: str | None = None,
         sab_auto_manage: bool = True,
+        sab_suppress_issue: bool = False,
     ) -> dict:
         """Turn raw heartbeat readings into the shared status shape consumed by
         both the terminal log line and the dashboard JSON file."""
@@ -253,7 +261,7 @@ class Daemon:
         # trying to manage it - David turned that off on purpose for idle
         # streaming, so a "running during game" state there is expected, not
         # a fault.
-        sab_issue = sab_auto_manage and (not sab_paused or sab_paused is None or sab_corrected)
+        sab_issue = sab_auto_manage and not sab_suppress_issue and (not sab_paused or sab_paused is None or sab_corrected)
         issue = game_active and (
             not obs_streaming or sab_issue
             or not obs_window_ok or stream_restarted or blacklisted_window
@@ -282,8 +290,9 @@ class Daemon:
         stream_restarted: bool = False,
         blacklisted_window: str | None = None,
         sab_auto_manage: bool = True,
+        sab_suppress_issue: bool = False,
     ) -> str:
-        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, sab_auto_manage)
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, sab_auto_manage, sab_suppress_issue)
         line = f"Status: {c['status'] if c['game_active'] else 'OK'} | Streaming: {c['game_str']} | Category: {c['cat_str']} | SABnzbd: {c['sab_str']}"
         if c["game_active"] and not c["obs_window_ok"]:
             line += " | OBS Window: REAPPLIED"
@@ -305,6 +314,10 @@ class Daemon:
         sab_corrected = False
         stream_restarted = False
         blacklisted_window = None
+        # Consumed once - covers only the heartbeat that actually performs
+        # the corrective re-pause right after the toggle flips on.
+        sab_suppress_issue = self._sab_just_enabled
+        self._sab_just_enabled = False
 
         if self._active_game_exe:
             # OBS connectivity - attempt reconnect before other OBS calls
@@ -354,8 +367,8 @@ class Daemon:
         else:
             obs_streaming = self.obs.is_streaming()
 
-        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage)
-        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage))
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue)
+        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue))
         try:
             status_file.write_status(
                 STATUS_PATH,
