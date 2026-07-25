@@ -195,14 +195,21 @@ function renderTags(tags) {
 let lastBuildId = null;  // tracks the running process - see hot_reload.py
 
 const sabToggle = document.getElementById("sabToggle");
-let sabToggleInFlight = false;
+// Holds the value we just asked the daemon for. A poll in flight when the
+// user clicks can still land afterwards carrying the OLD status.json value
+// (the daemon writes it on its own heartbeat, not synchronously with the
+// POST) - that stale poll would otherwise snap the switch back before the
+// next poll (with the daemon's actual new state) snaps it forward again.
+// Keeping this set until a poll's value matches what we asked for closes
+// that window, instead of clearing it as soon as the POST round-trip ends.
+let sabToggleDesired = null;
 sabToggle.addEventListener("change", () => {
-  sabToggleInFlight = true;
+  sabToggleDesired = sabToggle.checked;
   fetch("/sab_toggle", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ enabled: sabToggle.checked }),
-  }).catch(() => {}).finally(() => { sabToggleInFlight = false; });
+  }).catch(() => {});
 });
 
 async function tick() {
@@ -253,8 +260,12 @@ async function tick() {
     renderTags(s.tags);
     document.getElementById("sabnzbd").textContent = s.sabnzbd || "-";
     sabToggle.disabled = false;
-    if (!sabToggleInFlight) {
-      sabToggle.checked = s.sab_auto_manage !== undefined ? s.sab_auto_manage : true;
+    const daemonValue = s.sab_auto_manage !== undefined ? s.sab_auto_manage : true;
+    if (sabToggleDesired !== null && daemonValue === sabToggleDesired) {
+      sabToggleDesired = null;  // daemon caught up - resume following polls
+    }
+    if (sabToggleDesired === null) {
+      sabToggle.checked = daemonValue;
     }
     document.getElementById("footer").textContent =
       `updated ${Math.max(0, Math.round(age))}s ago  |  polling every ${s.poll_interval}s`;
