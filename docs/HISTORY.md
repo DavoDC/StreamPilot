@@ -2,6 +2,32 @@
 
 ---
 
+## 2026-07-25 - SAB auto-pause toggle switch + Quit button font fix + docs/DESIGN.md
+
+**Feature:** dashboard toggle to let David keep SABnzbd running during "idle
+streaming" (overnight, game detected but not actively played) without
+disabling homeostasis permanently.
+
+- **`daemon.py`** - new `sab_auto_manage` bool (persisted to
+  `data/state/sab_settings.json`, survives hot-reload restarts). When
+  disabled, the daemon never pauses/resumes SABnzbd and it drops out of
+  ISSUE detection entirely; disabling resumes SAB immediately rather than
+  leaving it paused. Dashboard shows "Running (manual)"/"Paused (manual)"
+  instead of the normal auto-managed strings.
+- **`dashboard_server.py`** - new toggle-switch UI (`#sabToggle`, `.switch`
+  CSS pattern) wired to a new `POST /sab_toggle` route; disables itself
+  while the dashboard is offline/stale, same as the rest of the panel.
+- **Bug fix:** Quit button (and any future `<button>`/`<input>`) was
+  rendering in the OS UI font instead of the page font - browsers don't
+  make form controls inherit `font-family` by default. Fixed with a single
+  global `button, input { font-family: inherit; }` rule.
+- **`docs/DESIGN.md`** (new) - palette, typography, button, and toggle-switch
+  conventions for the dashboard, written specifically to prevent the font
+  bug (and its class of bug) recurring as new controls get added.
+- Verified end-to-end against the live running instance via the hot-reload
+  trigger file (`data/state/reload.trigger`) - no stream interruption.
+- 35 new tests (`test_daemon.py`, `test_dashboard_server.py`); 226 total pass.
+
 ## 2026-07-18 - Dynamic per-game title + tags (belatedly recorded 2026-07-21)
 
 Shipped in `2bea232` but never moved out of IDEAS.md at the time - caught during a

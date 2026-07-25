@@ -5,6 +5,7 @@ Python CLI daemon that auto-manages OBS streaming + SABnzbd when launching a kno
 ## Key Paths
 
 - OBS executable: `C:\Program Files\obs-studio\bin\64bit\obs64.exe`
+- Dashboard visual consistency rules (palette, typography, buttons, toggles): `docs/DESIGN.md` - read before editing `dashboard_server.py`'s `INDEX_HTML`.
 
 ## Problem It Solves
 
