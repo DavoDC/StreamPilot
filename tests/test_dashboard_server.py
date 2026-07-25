@@ -224,3 +224,92 @@ def test_post_unknown_route_returns_404():
         assert resp.status == 404
     finally:
         server.shutdown()
+
+
+# --- SAB auto-manage toggle tests ---
+
+def test_index_html_contains_sab_toggle():
+    html = dashboard_server.INDEX_HTML
+    assert 'id="sabToggle"' in html
+    assert "/sab_toggle" in html
+
+
+def test_status_json_bytes_includes_sab_auto_manage(tmp_path):
+    path = tmp_path / "status.json"
+    status_file.write_status(
+        path, status="OK", game="Marvel Rivals", streaming=True, category="Marvel Rivals",
+        sabnzbd="Paused", poll_interval=2, sab_auto_manage=False,
+    )
+    data = json.loads(dashboard_server.status_json_bytes(path))
+    assert data["sab_auto_manage"] is False
+
+
+def test_post_sab_toggle_invokes_callback_and_returns_202():
+    calls = []
+    dashboard_server._on_sab_toggle_callback = lambda **kwargs: calls.append(kwargs)
+    server, port = _run_server()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        body = json.dumps({"enabled": False}).encode("utf-8")
+        conn.request("POST", "/sab_toggle", body=body, headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        resp.read()
+        assert resp.status == 202
+    finally:
+        server.shutdown()
+        dashboard_server._on_sab_toggle_callback = None
+    assert calls == [{"enabled": False}]
+
+
+def test_post_sab_toggle_enabled_true():
+    calls = []
+    dashboard_server._on_sab_toggle_callback = lambda **kwargs: calls.append(kwargs)
+    server, port = _run_server()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        body = json.dumps({"enabled": True}).encode("utf-8")
+        conn.request("POST", "/sab_toggle", body=body, headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        resp.read()
+    finally:
+        server.shutdown()
+        dashboard_server._on_sab_toggle_callback = None
+    assert calls == [{"enabled": True}]
+
+
+def test_post_sab_toggle_malformed_body_returns_400_and_skips_callback():
+    calls = []
+    dashboard_server._on_sab_toggle_callback = lambda **kwargs: calls.append(kwargs)
+    server, port = _run_server()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        body = b"not json"
+        conn.request("POST", "/sab_toggle", body=body, headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        resp.read()
+        assert resp.status == 400
+    finally:
+        server.shutdown()
+        dashboard_server._on_sab_toggle_callback = None
+    assert calls == []
+
+
+def test_post_sab_toggle_no_callback_registered_still_returns_202():
+    dashboard_server._on_sab_toggle_callback = None
+    server, port = _run_server()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        body = json.dumps({"enabled": False}).encode("utf-8")
+        conn.request("POST", "/sab_toggle", body=body, headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        resp.read()
+        assert resp.status == 202
+    finally:
+        server.shutdown()
+
+
+def test_index_html_button_font_family_reset():
+    """Prevention for the Quit-button-looks-different bug: browsers don't
+    make <button> inherit the page font by default, so it must be explicit."""
+    html = dashboard_server.INDEX_HTML
+    assert "font-family: inherit" in html

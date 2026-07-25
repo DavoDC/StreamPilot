@@ -1,6 +1,7 @@
 """Tests for daemon.py"""
 
 import copy
+import json
 import pytest
 from unittest.mock import MagicMock, patch, call
 from daemon import Daemon
@@ -885,6 +886,153 @@ def test_print_heartbeat_no_sab_correction_when_already_paused(daemon):
     daemon._print_heartbeat()
 
     daemon.sab.pause.assert_not_called()
+
+
+# --- SAB auto-manage toggle tests (dashboard "idle streaming" switch) ---
+# When off, StreamPilot must never pause/resume SABnzbd itself - David
+# controls it manually (e.g. overnight idle streaming with a game still
+# "active" but not actively played).
+
+def _make_daemon_with_settings_path(tmp_path, initial=None):
+    settings_path = tmp_path / "sab_settings.json"
+    if initial is not None:
+        settings_path.write_text(json.dumps(initial), encoding="utf-8")
+    with patch("daemon.SAB_SETTINGS_PATH", str(settings_path)):
+        d = Daemon(copy.deepcopy(SAMPLE_CFG))
+    return d, settings_path
+
+
+def test_sab_auto_manage_defaults_true_with_no_settings_file(tmp_path):
+    d, _ = _make_daemon_with_settings_path(tmp_path)
+    assert d.sab_auto_manage is True
+
+
+def test_sab_auto_manage_loads_persisted_false(tmp_path):
+    d, _ = _make_daemon_with_settings_path(tmp_path, initial={"auto_manage": False})
+    assert d.sab_auto_manage is False
+
+
+def test_sab_auto_manage_defaults_true_on_corrupt_settings_file(tmp_path):
+    settings_path = tmp_path / "sab_settings.json"
+    settings_path.write_text("not json", encoding="utf-8")
+    with patch("daemon.SAB_SETTINGS_PATH", str(settings_path)):
+        d = Daemon(copy.deepcopy(SAMPLE_CFG))
+    assert d.sab_auto_manage is True
+
+
+def test_set_sab_auto_manage_persists_to_file(tmp_path):
+    d, settings_path = _make_daemon_with_settings_path(tmp_path)
+    d.sab = MagicMock()
+    with patch("daemon.SAB_SETTINGS_PATH", str(settings_path)):
+        d.set_sab_auto_manage(False)
+    assert json.loads(settings_path.read_text(encoding="utf-8"))["auto_manage"] is False
+
+
+def test_set_sab_auto_manage_false_resumes_sab_immediately(daemon):
+    """Confirmed behaviour: flipping OFF resumes SABnzbd right away instead
+    of waiting for David to do it manually in SABnzbd's own UI."""
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    with patch.object(daemon, "_save_sab_auto_manage"):
+        daemon.set_sab_auto_manage(False)
+    daemon.sab.resume.assert_called_once()
+
+
+def test_set_sab_auto_manage_true_does_not_call_resume(daemon):
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    with patch.object(daemon, "_save_sab_auto_manage"):
+        daemon.set_sab_auto_manage(True)
+    daemon.sab.resume.assert_not_called()
+
+
+def test_on_game_launch_skips_pause_when_auto_manage_disabled(daemon):
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.sab_auto_manage = False
+    daemon.obs.is_streaming.return_value = False
+
+    daemon._on_game_launch("game.exe")
+
+    daemon.sab.pause.assert_not_called()
+
+
+def test_on_no_game_skips_resume_when_auto_manage_disabled(daemon):
+    daemon.obs = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.sab_auto_manage = False
+    daemon.obs.is_streaming.return_value = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon._on_no_game()
+
+    daemon.sab.resume.assert_not_called()
+
+
+def test_print_heartbeat_no_sab_correction_when_auto_manage_disabled(daemon):
+    """SABnzbd left running during a game with auto-manage off - no repause, no ISSUE."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.sab_auto_manage = False
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = False
+
+    with patch("daemon.log") as mock_log:
+        daemon._print_heartbeat()
+
+    daemon.sab.pause.assert_not_called()
+    logged_line = mock_log.info.call_args[0][0]
+    assert "ISSUE" not in logged_line
+
+
+def test_print_heartbeat_writes_sab_auto_manage_to_status_file(daemon):
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.sab_auto_manage = False
+    daemon._active_game_exe = None
+    daemon.obs.is_streaming.return_value = False
+
+    with patch("daemon.log"), patch("daemon.status_file.write_status") as mock_write:
+        daemon._print_heartbeat()
+
+    _, kwargs = mock_write.call_args
+    assert kwargs["sab_auto_manage"] is False
+
+
+def test_format_heartbeat_sab_running_no_issue_when_auto_manage_disabled(daemon):
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=False,
+        sab_auto_manage=False,
+    )
+    assert "Status: ISSUE" not in line
+    assert "manual" in line.lower()
+
+
+def test_format_heartbeat_sab_running_still_issue_when_auto_manage_enabled(daemon):
+    """Default (auto_manage=True) behaviour must be unchanged."""
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=False,
+        sab_auto_manage=True,
+    )
+    assert "Status: ISSUE" in line
 
 
 # --- Steam relaunch tests ---
