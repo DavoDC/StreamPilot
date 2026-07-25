@@ -124,7 +124,7 @@ half-written feature mid-edit.
 Neither catches a semantic/runtime bug (only a genuine syntax error) - the
 psutil-race crash earlier this session would NOT have been caught by this,
 that's what the liveness-verification discipline
-(`feedback_live_process_hotreload_verify_liveness.md`) is for.
+(captured in the maintainer's private notes) is for.
 
 ## 2026-07-19 - "Watch on Twitch" dashboard link
 
@@ -162,11 +162,10 @@ three real bugs that unit tests alone hadn't caught:
    just died, taking the dashboard with it - unnoticed for several minutes. Fixed by
    reading psutil's pre-fetched `p.info['name']` instead of live-querying `.name()`.
 
-General lesson (workspace-wide, not StreamPilot-specific): a green pytest run does not
-prove a live `--watch`-driven process survived an edit, since mocks can't reproduce real
-external-library races. Captured in
-`PRIVATE_NOTES/memory/feedback/feedback_live_process_hotreload_verify_liveness.md` and
-`.claude/rules/enforced-rules.md`.
+General lesson (a broader engineering rule, not StreamPilot-specific): a green pytest run
+does not prove a live `--watch`-driven process survived an edit, since mocks can't
+reproduce real external-library races. Captured in the maintainer's private notes and
+this repo's enforced rules.
 
 Also added: window-capture safety blacklist (`src/window_safety.py`) - config
 validation, add-game wizard, and a live heartbeat check all refuse to ever stream a

@@ -186,9 +186,9 @@ Future polish, do not implement yet:
   David doesn't need to remember the powershell invocation - same pattern as
   `scripts/setup/add-game.bat` wrapping other logic. Low effort, quality of
   life only.
-- **Also drop a copy of the shortcut in the repo** (mirrors the Claude Code
-  shortcut setup, which keeps a copy in both `PRIVATE_NOTES/setup/shortcut/` and
-  the workspace root alongside the Desktop one) - makes it obvious the
+- **Also drop a copy of the shortcut in the repo** (mirrors a setup pattern
+  from the maintainer's private tooling, which keeps a versioned copy of a
+  shortcut alongside the Desktop one) - makes it obvious the
   shortcut is reproducible/version-controllable rather than a one-off manual
   Desktop artifact. Not clearly needed for a single-shortcut single-target
   tool like StreamPilot; only worth doing if the Desktop copy ever goes

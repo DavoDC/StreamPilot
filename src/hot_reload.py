@@ -26,9 +26,9 @@ Either way, before actually restarting: every changed .py file must compile
 logs a warning and keeps the old (working) process running, re-checking
 each poll, instead of restarting into a guaranteed crash. This does NOT
 catch a semantic/runtime bug (a feature that's syntax-valid but wired wrong,
-or the psutil-race class of bug from earlier) - see
-feedback_live_process_hotreload_verify_liveness.md for the verification
-discipline that covers the rest.
+or the psutil-race class of bug from earlier) - a green pytest run does not
+prove a live process survived the edit; verify liveness after each risky
+change, not just at the end.
 
 Opt-in via `streampilot start --watch`. Never runs during a normal streaming
 session unless explicitly requested - stdlib only, no watchdog dependency,
