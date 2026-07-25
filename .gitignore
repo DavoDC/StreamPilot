@@ -19,6 +19,9 @@ data/state/status.json
 data/state/reload.trigger
 data/state/sab_settings.json
 
+# Captures - debug screenshots/recordings, never committed
+captures/
+
 # IDE
 .vscode/
 .idea/

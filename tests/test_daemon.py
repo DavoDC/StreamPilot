@@ -852,6 +852,63 @@ def test_print_heartbeat_repauses_sab_when_running_during_game(daemon):
     assert "ISSUE" in logged_line
 
 
+def test_format_heartbeat_sab_corrected_suppressed_shows_ok(daemon):
+    """The one heartbeat right after the toggle flips on re-pauses SABnzbd
+    as an expected consequence of the user's own click, not a fault -
+    sab_suppress_issue keeps the badge green despite sab_corrected."""
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=False,
+        sab_corrected=True,
+        sab_suppress_issue=True,
+    )
+    assert "REPAUSED" in line
+    assert "Status: OK" in line
+
+
+def test_set_sab_auto_manage_true_sets_just_enabled_flag(daemon):
+    daemon.sab = MagicMock()
+    with patch.object(daemon, "_save_sab_auto_manage"):
+        daemon.set_sab_auto_manage(True)
+    assert daemon._sab_just_enabled is True
+
+
+def test_set_sab_auto_manage_false_does_not_set_just_enabled_flag(daemon):
+    daemon.sab = MagicMock()
+    with patch.object(daemon, "_save_sab_auto_manage"):
+        daemon.set_sab_auto_manage(False)
+    assert daemon._sab_just_enabled is False
+
+
+def test_print_heartbeat_suppresses_issue_right_after_toggle_enabled(daemon):
+    """Reproduces the reported flicker: toggling auto-pause ON while
+    SABnzbd is running mid-game must not flash a red ISSUE badge - the
+    corrective re-pause this cycle is expected, not a fault."""
+    daemon.obs = MagicMock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+    daemon._sab_just_enabled = True
+
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = False
+
+    with patch("daemon.log") as mock_log:
+        daemon._print_heartbeat()
+
+    daemon.sab.pause.assert_called_once()
+    logged_line = mock_log.info.call_args[0][0]
+    assert "REPAUSED" in logged_line
+    assert "Status: OK" in logged_line
+    assert daemon._sab_just_enabled is False  # consumed - one-shot suppression
+
+
 def test_print_heartbeat_no_sab_correction_when_idle(daemon):
     """No game active - SABnzbd correction is skipped even if SABnzbd is running."""
     daemon.obs = MagicMock()
