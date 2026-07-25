@@ -259,25 +259,7 @@ the newest `data/logs/*.log`) after each risky edit, not just at the end.
 
 ## Status/state field design (rule, added 2026-07-25)
 
-**A status field shown on the dashboard must only ever encode current physical
-truth, never a transient "an action was just taken" event.** A polled UI (the
-dashboard reads `status.json` once a poll cycle) can only show a label for as
-long as it survives to the next poll - a one-cycle "I just corrected this"
-annotation is either invisible (overwritten before anyone looks) or, worse,
-asymmetric if only one direction of the correction gets a label and the other
-doesn't. **Incident:** SABnzbd's status field showed `"REPAUSED"` for exactly
-one heartbeat after the daemon auto-paused a drifted SABnzbd, but there was no
-matching `"UNPAUSED"` for the resume direction (resume happens synchronously
-on toggle-off, not via a heartbeat correction) - David never saw the label he
-expected and the asymmetry itself was the tell that the design was wrong, not
-just the wording. Fixed by collapsing `sab_str` in `daemon.py::_classify()` to
-plain physical states only (`Running`/`Paused`, `Disabled`/`Unreachable` for
-connectivity, `(manual)` suffix for mode) - correction *events* stay in the
-log line that triggers them (`log.warning(...)` in `_print_heartbeat`), never
-the polled state field. **Applies to any future dashboard row:** if you're
-about to add a value like `"JUST DID X"` to a `_classify()`-style status
-string, put it in the log instead and keep the field itself to states that
-are true for as long as they're displayed.
+**A status field shown on the dashboard must only ever encode current physical truth, never a transient "an action was just taken" event.** A polled UI (the dashboard reads `status.json` once a poll cycle) can only show a label for as long as it survives to the next poll - a one-cycle "I just corrected this" annotation is either invisible (overwritten before anyone looks) or, worse, asymmetric if only one direction of the correction gets a label and the other doesn't. **Incident:** SABnzbd's status field showed `"REPAUSED"` for exactly one heartbeat after the daemon auto-paused a drifted SABnzbd, but there was no matching `"UNPAUSED"` for the resume direction (resume happens synchronously on toggle-off, not via a heartbeat correction) - David never saw the label he expected and the asymmetry itself was the tell that the design was wrong, not just the wording. Fixed by collapsing `sab_str` in `daemon.py::_classify()` to plain physical states only (`Running`/`Paused`, `Disabled`/`Unreachable` for connectivity, `(manual)` suffix for mode) - correction *events* stay in the log line that triggers them (`log.warning(...)` in `_print_heartbeat`), never the polled state field. **Applies to any future dashboard row:** if you're about to add a value like `"JUST DID X"` to a `_classify()`-style status string, put it in the log instead and keep the field itself to states that are true for as long as they're displayed.
 
 ## Repo Structure
 
