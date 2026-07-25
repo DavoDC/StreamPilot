@@ -333,14 +333,16 @@ def test_format_heartbeat_obs_offline_while_game_active(daemon):
 
 
 def test_format_heartbeat_sab_running_while_game_active(daemon):
+    """sab_str only reflects current truth ('Running') - no editorializing
+    'should be paused' annotation, that's what the ISSUE badge is for."""
     line = daemon._format_heartbeat(
         game_name="My Game",
         obs_streaming=True,
         twitch_category="My Game",
         sab_paused=False,
     )
-    assert "RUNNING" in line
-    assert "should be paused" in line
+    assert "Running" in line
+    assert "should be paused" not in line
 
 
 def test_format_heartbeat_idle_no_game(daemon):
@@ -802,8 +804,13 @@ def test_format_heartbeat_stream_restarted_false_no_extra_field(daemon):
     assert "Stream: RESTARTED" not in line
 
 
-def test_format_heartbeat_sab_corrected_shows_repaused(daemon):
-    """sab_corrected=True overrides 'RUNNING' display with 'REPAUSED' and flags ISSUE."""
+def test_format_heartbeat_sab_corrected_shows_running(daemon):
+    """sab_str only ever reflects current physical state ('Running'), whether or
+    not this cycle just corrected it - sab_corrected still flags ISSUE via
+    sab_issue, but no longer changes the displayed label. A one-heartbeat
+    'REPAUSED' annotation used to live here; it raced the poll cycle and was
+    invisible/asymmetric (no 'UNPAUSED' counterpart existed for the resume
+    direction) - see docs design rule on state fields for the reasoning."""
     line = daemon._format_heartbeat(
         game_name="My Game",
         obs_streaming=True,
@@ -811,13 +818,14 @@ def test_format_heartbeat_sab_corrected_shows_repaused(daemon):
         sab_paused=False,
         sab_corrected=True,
     )
-    assert "REPAUSED" in line
-    assert "RUNNING" not in line
+    assert "Running" in line
+    assert "REPAUSED" not in line
     assert "Status: ISSUE" in line
 
 
 def test_format_heartbeat_sab_not_corrected_still_shows_running(daemon):
-    """Without correction flag, uncorrected SABnzbd still shows 'RUNNING - should be paused'."""
+    """Without correction flag, SABnzbd still just shows 'Running' - same label
+    as the corrected case, since both mean the same physical truth."""
     line = daemon._format_heartbeat(
         game_name="My Game",
         obs_streaming=True,
@@ -825,8 +833,8 @@ def test_format_heartbeat_sab_not_corrected_still_shows_running(daemon):
         sab_paused=False,
         sab_corrected=False,
     )
-    assert "RUNNING" in line
-    assert "should be paused" in line
+    assert "Running" in line
+    assert "should be paused" not in line
 
 
 def test_print_heartbeat_repauses_sab_when_running_during_game(daemon):
@@ -848,7 +856,7 @@ def test_print_heartbeat_repauses_sab_when_running_during_game(daemon):
 
     daemon.sab.pause.assert_called_once()
     logged_line = mock_log.info.call_args[0][0]
-    assert "REPAUSED" in logged_line
+    assert "Running" in logged_line
     assert "ISSUE" in logged_line
 
 
@@ -864,7 +872,7 @@ def test_format_heartbeat_sab_corrected_suppressed_shows_ok(daemon):
         sab_corrected=True,
         sab_suppress_issue=True,
     )
-    assert "REPAUSED" in line
+    assert "Running" in line
     assert "Status: OK" in line
 
 
@@ -904,7 +912,7 @@ def test_print_heartbeat_suppresses_issue_right_after_toggle_enabled(daemon):
 
     daemon.sab.pause.assert_called_once()
     logged_line = mock_log.info.call_args[0][0]
-    assert "REPAUSED" in logged_line
+    assert "Running" in logged_line
     assert "Status: OK" in logged_line
     assert daemon._sab_just_enabled is False  # consumed - one-shot suppression
 
