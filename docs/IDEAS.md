@@ -84,6 +84,20 @@ both fixed 2026-07-13, see HISTORY.md)*
   exact feature the 2026-07-18/21 viewer-growth work shipped - with zero visible
   signal today.
 
+- **`tests/test_daemon.py` failed intermittently on 2026-07-26, cause unidentified** -
+  during an unrelated git-history rewrite the full suite came back with several
+  failures confined to `test_daemon.py`. Re-running the file on its own later the
+  same day passed cleanly three times in a row, and the full suite passed too, so
+  the failures are not reproducible on demand and the specific test names were not
+  captured before the run scrolled away. The history rewrite itself is ruled out as
+  the cause: its diff touched only `.gitignore`. Most likely something in the
+  environment at that moment - a real daemon process holding a port or lock file,
+  or another session running tests concurrently against the same tree. **Next time
+  this happens, save the pytest output before doing anything else.** If it recurs,
+  the fix is probably to make the daemon tests bind an ephemeral port and use a
+  test-scoped state directory rather than whatever shared resource they currently
+  assume is free.
+
 ## Dashboard tab title/favicon - future (harder stuff, easy version shipped 2026-07-13)
 Shipped: tab title shows a colored dot + game name (🟢/🔴/⚪/⚫), favicon recolors
 to match state. See HISTORY.md. Harder follow-ups, not done:
