@@ -152,7 +152,7 @@ INDEX_HTML = """<!doctype html>
     <div class="row"><span class="label">Title</span><span class="value" id="title">-</span></div>
     <div class="row" id="tagsRow"><span class="label">Tags</span><span class="value" id="tags"></span></div>
     <div class="row"><span class="label">SABnzbd</span><span class="value" id="sabnzbd">-</span></div>
-    <div class="row"><span class="label">SAB auto-pause</span><span class="value"><label class="switch"><input type="checkbox" id="sabToggle" checked><span class="slider"></span></label></span></div>
+    <div class="row"><span class="label">Keep SAB paused</span><span class="value"><label class="switch"><input type="checkbox" id="sabToggle" checked><span class="slider"></span></label></span></div>
   </div>
   __TWITCH_LINK_HTML__
   <div id="footer">waiting for daemon...</div>
