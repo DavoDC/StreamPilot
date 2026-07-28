@@ -55,3 +55,28 @@ def test_is_blacklisted_accepts_full_obs_window_string():
 def test_is_blacklisted_false_for_none_or_empty():
     assert window_safety.is_blacklisted(None) is False
     assert window_safety.is_blacklisted("") is False
+
+
+def test_extract_title_from_obs_window_format():
+    assert window_safety.extract_title("My Game  [id]:UnrealWindow:MyGame.exe") == "My Game  [id]"
+
+
+def test_extract_title_none_for_bare_exe_name():
+    assert window_safety.extract_title("chrome.exe") is None
+
+
+def test_extract_title_none_for_empty_or_none():
+    assert window_safety.extract_title("") is None
+    assert window_safety.extract_title(None) is None
+
+
+def test_extract_title_none_for_malformed_input():
+    assert window_safety.extract_title("just:two") is None
+
+
+def test_extract_title_strips_whitespace():
+    assert window_safety.extract_title("  Padded Title  :SomeClass:game.exe") == "Padded Title"
+
+
+def test_extract_title_none_for_empty_title_segment():
+    assert window_safety.extract_title(":SomeClass:game.exe") is None

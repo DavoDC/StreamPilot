@@ -66,10 +66,29 @@ INDEX_HTML = """<!doctype html>
     50% { transform: scale(1.15); }
   }
   #badge { font-size: 28px; font-weight: 700; letter-spacing: 1px; }
-  #panel {
-    background: #1a1e26; border-radius: 10px; padding: 14px 20px;
-    min-width: 220px; max-width: 340px;
+  /* One soft-edged, colour-coded card per API source (OBS / Twitch /
+     SABnzbd) so related facts stay together and each fact's origin is
+     obvious - see docs/IDEAS.md "Dashboard grouped by API source". The
+     big OK/ISSUE badge above stays the primary state signal; card colours
+     are deliberately muted (dark fill, a thin accent border only) so they
+     never compete with it. */
+  #cards {
+    display: flex; flex-direction: column; gap: 12px;
+    min-width: 220px; max-width: 340px; width: 100%;
   }
+  .card {
+    background: #1a1e26; border: 1px solid #262b34; border-left: 3px solid var(--accent);
+    border-radius: 10px; padding: 12px 16px 14px;
+  }
+  .card-header {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+    color: #8b93a1; margin-bottom: 6px;
+  }
+  .card-header svg { color: var(--accent); flex-shrink: 0; }
+  .card-obs { --accent: #3fa1ff; }
+  .card-twitch { --accent: #a970ff; }
+  .card-sab { --accent: #f0a860; }
   .row { display: flex; justify-content: space-between; gap: 20px; padding: 6px 0; font-size: 14px; }
   .row .label { color: #6b7280; flex-shrink: 0; }
   .row .value { font-weight: 600; text-align: right; word-break: break-word; }
@@ -103,6 +122,7 @@ INDEX_HTML = """<!doctype html>
   .switch input:focus-visible + .slider { outline: 2px solid #4b5563; outline-offset: 2px; }
 
   #twitchLink {
+    display: inline-block; margin-top: 8px;
     color: #a970ff; font-size: 13px; font-weight: 600; text-decoration: none;
     padding: 6px 14px; border: 1px solid #3a2a5c; border-radius: 6px;
     transition: border-color 0.2s ease, color 0.2s ease;
@@ -146,16 +166,34 @@ INDEX_HTML = """<!doctype html>
 <body>
   <div id="dot"></div>
   <div id="badge">OFFLINE</div>
-  <div id="panel">
-    <div class="row"><span class="label">Game</span><span class="value" id="game">-</span></div>
-    <div class="row"><span class="label">Category</span><span class="value" id="category">-</span></div>
-    <div class="row"><span class="label">Title</span><span class="value" id="title">-</span></div>
-    <div class="row" id="tagsRow"><span class="label">Tags</span><span class="value" id="tags"></span></div>
-    <div class="row"><span class="label">SABnzbd</span><span class="value" id="sabnzbd">-</span></div>
-    <div class="row" id="audioRow"><span class="label">Audio</span><span class="value" id="audio">-</span></div>
-    <div class="row"><span class="label">Keep SAB paused</span><span class="value"><label class="switch"><input type="checkbox" id="sabToggle" checked><span class="slider"></span></label></span></div>
+  <div id="cards">
+    <div class="card card-obs">
+      <div class="card-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-4v12l-6-4"/></svg>
+        OBS
+      </div>
+      <div class="row"><span class="label">Game Captured</span><span class="value" id="capturedWindow">-</span></div>
+      <div class="row" id="audioRow"><span class="label">Audio</span><span class="value" id="audio">-</span></div>
+    </div>
+    <div class="card card-twitch">
+      <div class="card-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a8 8 0 0 1 16 0"/><path d="M8 13a4 4 0 0 1 8 0"/><circle cx="12" cy="17" r="1.4" fill="currentColor" stroke="none"/></svg>
+        Twitch
+      </div>
+      <div class="row"><span class="label">Category</span><span class="value" id="category">-</span></div>
+      <div class="row"><span class="label">Title</span><span class="value" id="title">-</span></div>
+      <div class="row" id="tagsRow"><span class="label">Tags</span><span class="value" id="tags"></span></div>
+      __TWITCH_LINK_HTML__
+    </div>
+    <div class="card card-sab">
+      <div class="card-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v10"/><path d="M8 9l4 4 4-4"/><path d="M4 17h16v3H4z"/></svg>
+        SABnzbd
+      </div>
+      <div class="row"><span class="label">Status</span><span class="value" id="sabnzbd">-</span></div>
+      <div class="row"><span class="label">Keep SAB paused</span><span class="value"><label class="switch"><input type="checkbox" id="sabToggle" checked><span class="slider"></span></label></span></div>
+    </div>
   </div>
-  __TWITCH_LINK_HTML__
   <div id="footer">waiting for daemon...</div>
   <button id="quitBtn" type="button">Quit</button>
 
@@ -193,7 +231,7 @@ function renderTags(tags) {
   }
 }
 
-function setAudioRow(audioOk, violations) {
+function setAudioRow(audioOk, violations, exes) {
   const el = document.getElementById("audio");
   if (audioOk === null || audioOk === undefined) {
     el.textContent = "-";
@@ -201,7 +239,11 @@ function setAudioRow(audioOk, violations) {
     return;
   }
   if (audioOk) {
-    el.textContent = "safe";
+    // Name the exe(s) audio is actually coming from, not just "safe" - under
+    // exclusive mode this is normally one entry, so it's verifiable at a
+    // glance instead of a bare verdict you have to trust blindly.
+    const names = (exes || []).join(", ");
+    el.textContent = names ? `safe (${names})` : "safe";
     el.style.color = "#3fd67a";
   } else {
     const messages = (violations || []).join("; ");
@@ -262,23 +304,26 @@ async function tick() {
   setFavicon(color);
 
   if (stale) {
-    document.getElementById("game").textContent = "-";
+    document.getElementById("capturedWindow").textContent = "-";
     document.getElementById("category").textContent = "-";
     document.getElementById("title").textContent = "-";
     renderTags(null);
     document.getElementById("sabnzbd").textContent = "-";
-    setAudioRow(null, null);
+    setAudioRow(null, null, null);
     sabToggle.disabled = true;
     document.getElementById("footer").textContent = "No signal from daemon - is it running?";
     document.title = `${TITLE_DOTS[state]} Offline - StreamPilot`;
   } else {
     const game = s.game || "Idle";
-    document.getElementById("game").textContent = game;
+    // Actual captured WINDOW TITLE, not the configured game name (that
+    // duplicated Category) - falls back to the game name if OBS's window
+    // string is missing/malformed, and to "-" entirely when idle.
+    document.getElementById("capturedWindow").textContent = s.game ? (s.captured_window_title || game) : "-";
     document.getElementById("category").textContent = s.category || "Unknown";
     document.getElementById("title").textContent = s.title || "-";
     renderTags(s.tags);
     document.getElementById("sabnzbd").textContent = s.sabnzbd || "-";
-    setAudioRow(s.game ? s.audio_ok : null, s.audio_violations);
+    setAudioRow(s.game ? s.audio_ok : null, s.audio_violations, s.audio_exes);
     sabToggle.disabled = false;
     const daemonValue = s.sab_auto_manage !== undefined ? s.sab_auto_manage : true;
     if (sabToggleDesired !== null && daemonValue === sabToggleDesired) {
@@ -366,7 +411,7 @@ def status_json_bytes(status_path=STATUS_PATH) -> bytes:
     if the daemon hasn't written anything yet."""
     data = status_file.read_status(status_path)
     if data is None:
-        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2, "build_id": None, "audio_ok": None, "audio_violations": None}
+        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2, "build_id": None, "audio_ok": None, "audio_violations": None, "captured_window_title": None, "audio_exes": None}
     return json.dumps(data).encode("utf-8")
 
 
