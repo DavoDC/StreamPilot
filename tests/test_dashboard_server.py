@@ -269,25 +269,24 @@ def test_status_json_bytes_includes_sab_auto_manage(tmp_path):
     assert data["sab_auto_manage"] is False
 
 
-def test_status_json_bytes_includes_captured_window_title_and_audio_exes(tmp_path):
+def test_status_json_bytes_includes_captured_window_exe_and_audio_exes(tmp_path):
     path = tmp_path / "status.json"
     status_file.write_status(
         path, status="OK", game="Marvel Rivals", streaming=True, category="Marvel Rivals",
-        sabnzbd="Paused", poll_interval=2, captured_window_title="Marvel Rivals  [PID 1234]",
+        sabnzbd="Paused", poll_interval=2,
         captured_window_exe="MarvelRivals_Live.exe",
         audio_exes=["MarvelRivals_Live.exe"],
     )
     data = json.loads(dashboard_server.status_json_bytes(path))
-    assert data["captured_window_title"] == "Marvel Rivals  [PID 1234]"
     assert data["captured_window_exe"] == "MarvelRivals_Live.exe"
     assert data["audio_exes"] == ["MarvelRivals_Live.exe"]
 
 
 def test_status_json_bytes_missing_file_has_null_captured_window_and_audio_exes(tmp_path):
     data = json.loads(dashboard_server.status_json_bytes(tmp_path / "nope.json"))
-    assert data["captured_window_title"] is None
     assert data["captured_window_exe"] is None
     assert data["audio_exes"] is None
+    assert data["blacklisted_window"] is None
 
 
 def test_index_html_grouped_into_three_api_cards():
@@ -300,32 +299,78 @@ def test_index_html_grouped_into_three_api_cards():
     assert 'class="card card-sab"' in html
 
 
-def test_index_html_obs_card_contains_captured_window_and_audio_adjacent():
+def test_index_html_obs_card_contains_video_and_audio_adjacent():
     html = dashboard_server.INDEX_HTML
-    assert 'id="capturedWindow"' in html
-    assert "s.captured_window_title" in html
-    # Game Captured and Audio must sit in the same (OBS) card, audio directly
-    # beneath the captured-window row.
+    assert 'id="video"' in html
+    assert "s.captured_window_exe" in html
+    # Video and Audio must sit in the same (OBS) card, audio directly
+    # beneath the video row.
     obs_card = html.split('class="card card-obs"')[1].split('class="card card-twitch"')[0]
-    assert 'id="capturedWindow"' in obs_card
+    assert 'id="video"' in obs_card
     assert 'id="audio"' in obs_card
 
 
-def test_index_html_captured_window_shows_exe_alongside_title():
-    """Game Captured mirrors the Audio row's "safe (exe)" format so David
-    can confirm video and audio come from the SAME source at a glance -
-    see setCapturedWindow() and the .exeSuffix de-emphasis style."""
+def test_index_html_obs_card_label_reads_video_not_game_captured():
+    """David's TIER 1 feedback: 'Game Captured' -> 'Video', paired with
+    'Audio' as the two halves of one stream."""
     html = dashboard_server.INDEX_HTML
-    assert "s.captured_window_exe" in html
-    assert "exeSuffix" in html
-    assert "function setCapturedWindow" in html
+    obs_card = html.split('class="card card-obs"')[1].split('class="card card-twitch"')[0]
+    assert ">Video<" in obs_card
+    assert "Game Captured" not in html
+
+
+def test_index_html_video_row_shows_bare_exe_no_title_no_brackets():
+    """Video shows the bare exe only - no window title, no brackets, no
+    .exeSuffix de-emphasis span (removed - both rows render identically so
+    they align character for character). See docs/DESIGN.md."""
+    html = dashboard_server.INDEX_HTML
+    assert "function setVideoRow" in html
+    assert "exeSuffix" not in html
+    assert "captured_window_title" not in html
+    assert "function setCapturedWindow" not in html
 
 
 def test_index_html_audio_row_names_the_capturing_exe():
-    """setAudioRow must take the exe list so 'safe' is verifiable at a
-    glance, not a bare safe/unsafe verdict."""
+    """setAudioRow must take the exe list so the healthy state is
+    verifiable at a glance, not a bare safe/unsafe verdict."""
     html = dashboard_server.INDEX_HTML
     assert "s.audio_exes" in html
+
+
+def test_index_html_audio_row_no_safe_label_or_brackets():
+    """David's TIER 1 feedback: no "safe" prefix word, no brackets around
+    the exe - the bare exe name is the whole value."""
+    html = dashboard_server.INDEX_HTML
+    assert '"safe' not in html
+    assert "`safe" not in html
+
+
+def test_index_html_obs_card_rows_share_identical_value_formatting():
+    """Video and Audio values must use the same .value class (no per-row
+    override) so identical font-size/weight/color keep the two rows
+    aligned character for character - that alignment is the point."""
+    html = dashboard_server.INDEX_HTML
+    obs_card = html.split('class="card card-obs"')[1].split('class="card card-twitch"')[0]
+    assert 'class="value" id="video"' in obs_card
+    assert 'class="value" id="audio"' in obs_card
+
+
+def test_index_html_obs_row_functions_never_set_green():
+    """No decorative green anywhere in the OBS card body's healthy-state
+    rendering - white means normal, colour means attention. The top-level
+    OK/ISSUE badge legitimately uses green elsewhere; only the row-setter
+    functions for Video/Audio must never reference it."""
+    html = dashboard_server.INDEX_HTML
+    set_video_row = html.split("function setVideoRow")[1].split("function setAudioRow")[0]
+    set_audio_row = html.split("function setAudioRow")[1].split("let lastBuildId")[0]
+    assert "#3fd67a" not in set_video_row
+    assert "#3fd67a" not in set_audio_row
+
+
+def test_index_html_video_row_turns_red_on_blacklisted_window():
+    html = dashboard_server.INDEX_HTML
+    assert "s.blacklisted_window" in html
+    assert "#ff5d5d" in html
 
 
 def test_index_html_no_longer_has_standalone_game_row():

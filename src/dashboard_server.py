@@ -91,12 +91,13 @@ INDEX_HTML = """<!doctype html>
   .card-sab { --accent: #f0a860; }
   .row { display: flex; justify-content: space-between; gap: 20px; padding: 6px 0; font-size: 14px; }
   .row .label { color: #6b7280; flex-shrink: 0; }
+  /* Video and Audio share this class with identical font-size/weight/color
+     (no per-row override) so the two values align character for character -
+     that alignment is what makes a video/audio source mismatch visible
+     without reading a word. See docs/DESIGN.md. Colour is only ever set
+     inline (via JS, on a violation) - never in this base rule, which is
+     what keeps white the default and colour reserved for attention. */
   .row .value { font-weight: 600; text-align: right; word-break: break-word; }
-  /* De-emphasised exe suffix on the "Game Captured" row (e.g. "Palworld
-     (Palworld-Win64-Shipping.exe)") - dimmer + smaller than the title so it
-     reads as supporting detail, not a second headline, matching the .tag
-     treatment used elsewhere for secondary text. */
-  .row .value .exeSuffix { font-weight: 400; font-size: 12px; color: #6b7280; }
   #tagsRow { flex-direction: column; align-items: flex-start; gap: 6px; }
   #tagsRow .label { flex-shrink: unset; }
   #tags {
@@ -177,7 +178,7 @@ INDEX_HTML = """<!doctype html>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-4v12l-6-4"/></svg>
         OBS
       </div>
-      <div class="row"><span class="label">Game Captured</span><span class="value" id="capturedWindow">-</span></div>
+      <div class="row"><span class="label">Video</span><span class="value" id="video">-</span></div>
       <div class="row" id="audioRow"><span class="label">Audio</span><span class="value" id="audio">-</span></div>
     </div>
     <div class="card card-twitch">
@@ -236,29 +237,28 @@ function renderTags(tags) {
   }
 }
 
-function setCapturedWindow(active, title, exe, gameName) {
-  // Mirrors the Audio row's "safe (exe)" format so David can confirm video
-  // and audio come from the SAME source at a glance - the title falls back
-  // to the configured game name (as before), the exe is independent and
-  // only shown (dimmer, smaller) when OBS's window string actually had one.
-  // Never render an empty "()" - the exe span is only added when present.
-  const el = document.getElementById("capturedWindow");
+function setVideoRow(active, exe, blacklistedWindow) {
+  // Bare exe name only, plain white, identical formatting to the Audio row -
+  // no window title, no brackets - so the two rows align character for
+  // character and a mismatch is visible without reading either one. See
+  // docs/DESIGN.md. Colour turns red only when the captured window is
+  // blacklisted (something needs attention); otherwise no inline colour at
+  // all, so it falls back to the row's plain white.
+  const el = document.getElementById("video");
   if (!active) {
     el.textContent = "-";
+    el.style.color = "";
     return;
   }
-  const mainText = title || gameName;
-  el.textContent = "";
-  el.appendChild(document.createTextNode(mainText));
-  if (exe) {
-    const exeSpan = document.createElement("span");
-    exeSpan.className = "exeSuffix";
-    exeSpan.textContent = ` (${exe})`;
-    el.appendChild(exeSpan);
-  }
+  el.textContent = exe || "-";
+  el.style.color = blacklistedWindow ? "#ff5d5d" : "";
 }
 
 function setAudioRow(audioOk, violations, exes) {
+  // Bare exe name(s) only when healthy - plain white, no prefix word, no
+  // brackets - identical formatting to the Video row so the pair is
+  // comparable at a glance (see docs/DESIGN.md). Colour turns red only on a
+  // stop violation, showing the guard's own violation text.
   const el = document.getElementById("audio");
   if (audioOk === null || audioOk === undefined) {
     el.textContent = "-";
@@ -266,15 +266,12 @@ function setAudioRow(audioOk, violations, exes) {
     return;
   }
   if (audioOk) {
-    // Name the exe(s) audio is actually coming from, not just "safe" - under
-    // exclusive mode this is normally one entry, so it's verifiable at a
-    // glance instead of a bare verdict you have to trust blindly.
     const names = (exes || []).join(", ");
-    el.textContent = names ? `safe (${names})` : "safe";
-    el.style.color = "#3fd67a";
+    el.textContent = names || "-";
+    el.style.color = "";
   } else {
     const messages = (violations || []).join("; ");
-    el.textContent = messages ? `UNSAFE: ${messages}` : "UNSAFE";
+    el.textContent = messages || "UNSAFE";
     el.style.color = "#ff5d5d";
   }
 }
@@ -331,7 +328,7 @@ async function tick() {
   setFavicon(color);
 
   if (stale) {
-    setCapturedWindow(false, null, null, null);
+    setVideoRow(false, null, null);
     document.getElementById("category").textContent = "-";
     document.getElementById("title").textContent = "-";
     renderTags(null);
@@ -342,11 +339,7 @@ async function tick() {
     document.title = `${TITLE_DOTS[state]} Offline - StreamPilot`;
   } else {
     const game = s.game || "Idle";
-    // Actual captured WINDOW TITLE, not the configured game name (that
-    // duplicated Category) - falls back to the game name if OBS's window
-    // string is missing/malformed, and to "-" entirely when idle. The exe
-    // suffix is independent of the title fallback (see setCapturedWindow).
-    setCapturedWindow(!!s.game, s.captured_window_title, s.captured_window_exe, game);
+    setVideoRow(!!s.game, s.captured_window_exe, s.blacklisted_window);
     document.getElementById("category").textContent = s.category || "Unknown";
     document.getElementById("title").textContent = s.title || "-";
     renderTags(s.tags);
@@ -439,7 +432,7 @@ def status_json_bytes(status_path=STATUS_PATH) -> bytes:
     if the daemon hasn't written anything yet."""
     data = status_file.read_status(status_path)
     if data is None:
-        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2, "build_id": None, "audio_ok": None, "audio_violations": None, "captured_window_title": None, "captured_window_exe": None, "audio_exes": None}
+        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2, "build_id": None, "audio_ok": None, "audio_violations": None, "captured_window_exe": None, "audio_exes": None, "blacklisted_window": None}
     return json.dumps(data).encode("utf-8")
 
 
