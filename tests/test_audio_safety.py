@@ -105,6 +105,59 @@ def test_resolve_exclude_malformed_settings_returns_default():
     assert audio_safety.resolve_exclude(None) is False
 
 
+# --- resolve_exclude regression: fail closed on present-but-non-bool values ---
+# A present-but-not-bool 'exclude' must resolve by truthiness, never fall
+# back to the default - only an ABSENT key means default. This was a
+# fail-open bug: a non-bool truthy value used to silently read as safe.
+
+def test_resolve_exclude_absent_key_is_false():
+    assert audio_safety.resolve_exclude({}) is False
+
+
+def test_resolve_exclude_false_is_false():
+    assert audio_safety.resolve_exclude({"exclude": False}) is False
+
+
+def test_resolve_exclude_true_is_true():
+    assert audio_safety.resolve_exclude({"exclude": True}) is True
+
+
+def test_resolve_exclude_int_1_is_true():
+    assert audio_safety.resolve_exclude({"exclude": 1}) is True
+
+
+def test_resolve_exclude_string_true_is_true():
+    assert audio_safety.resolve_exclude({"exclude": "true"}) is True
+
+
+def test_resolve_exclude_int_0_is_false():
+    assert audio_safety.resolve_exclude({"exclude": 0}) is False
+
+
+def test_resolve_exclude_none_value_is_false():
+    assert audio_safety.resolve_exclude({"exclude": None}) is False
+
+
+def test_exclude_absent_key_settings_dict_is_safe():
+    """The whole settings dict must still report SAFE when 'exclude' is
+    absent entirely - this is the normal, correctly-configured case."""
+    settings = {"executable_list": [_entry("game.exe")]}
+    violations = audio_safety.check_audio_settings(settings, {"game.exe"})
+    assert violations == []
+
+
+def test_exclude_int_1_produces_exclude_inverted_stop():
+    settings = {"executable_list": [_entry("game.exe")], "exclude": 1}
+    violations = audio_safety.check_audio_settings(settings, {"game.exe"})
+    assert any(v.severity == "stop" and v.code == "exclude_inverted" for v in violations)
+
+
+def test_exclude_string_true_produces_exclude_inverted_stop():
+    settings = {"executable_list": [_entry("game.exe")], "exclude": "true"}
+    violations = audio_safety.check_audio_settings(settings, {"game.exe"})
+    assert any(v.severity == "stop" and v.code == "exclude_inverted" for v in violations)
+
+
 # --- check_audio_settings: severity ladder ---
 
 def test_exclude_true_stops():
