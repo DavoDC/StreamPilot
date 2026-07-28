@@ -114,24 +114,6 @@ to match state. See HISTORY.md. Harder follow-ups, not done:
   useful if the second monitor isn't always in view. Simple `Audio()` object,
   but needs a user gesture first (browser autoplay policy) so isn't zero-effort.
 
-## TIER 1 - Dashboard grouped by API source (added 2026-07-28, David's feedback @ 0f09855)
-
-**Consolidates the former "Dashboard UI improvements" bullets** (game poster, program API source icons, general polish), which were the seed of this idea; David's feedback is the fuller version and those bullets are folded in here rather than left as a parallel item.
-
-**The problem, from the current dashboard.** It is one flat list of label-value rows, so information from three unrelated services sits interleaved with no visual grouping, and video and audio state are separated by four Twitch rows despite being the pair most needed together. `Game: Palworld` and `Category: Palworld` also print the same word twice, which wastes the most prominent row on redundancy.
-
-**Design.** Three soft-edged, colour-coded rectangles, one per API source, so related information stays together and the source of each fact is obvious at a glance:
-
-- **OBS card** - `Game Captured` showing the actual captured window TITLE (not the game name, which duplicates Category), with `Audio` directly beneath it so video and audio sit adjacent. Audio must not just say "safe": it should name the exe or exes the audio is coming from, which under exclusive mode above is a single entry and makes the whole thing verifiable in one glance. Red state shows the violation messages.
-- **Twitch card** - Category, Title, Tags, and the Watch on Twitch link.
-- **SABnzbd card** - status and the Keep SAB paused toggle.
-
-The existing per-source icons idea belongs here as the card headers. The game poster idea belongs in the Twitch card. Colour-coding should stay muted enough not to compete with the green/red OK/ISSUE signal at the top, which remains the primary state indicator.
-
-## TIER 2 - README does not properly cover the audio privacy guard (added 2026-07-28)
-
-The README change in commit `22ad61b` patched an existing note in place rather than restructuring around the feature. The audio privacy guard is a main feature and one of the strongest things the program does, so it needs proper README treatment as a headline capability, benefit-led. The stale note framing should be removed entirely, not edited: it no longer describes a caveat, it describes the product.
-
 ## P1 - AudioManager (next major feature - start after QOL batch is done)
 
 ## System tray (do after status heartbeat)

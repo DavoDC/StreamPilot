@@ -2,6 +2,58 @@
 
 ---
 
+## 2026-07-28 - README rewritten around the audio privacy guard (TIER 2, David's feedback @ 0f09855)
+
+The previous README change (commit `22ad61b`) patched an existing caveat NOTE about
+audio setup in place rather than restructuring around the feature - the audio privacy
+guard is a headline capability, not a caveat, and the note framing undersold it.
+
+- **`README.md`** - deleted the `> **Note:**` block describing the old wide allow-list
+  behaviour entirely (not reworded - it no longer described current behaviour after the
+  exclusive-list change above). Replaced with a proper benefit-led "Private audio can
+  never reach the stream" section: leads with the benefit (Discord, Chrome, Signal audio
+  can never reach the stream, guaranteed continuously, not something David has to
+  remember to check), then explains the mechanism (StreamPilot owns the OBS audio capture
+  list directly, converges it to exactly the current game's exe, force-stops the stream
+  on any live violation) only after the benefit is established. Also tightened the
+  feature-bullet list at the top to match, and confirmed no other README content
+  referenced the old wide-list behaviour.
+
+## 2026-07-28 - Dashboard grouped into per-API cards (TIER 1, David's feedback @ 0f09855)
+
+**The problem.** The dashboard was one flat list of label-value rows: information from
+three unrelated services (OBS, Twitch, SABnzbd) sat interleaved with no visual grouping,
+video and audio state were separated by four Twitch rows despite being the pair most
+needed together, and `Game: Palworld` / `Category: Palworld` printed the same word twice.
+
+- **`src/window_safety.py`** - new `extract_title(obs_window)`, a sibling to the existing
+  `extract_exe`, pulling the human-readable title out of the `Title:Class:Exe.exe`
+  format so the dashboard can show what OBS actually captured instead of the configured
+  game name.
+- **`src/daemon.py`** - `_print_heartbeat` now computes `captured_window_title` (via
+  `window_safety.extract_title`, falls back to the game name on the dashboard side when
+  `None`) and a new `_current_audio_capture_exes()` method returning the exe(s) currently
+  in OBS's audio capture list (empty list if settings are unreadable - `_check_audio_safety`
+  already flags that as a stop violation independently). Both are new, separate additions
+  rather than changes to `_check_audio_safety`'s existing 2-tuple return - that signature
+  is unpacked across ~15-20 existing tests and changing it would have broken all of them.
+  `_current_audio_capture_exes()` is only called inside the active-game branch, matching
+  `test_print_heartbeat_no_audio_check_when_idle`'s assertion that no audio check happens
+  while idle. Both new fields are plumbed through the existing `status_file.write_status`
+  call - no second channel.
+- **`src/dashboard_server.py`** - replaced the flat `#panel` row list with three
+  soft-edged, colour-coded `.card` divs (`card-obs` blue, `card-twitch` purple, `card-sab`
+  orange accent borders only, kept muted so they don't compete with the green/red
+  OK/ISSUE badge which stays the primary signal), each with an inline SVG icon in its
+  header (no external requests, no emoji). OBS card: `Game Captured` (the new
+  `captured_window_title`, falling back to the game name) with `Audio` directly beneath
+  it, and `Audio` now names the actual capturing exe(s) (`safe (game.exe)`) instead of a
+  bare safe/unsafe verdict. Twitch card: Category, Title, Tags, Watch on Twitch link.
+  SABnzbd card: status and the Keep SAB paused toggle. The old standalone `Game` row
+  (duplicating Category) was removed entirely.
+- New/extended tests across `test_window_safety.py`, `test_daemon.py`,
+  `test_dashboard_server.py`; full suite green (360 passed).
+
 ## 2026-07-28 - Exclusive audio capture list (TIER 1, David's feedback @ 0f09855)
 
 **Concept:** collapses the audio allow-list built earlier the same day from "every
