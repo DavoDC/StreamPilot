@@ -90,11 +90,18 @@ def resolve_mode(settings: dict) -> int:
 
 def resolve_exclude(settings: dict) -> bool:
     """Return settings['exclude'] if present, else the documented default
-    (False = do not invert the capture list)."""
+    (False = do not invert the capture list).
+
+    A present-but-not-bool value is resolved by truthiness rather than
+    falling back to the default. Only an ABSENT key means "default". This
+    matters because exclude=True is the single worst violation, so a
+    surprising value (1, "true") must fail closed, not silently read as
+    safe."""
     if not isinstance(settings, dict):
         return DEFAULT_EXCLUDE
-    value = settings.get("exclude")
-    return value if isinstance(value, bool) else DEFAULT_EXCLUDE
+    if "exclude" not in settings:
+        return DEFAULT_EXCLUDE
+    return bool(settings["exclude"])
 
 
 def check_audio_settings(settings: dict, allowed_exes: set) -> list["Violation"]:
