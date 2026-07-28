@@ -92,6 +92,11 @@ INDEX_HTML = """<!doctype html>
   .row { display: flex; justify-content: space-between; gap: 20px; padding: 6px 0; font-size: 14px; }
   .row .label { color: #6b7280; flex-shrink: 0; }
   .row .value { font-weight: 600; text-align: right; word-break: break-word; }
+  /* De-emphasised exe suffix on the "Game Captured" row (e.g. "Palworld
+     (Palworld-Win64-Shipping.exe)") - dimmer + smaller than the title so it
+     reads as supporting detail, not a second headline, matching the .tag
+     treatment used elsewhere for secondary text. */
+  .row .value .exeSuffix { font-weight: 400; font-size: 12px; color: #6b7280; }
   #tagsRow { flex-direction: column; align-items: flex-start; gap: 6px; }
   #tagsRow .label { flex-shrink: unset; }
   #tags {
@@ -231,6 +236,28 @@ function renderTags(tags) {
   }
 }
 
+function setCapturedWindow(active, title, exe, gameName) {
+  // Mirrors the Audio row's "safe (exe)" format so David can confirm video
+  // and audio come from the SAME source at a glance - the title falls back
+  // to the configured game name (as before), the exe is independent and
+  // only shown (dimmer, smaller) when OBS's window string actually had one.
+  // Never render an empty "()" - the exe span is only added when present.
+  const el = document.getElementById("capturedWindow");
+  if (!active) {
+    el.textContent = "-";
+    return;
+  }
+  const mainText = title || gameName;
+  el.textContent = "";
+  el.appendChild(document.createTextNode(mainText));
+  if (exe) {
+    const exeSpan = document.createElement("span");
+    exeSpan.className = "exeSuffix";
+    exeSpan.textContent = ` (${exe})`;
+    el.appendChild(exeSpan);
+  }
+}
+
 function setAudioRow(audioOk, violations, exes) {
   const el = document.getElementById("audio");
   if (audioOk === null || audioOk === undefined) {
@@ -304,7 +331,7 @@ async function tick() {
   setFavicon(color);
 
   if (stale) {
-    document.getElementById("capturedWindow").textContent = "-";
+    setCapturedWindow(false, null, null, null);
     document.getElementById("category").textContent = "-";
     document.getElementById("title").textContent = "-";
     renderTags(null);
@@ -317,8 +344,9 @@ async function tick() {
     const game = s.game || "Idle";
     // Actual captured WINDOW TITLE, not the configured game name (that
     // duplicated Category) - falls back to the game name if OBS's window
-    // string is missing/malformed, and to "-" entirely when idle.
-    document.getElementById("capturedWindow").textContent = s.game ? (s.captured_window_title || game) : "-";
+    // string is missing/malformed, and to "-" entirely when idle. The exe
+    // suffix is independent of the title fallback (see setCapturedWindow).
+    setCapturedWindow(!!s.game, s.captured_window_title, s.captured_window_exe, game);
     document.getElementById("category").textContent = s.category || "Unknown";
     document.getElementById("title").textContent = s.title || "-";
     renderTags(s.tags);
@@ -411,7 +439,7 @@ def status_json_bytes(status_path=STATUS_PATH) -> bytes:
     if the daemon hasn't written anything yet."""
     data = status_file.read_status(status_path)
     if data is None:
-        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2, "build_id": None, "audio_ok": None, "audio_violations": None, "captured_window_title": None, "audio_exes": None}
+        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2, "build_id": None, "audio_ok": None, "audio_violations": None, "captured_window_title": None, "captured_window_exe": None, "audio_exes": None}
     return json.dumps(data).encode("utf-8")
 
 

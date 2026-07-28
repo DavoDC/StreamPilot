@@ -80,6 +80,7 @@ def seed_status(unsafe: bool):
         audio_ok=audio_ok,
         audio_violations=audio_violations,
         captured_window_title="Palworld",
+        captured_window_exe="Palworld-Win64-Shipping.exe",
         audio_exes=audio_exes,
     )
 

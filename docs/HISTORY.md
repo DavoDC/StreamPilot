@@ -2,6 +2,33 @@
 
 ---
 
+## 2026-07-28 - Game Captured row shows the exe, not just the window title
+
+**The problem.** `Game Captured` showed only the window title (e.g. `Palworld`), which
+for most games IS the game name - still visually duplicating the Twitch card's
+`Category` row. More importantly, the whole point of the OBS card is letting David
+confirm at a glance that video and audio come from the SAME source, and the exe was
+missing from the video side of that comparison even though the Audio row already
+showed it (`safe (Palworld-Win64-Shipping.exe)`).
+
+- **`src/daemon.py`** - `_print_heartbeat` now also computes `captured_window_exe` via
+  the existing `window_safety.extract_exe(actual)`, alongside the existing
+  `captured_window_title`. Plumbed through the same `status_file.write_status` call
+  used by every other heartbeat field - no second channel.
+- **`src/dashboard_server.py`** - `Game Captured` now renders `Title (exe)`, e.g.
+  `Palworld (Palworld-Win64-Shipping.exe)`, mirroring the Audio row's format. New
+  `setCapturedWindow()` builds the row from a title text node plus an optional
+  `.exeSuffix` span so the exe is never wrapped in an empty bracket pair when it's
+  unavailable, and the title still falls back to the configured game name exactly as
+  before. `.exeSuffix` is styled dimmer/smaller (`#6b7280`, 12px, weight 400) than the
+  title, matching the dashboard's existing de-emphasis of secondary text, and both
+  stay on one line.
+- **`scripts/preview_dashboard.py`** - seeds `captured_window_exe` alongside the
+  existing `captured_window_title` so the preview matches production's status
+  contract.
+- New/extended tests across `test_daemon.py`, `test_dashboard_server.py`; full suite
+  green (362 passed).
+
 ## 2026-07-28 - README rewritten around the audio privacy guard (TIER 2, David's feedback @ 0f09855)
 
 The previous README change (commit `22ad61b`) patched an existing caveat NOTE about
