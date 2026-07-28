@@ -18,6 +18,7 @@ data/logs/*.log
 data/state/status.json
 data/state/reload.trigger
 data/state/sab_settings.json
+data/state/preview_status.json
 
 # Captures - debug screenshots/recordings, never committed
 captures/
