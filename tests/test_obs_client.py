@@ -211,6 +211,82 @@ def test_set_audio_capture_exes_exception_returns_false(client):
     assert client.set_audio_capture_exes(["game.exe"]) is False
 
 
+# --- exact=True (exclusive-mode convergence) ---
+
+def test_set_audio_capture_exes_exact_removes_entries_not_in_target(client):
+    """exact=True is the one sanctioned removal path - anything already in
+    the list that isn't in exe_values gets dropped."""
+    stale_entry = {"hidden": False, "selected": False, "uuid": "stale-uuid", "value": "old_game.exe"}
+    client._client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.input_settings = {"executable_list": [stale_entry]}
+    client._client.get_input_settings.return_value = mock_resp
+
+    result = client.set_audio_capture_exes(["new_game.exe"], exact=True)
+
+    assert result is True
+    _, kwargs = client._client.set_input_settings.call_args
+    new_list = kwargs["settings"]["executable_list"]
+    assert [e["value"] for e in new_list] == ["new_game.exe"]
+
+
+def test_set_audio_capture_exes_exact_preserves_uuid_for_retained_entries(client):
+    existing_entry = {"hidden": True, "selected": True, "uuid": "keep-me", "value": "game.exe"}
+    client._client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.input_settings = {"executable_list": [existing_entry]}
+    client._client.get_input_settings.return_value = mock_resp
+
+    client.set_audio_capture_exes(["game.exe", "extra.exe"], exact=True)
+
+    _, kwargs = client._client.set_input_settings.call_args
+    new_list = kwargs["settings"]["executable_list"]
+    kept = next(e for e in new_list if e["value"] == "game.exe")
+    assert kept["uuid"] == "keep-me"
+    assert kept["hidden"] is True
+    added = next(e for e in new_list if e["value"] == "extra.exe")
+    assert added["uuid"] and added["uuid"] != "keep-me"
+
+
+def test_set_audio_capture_exes_exact_clears_to_empty(client):
+    existing_entry = {"hidden": False, "selected": False, "uuid": "u1", "value": "game.exe"}
+    client._client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.input_settings = {"executable_list": [existing_entry]}
+    client._client.get_input_settings.return_value = mock_resp
+
+    result = client.set_audio_capture_exes([], exact=True)
+
+    assert result is True
+    _, kwargs = client._client.set_input_settings.call_args
+    assert kwargs["settings"]["executable_list"] == []
+
+
+def test_set_audio_capture_exes_exact_skips_write_when_already_converged(client):
+    """No redundant SetInputSettings calls when the list already matches
+    the target - avoids hammering OBS every 2s heartbeat cycle."""
+    existing_entry = {"hidden": False, "selected": False, "uuid": "u1", "value": "game.exe"}
+    client._client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.input_settings = {"executable_list": [existing_entry]}
+    client._client.get_input_settings.return_value = mock_resp
+
+    result = client.set_audio_capture_exes(["game.exe"], exact=True)
+
+    assert result is True
+    client._client.set_input_settings.assert_not_called()
+
+
+def test_set_audio_capture_exes_exact_no_client_returns_false(client):
+    assert client.set_audio_capture_exes(["game.exe"], exact=True) is False
+
+
+def test_set_audio_capture_exes_exact_exception_returns_false(client):
+    client._client = MagicMock()
+    client._client.get_input_settings.side_effect = Exception("unreachable")
+    assert client.set_audio_capture_exes(["game.exe"], exact=True) is False
+
+
 def test_get_input_mute_returns_true_when_muted(client):
     mock_resp = MagicMock()
     mock_resp.input_muted = True

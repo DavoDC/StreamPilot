@@ -31,7 +31,6 @@ class Daemon:
         self.games = cfg.get("games", {})
 
         self.audio_cfg = config_module.get_audio_config(cfg)
-        self.audio_allowed_exes = config_module.get_allowed_audio_exes(cfg)
         self.obs = OBSClient(
             host=cfg["obs"]["host"],
             port=cfg["obs"]["port"],
@@ -391,6 +390,16 @@ class Daemon:
                 self.obs.start_stream()
                 stream_restarted = True
 
+            # Audio list convergence: CRITICAL - only when this cycle did NOT
+            # just force-stop for an audio violation. audio_blocked means the
+            # guard flagged a real leak against the true current settings;
+            # converging/removing here on the same cycle would silently
+            # "clean up" the very evidence that caused the stop, which is
+            # exactly what this design must never do (see
+            # _converge_audio_capture_list docstring).
+            if not audio_blocked:
+                self._converge_audio_capture_list(self._active_game_exe, obs_streaming)
+
             # SABnzbd correction - skipped entirely when auto-manage is off
             if self.sab_enabled and self.sab and self.sab_auto_manage and sab_paused is False:
                 log.warning("SABnzbd running during active game session - repausing")
@@ -398,6 +407,7 @@ class Daemon:
                 sab_corrected = True
         else:
             obs_streaming = self.obs.is_streaming()
+            self._converge_audio_capture_list(None, obs_streaming)
 
         audio_violation_count = len(audio_violations)
         c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count)
@@ -439,6 +449,51 @@ class Daemon:
                 return exe
         return None
 
+    def _audio_allowed_exes(self, game_exe: str | None) -> set:
+        """The allow-list to check the current OBS audio capture list
+        against - mirrors config.get_allowed_audio_exes but reads the
+        cached self.audio_cfg (matching how every other audio.* flag is
+        read/tested in this class, e.g. tests mutate daemon.audio_cfg[...]
+        directly) rather than recomputing from self.cfg, which would miss
+        any such test-time (or runtime) mutation. See
+        config.py::get_allowed_audio_exes for the exclusive vs wide-list
+        rationale - exclusive_mode (default True) narrows this to just the
+        currently streaming game plus extra_allowed, closing the case
+        where two games happen to be running at once."""
+        extra = set(self.audio_cfg.get("extra_allowed", []))
+        if self.audio_cfg.get("exclusive_mode", True):
+            return ({game_exe} if game_exe else set()) | extra
+        return set(self.games.keys()) | extra
+
+    def _converge_audio_capture_list(self, game_exe: str | None, obs_streaming: bool) -> None:
+        """Exclusive-mode homeostasis: converge OBS's audio executable_list
+        to exactly {current game} + extra_allowed while a game is active,
+        and to empty once idle with no stream running. No-ops entirely when
+        audio.exclusive_mode is False (the wide allow-list path is
+        untouched - nothing to converge).
+
+        CRITICAL: this is the ONE place StreamPilot is allowed to remove an
+        entry from the OBS audio capture list. It exists purely to converge
+        onto the single known-correct value {current game}+extra_allowed -
+        it must NEVER be used to clear a violation the safety guard has
+        flagged. A denied exe (Discord etc.) or an inverted 'exclude' flag
+        still force-stops the stream exactly as before (see
+        _check_audio_safety / _preflight_audio_check); callers must only
+        invoke this on a cycle that did NOT just force-stop for an audio
+        violation (see _print_heartbeat's `not audio_blocked` gate), so a
+        flagged violation is never silently 'resolved' by removal - it
+        stays visible until config is fixed or the game relaunches.
+        """
+        if not self.audio_cfg.get("exclusive_mode", True):
+            return
+        if game_exe:
+            target = [game_exe] + list(self.audio_cfg.get("extra_allowed", []))
+        elif not obs_streaming:
+            target = []
+        else:
+            return  # no game detected but stream still active - leave list alone
+        self.obs.set_audio_capture_exes(target, exact=True)
+
     def _check_audio_safety(self, game_exe: str | None) -> tuple[bool, list]:
         """Evaluate the audio capture source (allow-list) plus the Desktop
         Audio / Mic leak paths against the current OBS state. Returns
@@ -453,7 +508,7 @@ class Daemon:
                 f"'{self.audio_cfg['source_name']}' - refusing to treat as safe",
             )]
         else:
-            violations = audio_safety.check_audio_settings(settings, self.audio_allowed_exes)
+            violations = audio_safety.check_audio_settings(settings, self._audio_allowed_exes(game_exe))
             missing = audio_safety.check_missing_game(settings, game_exe)
             if missing:
                 violations.append(missing)
@@ -514,6 +569,13 @@ class Daemon:
         name = game["name"]
         log.info(f"Game detected: {name} ({exe})")
 
+        # Converge the audio capture list to this game as early as possible,
+        # before anything else - addresses the win-capture-audio plugin
+        # attach-timing concern (docs/HISTORY.md "Exclusive audio capture
+        # list"): the exe should be in OBS's list before its audio session
+        # is likely to exist, not after. No-op when exclusive_mode is False.
+        self._converge_audio_capture_list(exe, obs_streaming=False)
+
         self.obs.set_game_capture_window(game["obs_window"])
 
         title = build_title(name, game, self.twitch_cfg)
@@ -551,6 +613,11 @@ class Daemon:
 
         if self.obs.is_streaming():
             self.obs.stop_stream()
+
+        # Clear the audio capture list on game exit - no-op when
+        # exclusive_mode is False. obs_streaming=False here because the
+        # stream was just stopped above (or wasn't running at all).
+        self._converge_audio_capture_list(None, obs_streaming=False)
 
         if self.sab_enabled and self.sab and self.sab_auto_manage:
             self.sab.resume()

@@ -18,6 +18,7 @@ AUDIO_DEFAULTS = {
     "enforce": True,
     "auto_add_game": True,
     "require_desktop_audio_muted": True,
+    "exclusive_mode": True,
 }
 
 
@@ -27,10 +28,26 @@ def get_audio_config(cfg: dict) -> dict:
     return {**AUDIO_DEFAULTS, **audio}
 
 
-def get_allowed_audio_exes(cfg: dict) -> set:
-    """The audio allow-list: every config.games key, plus audio.extra_allowed."""
+def get_allowed_audio_exes(cfg: dict, current_game_exe: str | None = None) -> set:
+    """The audio allow-list the caller should pass to
+    audio_safety.check_audio_settings - audio_safety.py stays pure and
+    never branches on config itself.
+
+    exclusive_mode (default True): only the currently-streaming game plus
+    audio.extra_allowed - the narrow surface. StreamPilot manages the OBS
+    executable_list itself (see daemon.py convergence loop), so it can be
+    exactly what's needed and nothing more; this also closes the case
+    where two games happen to be running at once.
+
+    exclusive_mode=False: the original wide list - every config.games key
+    plus audio.extra_allowed - kept so this can be backed out via config
+    alone, no code change.
+    """
     audio = get_audio_config(cfg)
-    return set(cfg.get("games", {}).keys()) | set(audio.get("extra_allowed", []))
+    extra = set(audio.get("extra_allowed", []))
+    if audio.get("exclusive_mode", True):
+        return ({current_game_exe} if current_game_exe else set()) | extra
+    return set(cfg.get("games", {}).keys()) | extra
 
 
 def load() -> dict:

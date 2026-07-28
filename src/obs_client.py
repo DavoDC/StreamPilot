@@ -127,15 +127,39 @@ class OBSClient:
             log.warning(f"OBS get_input_settings failed for '{self.audio_source_name}': {e}")
             return None
 
-    def set_audio_capture_exes(self, exe_values: list[str]) -> bool:
-        """Add every exe in exe_values to the audio source's executable_list
-        if not already present, preserving each existing entry's uuid/
-        hidden/selected and generating a fresh uuid4 for new ones. Only
-        ever adds - never removes an existing entry, even one not in
-        exe_values. Auto-removal is deliberately not implemented: a wrong
-        removal is invisible, so the safe response to a leak is stopping
-        the stream and telling the human, not silently editing this list
-        further (see docs/HISTORY.md 'Audio privacy guard')."""
+    def set_audio_capture_exes(self, exe_values: list[str], exact: bool = False) -> bool:
+        """Update the audio source's executable_list.
+
+        exact=False (default): additive only - adds every exe in
+        exe_values not already present, preserving each existing entry's
+        uuid/hidden/selected and generating a fresh uuid4 for new ones.
+        Never removes an existing entry, even one not in exe_values. Used
+        for the warn-only 'game just launched, add it' path
+        (daemon.py::_auto_add_game_to_audio) - a wrong removal there would
+        be invisible, so the safe response to a leak is stopping the
+        stream and telling the human, not silently editing this list
+        further (see docs/HISTORY.md 'Audio privacy guard').
+
+        exact=True: converge the list to contain ONLY exe_values, in that
+        order - existing entries not in exe_values are dropped, existing
+        entries that ARE in exe_values keep their uuid/hidden/selected,
+        new ones get a fresh uuid4. Skips the actual write entirely (no
+        SetInputSettings call) when the current list's exe set already
+        equals exe_values, so a homeostasis loop polling every couple
+        seconds doesn't hammer OBS with identical writes.
+
+        CRITICAL: exact=True is the ONLY place this client removes an
+        entry from the list, and it exists for exactly one purpose -
+        StreamPilot's exclusive-mode convergence loop
+        (daemon.py::_converge_audio_capture_list) reconciling the list to
+        {current game} + audio.extra_allowed. It must NEVER be called to
+        clear a violation the safety guard has flagged - a denied exe or
+        an inverted 'exclude' flag still force-stops the stream exactly as
+        it does today (see daemon.py::_check_audio_safety /
+        _preflight_audio_check); this method has no awareness of
+        violations at all, it only ever converges toward the exact list
+        its caller hands it.
+        """
         if not self._client:
             return False
         try:
@@ -146,12 +170,38 @@ class OBSClient:
                 # else already there. Refuse instead.
                 return False
             existing = current.get("executable_list") or []
-            existing_values = {e.get("value") for e in existing if isinstance(e, dict)}
+            existing_by_value = {
+                e.get("value"): e for e in existing if isinstance(e, dict)
+            }
+
+            if exact:
+                current_values = [
+                    e.get("value") for e in existing if isinstance(e, dict)
+                ]
+                if set(current_values) == set(exe_values):
+                    return True  # already converged - nothing to write
+
+                new_list = []
+                for exe in exe_values:
+                    entry = existing_by_value.get(exe)
+                    new_list.append(entry if entry is not None else {
+                        "hidden": False,
+                        "selected": False,
+                        "uuid": str(uuid.uuid4()),
+                        "value": exe,
+                    })
+                self._client.set_input_settings(
+                    name=self.audio_source_name,
+                    settings={"executable_list": new_list},
+                    overlay=True,
+                )
+                log.info(f"Audio capture list converged to: {exe_values}")
+                return True
 
             new_list = list(existing)
             added = []
             for exe in exe_values:
-                if exe not in existing_values:
+                if exe not in existing_by_value:
                     new_list.append({
                         "hidden": False,
                         "selected": False,

@@ -1509,3 +1509,197 @@ def test_print_heartbeat_no_audio_check_when_idle(daemon):
     daemon._print_heartbeat()
 
     daemon.obs.get_audio_capture_settings.assert_not_called()
+
+
+# --- Exclusive mode (TIER 1 - added 2026-07-28) ---
+# audio.exclusive_mode defaults True: the allowed set is ONLY the current
+# game + extra_allowed, not the full config.games list. StreamPilot manages
+# the OBS executable_list itself, so it converges the list to exactly that
+# set instead of just validating against a wide allow-list.
+
+def test_check_audio_safety_exclusive_mode_second_game_present_is_stop(daemon):
+    """A second game's exe in the capture list is a stop violation under
+    exclusive mode, even though it's a perfectly valid game - only the
+    CURRENTLY streaming game is allowed. Closes the two-games-at-once case."""
+    daemon.obs = _safe_obs_mock()
+    daemon.obs.get_audio_capture_settings.return_value = {
+        "executable_list": [{"value": "game.exe"}, {"value": "other_game.exe"}],
+    }
+    is_safe, violations = daemon._check_audio_safety("game.exe")
+    assert is_safe is False
+    assert any(v.code == "unknown_exe" and "other_game.exe" in v.message for v in violations)
+
+
+def test_check_audio_safety_exclusive_mode_only_current_game_is_safe(daemon):
+    daemon.obs = _safe_obs_mock()
+    daemon.obs.get_audio_capture_settings.return_value = {
+        "executable_list": [{"value": "game.exe"}],
+    }
+    is_safe, violations = daemon._check_audio_safety("game.exe")
+    assert is_safe is True
+    assert violations == []
+
+
+def test_check_audio_safety_exclusive_mode_extra_allowed_still_permitted(daemon):
+    daemon.audio_cfg["extra_allowed"] = ["voice_changer.exe"]
+    daemon.obs = _safe_obs_mock()
+    daemon.obs.get_audio_capture_settings.return_value = {
+        "executable_list": [{"value": "game.exe"}, {"value": "voice_changer.exe"}],
+    }
+    is_safe, violations = daemon._check_audio_safety("game.exe")
+    assert is_safe is True
+    assert violations == []
+
+
+def test_check_audio_safety_exclusive_mode_false_uses_wide_list(daemon):
+    """Backed out via config alone: exclusive_mode=False restores the
+    original wide allow-list (every config.games key)."""
+    daemon.audio_cfg["exclusive_mode"] = False
+    daemon.games["other_game.exe"] = {"name": "Other", "twitch_game_id": "1", "obs_window": "x"}
+    daemon.obs = _safe_obs_mock()
+    daemon.obs.get_audio_capture_settings.return_value = {
+        "executable_list": [{"value": "game.exe"}, {"value": "other_game.exe"}],
+    }
+    is_safe, violations = daemon._check_audio_safety("game.exe")
+    assert is_safe is True
+    assert violations == []
+
+
+def test_on_game_launch_converges_audio_list_to_current_game(daemon):
+    daemon.obs = _safe_obs_mock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.obs.is_streaming.return_value = False
+
+    daemon._on_game_launch("game.exe")
+
+    daemon.obs.set_audio_capture_exes.assert_any_call(["game.exe"], exact=True)
+
+
+def test_on_game_launch_converges_audio_list_with_extra_allowed(daemon):
+    daemon.audio_cfg["extra_allowed"] = ["voice_changer.exe"]
+    daemon.obs = _safe_obs_mock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.obs.is_streaming.return_value = False
+
+    daemon._on_game_launch("game.exe")
+
+    daemon.obs.set_audio_capture_exes.assert_any_call(["game.exe", "voice_changer.exe"], exact=True)
+
+
+def test_on_game_launch_does_not_converge_when_exclusive_mode_false(daemon):
+    daemon.audio_cfg["exclusive_mode"] = False
+    daemon.obs = _safe_obs_mock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.obs.is_streaming.return_value = False
+
+    daemon._on_game_launch("game.exe")
+
+    assert call(["game.exe"], exact=True) not in daemon.obs.set_audio_capture_exes.mock_calls
+
+
+def test_on_no_game_clears_audio_capture_list(daemon):
+    daemon.obs = _safe_obs_mock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.obs.is_streaming.return_value = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon._on_no_game()
+
+    daemon.obs.set_audio_capture_exes.assert_any_call([], exact=True)
+
+
+def test_on_no_game_does_not_clear_when_exclusive_mode_false(daemon):
+    daemon.audio_cfg["exclusive_mode"] = False
+    daemon.obs = _safe_obs_mock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.obs.is_streaming.return_value = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon._on_no_game()
+
+    assert call([], exact=True) not in daemon.obs.set_audio_capture_exes.mock_calls
+
+
+def test_print_heartbeat_converges_audio_list_every_cycle_when_game_active(daemon):
+    daemon.obs = _safe_obs_mock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    with patch("daemon.log"):
+        daemon._print_heartbeat()
+
+    daemon.obs.set_audio_capture_exes.assert_any_call(["game.exe"], exact=True)
+
+
+def test_print_heartbeat_converges_audio_list_to_empty_when_idle_and_not_streaming(daemon):
+    daemon.obs = _safe_obs_mock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = None
+    daemon.obs.is_streaming.return_value = False
+
+    with patch("daemon.log"):
+        daemon._print_heartbeat()
+
+    daemon.obs.set_audio_capture_exes.assert_any_call([], exact=True)
+
+
+def test_print_heartbeat_does_not_clear_audio_list_when_idle_but_still_streaming(daemon):
+    """Edge case: no game detected but the stream is somehow still active -
+    leave the list alone rather than blindly clearing it while live."""
+    daemon.obs = _safe_obs_mock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = None
+    daemon.obs.is_streaming.return_value = True
+
+    with patch("daemon.log"):
+        daemon._print_heartbeat()
+
+    daemon.obs.set_audio_capture_exes.assert_not_called()
+
+
+def test_print_heartbeat_does_not_converge_audio_list_when_force_stopped_this_cycle(daemon):
+    """CRITICAL: convergence must never be the mechanism that clears a
+    flagged violation. When this cycle force-stops for an audio violation,
+    the list is left exactly as the guard found it - it stays visible
+    until config is fixed or the game relaunches (which re-converges via
+    _on_game_launch), not silently cleaned up by the same cycle that just
+    caught it."""
+    daemon.obs = _safe_obs_mock()
+    daemon.obs.get_audio_capture_settings.return_value = {
+        "executable_list": [{"value": "discord.exe"}, {"value": "game.exe"}],
+    }
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    with patch("daemon.log"):
+        daemon._print_heartbeat()
+
+    daemon.obs.set_audio_capture_exes.assert_not_called()
