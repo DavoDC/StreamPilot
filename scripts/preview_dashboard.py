@@ -89,7 +89,6 @@ def seed_status(unsafe: bool):
         sab_auto_manage=False,
         audio_ok=audio_ok,
         audio_violations=audio_violations,
-        captured_window_title="Palworld",
         captured_window_exe=GAME_EXE,
         audio_exes=audio_exes,
     )

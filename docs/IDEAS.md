@@ -62,6 +62,30 @@ worth a dedicated session:
 *(Config schema for title/tags/emoji is documented in CLAUDE.md's Config section, not
 duplicated here - it's shipped, not a plan.)*
 
+## TIER 1 - OBS card text refinement (added 2026-07-28, David's feedback @ 99356d3)
+
+**Scope: the OBS card's two rows only.** David is happy with the three-card layout, the colour coding and everything else ("really sleek"). The Twitch and SABnzbd cards are not in scope. Do not restyle them.
+
+**What is wrong.** The rows currently read `Game Captured  Pal (Palworld-Win64-Shipping.exe)` and `Audio  safe (Palworld-Win64-Shipping.exe)`. Three separate problems:
+
+1. **"Pal" is the OBS window title**, and it is useless. Window titles are unreliable identifiers: they get truncated, they change at runtime (loading screens, level names, match state), and they are localised. The exe is the stable identity, and critically it is the exact thing the audio guard matches on. Showing a title next to an exe invites the eye to compare two different kinds of thing.
+2. **Green "safe" is decorative colour.** If the healthy state is coloured, the eye learns that colour is normal and stops treating it as a signal. Colour must be reserved for the case that needs attention.
+3. **Brackets and the word "safe" are noise.** They wrap the one value that matters in punctuation and a redundant adjective. The top-level OK/ISSUE indicator already states safety for the whole program.
+
+**The design.** Both rows show the bare exe, identical formatting, plain white, no brackets, no prefix word:
+
+```
+OBS
+Video    Palworld-Win64-Shipping.exe
+Audio    Palworld-Win64-Shipping.exe
+```
+
+`Game Captured` becomes `Video`, which David suggested and which is right for a reason worth stating: `Video` and `Audio` are the two halves of one stream, so the symmetric labels make the pair read as a pair. With identical labels-widths and identical values, the two lines align character for character, and a mismatch between what is being seen and what is being heard becomes visible instantly without reading a single word. That alignment IS the feature. Any decoration that breaks it (brackets, a colour on one row, an extra adjective) destroys the comparison.
+
+**Colour rule, generalised:** on this dashboard, white means normal and colour means attention. The audio row turns red and shows the violation text only when the guard flags a stop; the video row turns red only when the captured window is blacklisted. No green anywhere in the card body. This should be written down, not just implemented, because it is the rule the current green "safe" broke.
+
+**Also:** capture the dashboard's design principles in a `docs/DESIGN.md` (David: "docs design MD maybe") so the next change does not relitigate them. Cover the card grouping by API source, the muted accent colours that must not compete with the top-level state indicator, the white-normal/colour-attention rule, the symmetric Video/Audio pairing and why alignment matters, and the self-contained-no-external-requests constraint.
+
 ## P0 - Blocking bugs
 
 *(none currently - OBS window staleness fixed: heartbeat now verifies + reapplies.

@@ -1527,7 +1527,7 @@ def test_current_audio_capture_exes_empty_when_settings_unreadable(daemon):
     assert daemon._current_audio_capture_exes() == []
 
 
-def test_print_heartbeat_writes_captured_window_title_and_audio_exes(daemon):
+def test_print_heartbeat_writes_captured_window_exe_and_audio_exes(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.obs.get_audio_capture_settings.return_value = {
         "executable_list": [{"value": "game.exe"}],
@@ -1547,12 +1547,12 @@ def test_print_heartbeat_writes_captured_window_title_and_audio_exes(daemon):
         daemon._print_heartbeat()
 
     _, kwargs = mock_write.call_args
-    assert kwargs["captured_window_title"] == "My Game"
+    assert "captured_window_title" not in kwargs
     assert kwargs["captured_window_exe"] == "game.exe"
     assert kwargs["audio_exes"] == ["game.exe"]
 
 
-def test_print_heartbeat_captured_window_title_none_when_window_malformed(daemon):
+def test_print_heartbeat_captured_window_exe_resolves_from_bare_exe(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.sab = MagicMock()
@@ -1569,9 +1569,7 @@ def test_print_heartbeat_captured_window_title_none_when_window_malformed(daemon
         daemon._print_heartbeat()
 
     _, kwargs = mock_write.call_args
-    assert kwargs["captured_window_title"] is None
-    # A bare exe name (no "Title:Class:" prefix) has no title, but extract_exe
-    # still resolves it - the exe is independent of the title fallback.
+    # A bare exe name (no "Title:Class:" prefix) - extract_exe still resolves it.
     assert kwargs["captured_window_exe"] == "game.exe"
 
 
@@ -1592,7 +1590,6 @@ def test_print_heartbeat_captured_window_exe_none_when_no_window(daemon):
         daemon._print_heartbeat()
 
     _, kwargs = mock_write.call_args
-    assert kwargs["captured_window_title"] is None
     assert kwargs["captured_window_exe"] is None
 
 

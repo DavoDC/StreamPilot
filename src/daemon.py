@@ -332,7 +332,6 @@ class Daemon:
         blacklisted_window = None
         audio_ok = True
         audio_violations = []
-        captured_window_title = None
         captured_window_exe = None
         audio_exes = []
         # Consumed once - covers only the heartbeat that actually performs
@@ -354,15 +353,10 @@ class Daemon:
             # OBS window verification + correction
             expected = self.games[self._active_game_exe]["obs_window"]
             actual = self.obs.get_game_capture_window()
-            # Dashboard-visible: the actual captured WINDOW TITLE, not the
-            # configured game name - shows what OBS is really doing, not
-            # just what StreamPilot asked for. Falls back to None (dashboard
-            # falls back further to the game name) if the window string is
-            # missing or malformed.
-            captured_window_title = window_safety.extract_title(actual)
-            # Dashboard-visible: the exe actually behind that captured window,
-            # mirroring the Audio row's "safe (exe)" format so David can
-            # confirm video and audio come from the SAME source at a glance.
+            # Dashboard-visible: the exe actually behind the captured window
+            # (bare exe name only - see docs/DESIGN.md on preferring the
+            # stable identifier over the window title) so David can confirm
+            # video and audio come from the SAME source at a glance.
             captured_window_exe = window_safety.extract_exe(actual)
 
             # SAFETY: never stream a blacklisted window (browser/desktop/
@@ -448,7 +442,6 @@ class Daemon:
                 sab_auto_manage=self.sab_auto_manage,
                 audio_ok=audio_ok,
                 audio_violations=[v.message for v in audio_violations],
-                captured_window_title=captured_window_title,
                 captured_window_exe=captured_window_exe,
                 audio_exes=audio_exes,
             )
