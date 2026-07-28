@@ -172,6 +172,56 @@ def test_mode_1_stops():
     assert any(v.severity == "stop" and v.code == "wrong_mode" for v in violations)
 
 
+# --- resolve_mode regression: fail closed on present-but-non-int values ---
+# A present-but-not-int 'mode' must resolve to UNRESOLVABLE_MODE (!= 0), not
+# fall back to the default - only an ABSENT key means default. This mirrors
+# the resolve_exclude fail-open bug: a non-int value used to silently read
+# as safe.
+
+def test_mode_absent_key_resolves_to_zero_and_whole_dict_is_safe():
+    """The whole settings dict must still report SAFE when 'mode' is absent
+    entirely - this is the normal, correctly-configured case."""
+    assert audio_safety.resolve_mode({}) == 0
+    settings = {"executable_list": [_entry("game.exe")]}
+    violations = audio_safety.check_audio_settings(settings, {"game.exe"})
+    assert violations == []
+
+
+def test_mode_0_resolves_to_zero_and_whole_dict_is_safe():
+    assert audio_safety.resolve_mode({"mode": 0}) == 0
+    settings = {"executable_list": [_entry("game.exe")], "mode": 0}
+    violations = audio_safety.check_audio_settings(settings, {"game.exe"})
+    assert violations == []
+
+
+def test_mode_int_1_produces_wrong_mode_stop():
+    assert audio_safety.resolve_mode({"mode": 1}) == 1
+    settings = {"executable_list": [_entry("game.exe")], "mode": 1}
+    violations = audio_safety.check_audio_settings(settings, {"game.exe"})
+    assert any(v.severity == "stop" and v.code == "wrong_mode" for v in violations)
+
+
+def test_mode_string_1_produces_wrong_mode_stop():
+    assert audio_safety.resolve_mode({"mode": "1"}) == audio_safety.UNRESOLVABLE_MODE
+    settings = {"executable_list": [_entry("game.exe")], "mode": "1"}
+    violations = audio_safety.check_audio_settings(settings, {"game.exe"})
+    assert any(v.severity == "stop" and v.code == "wrong_mode" for v in violations)
+
+
+def test_mode_float_1_5_produces_wrong_mode_stop():
+    assert audio_safety.resolve_mode({"mode": 1.5}) == audio_safety.UNRESOLVABLE_MODE
+    settings = {"executable_list": [_entry("game.exe")], "mode": 1.5}
+    violations = audio_safety.check_audio_settings(settings, {"game.exe"})
+    assert any(v.severity == "stop" and v.code == "wrong_mode" for v in violations)
+
+
+def test_mode_none_value_produces_wrong_mode_stop():
+    assert audio_safety.resolve_mode({"mode": None}) == audio_safety.UNRESOLVABLE_MODE
+    settings = {"executable_list": [_entry("game.exe")], "mode": None}
+    violations = audio_safety.check_audio_settings(settings, {"game.exe"})
+    assert any(v.severity == "stop" and v.code == "wrong_mode" for v in violations)
+
+
 def test_discord_present_stops():
     settings = {"executable_list": [_entry("game.exe"), _entry("discord.exe")]}
     violations = audio_safety.check_audio_settings(settings, {"game.exe"})
