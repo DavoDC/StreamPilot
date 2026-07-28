@@ -2,6 +2,52 @@
 
 ---
 
+## 2026-07-28 - Audio privacy guard
+
+**Concept:** the video guard (`window_safety.py`, added 2026-07-19) blocks OBS from
+ever capturing an unsafe window; audio had no equivalent. Since a wrongly-captured
+audio source (Discord, a browser tab, a second app) is invisible and unrecoverable
+once streamed, unlike a missing game exe which is just a silent stream and gets
+noticed, the audio side inverts the pattern into an allow-list rather than a
+blocklist: only `config.games` exes plus an explicit `audio.extra_allowed` list may
+be present in OBS's "Application Audio Output Capture" source, with a hard-denied
+frozenset (Discord, browsers, terminals/editors, etc.) refused even if misconfigured
+into the allow-list.
+
+- **`src/audio_safety.py`** (new) - pure-function allow-list guard: `DENIED_EXES`,
+  `Violation` dataclass, `extract_capture_exes`, `resolve_mode`/`resolve_exclude`
+  (handle OBS's default-omission behaviour on `GetInputSettings`),
+  `check_audio_settings` (severity order: EXCEPT-inverted list, wrong mode, denied
+  exe, unknown exe - all stop; empty list - warn only), `check_missing_game`
+  (always warn only).
+- **`src/config.py`** - optional `audio` config block (`source_name`,
+  `extra_allowed`, `enforce`, `auto_add_game`, `require_desktop_audio_muted`),
+  allow-list built from `config.games` + `audio.extra_allowed`, `_validate()`
+  refuses a hard-denied exe in `extra_allowed`. `config/config.example.json`
+  updated with the new block.
+- **`src/obs_client.py`** - `get_audio_capture_settings`, `set_audio_capture_exes`
+  (additive-only, never removes an existing entry), `get_input_mute` /
+  `get_input_volume_db` (fail closed - unreadable state is treated as unsafe, the
+  opposite bias from the rest of this client), `list_inputs_by_kind`.
+- **`src/daemon.py`** - `_check_audio_safety` runs before every `start_stream()`
+  (blocks the start on violation, or logs only if `audio.enforce` is `false`) and
+  on every heartbeat cycle (force-stops an already-live stream on a stop-severity
+  violation, skipping that cycle's stream-restart correction so it doesn't
+  immediately undo the force-stop, mirroring the video guard's pattern exactly).
+  Auto-adds a missing active game's exe to the capture list (additive only).
+  Desktop Audio / Mic inputs are checked for mute/volume as a second leak path.
+  Heartbeat line gains a compact "Audio: OK" / "Audio: VIOLATION (n)" field.
+- **`src/dashboard_server.py`** - single green "safe" / red "UNSAFE: <reasons>"
+  Audio row, following the dashboard-is-source-of-truth rule.
+- **`scripts/check_audio_safety.py`** (new) - read-only script that runs the guard
+  against the live OBS instance for manual verification, never calls a `Set*`
+  request.
+- Verified end-to-end against the live running OBS instance (localhost:4455):
+  real capture-list settings read back SAFE with zero violations, Desktop
+  Audio/Mic leak check zero violations.
+- New tests across `test_audio_safety.py`, `test_obs_client.py`, `test_daemon.py`,
+  `test_dashboard_server.py`; full suite green.
+
 ## 2026-07-25 - SAB auto-pause toggle switch + Quit button font fix + docs/DESIGN.md
 
 **Feature:** dashboard toggle to let David keep SABnzbd running during "idle

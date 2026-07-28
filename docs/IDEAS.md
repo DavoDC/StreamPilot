@@ -173,45 +173,6 @@ Implementation:
 
 **Design note:** The heartbeat pattern (poll every 2s, correct inline, flag ISSUE) works for any correction where the target service's API is reachable. OBS process restart requires a different mechanism (process supervision) - deliberately deferred.
 
-## Live status improvements
-
-- **Check audio and OBS settings** - see `## Audio privacy guard` below, which is the designed-out version of this item.
-
-## Audio privacy guard (added 2026-07-28)
-
-**The concern, in David's words:** primarily that audio from Chrome, Discord and Signal must never leak into the stream; secondarily that the stream does carry audio from the game. It works today, but there is no assurance that it is still correct. The goal is relief and homeostasis around audio, the same way `window_safety.py` already gives it for video.
-
-**Current manual setup.** One OBS source, "Application Audio Output Capture", Mode = "Capture audio sessions from a selection of executables", holding an explicit list of game executables (Marvel-Win64-Shipping.exe, DeadByDaylight-Win64-Shipping.exe, SSF2.exe, FortniteClient-Win64-Shipping.exe, DOOMEternalx64vk.exe, javaw.exe, OblivionRemastered-Win64-Shipping.exe, SkyrimTogether.exe, Overwatch.exe, wwm.exe, Palworld-Win64-Shipping.exe). The "Capture all audio EXCEPT sessions from the selected executables" checkbox is unticked. Desktop Audio and Mic/Aux both sit at -inf dB. Adding a new game means opening the properties dialog by hand, which is exactly the step that silently rots.
-
-**Why this is a privacy feature, not a convenience feature.** The failure mode is asymmetric. A missing game exe costs a silent stream, which is embarrassing and instantly noticed. A wrongly present exe, or an accidentally ticked EXCEPT box, streams Discord voice, Signal notifications and browser tabs to the public, is not noticed by the streamer at all, and cannot be taken back. That is the same shape as the window blacklist, so it deserves the same treatment: enforced in code, checked continuously, and biased towards muting rather than towards streaming.
-
-**Design.**
-
-1. **Allow-list, not blocklist.** Video safety uses a blocklist (`window_safety.BLACKLISTED_EXES`) because the space of safe game windows is open-ended. Audio must invert that: the only executables permitted in the capture list are the ones that are keys of `config.games`, plus an explicit `audio.extra_allowed` list in config for legitimate non-game sources. Anything else present in the OBS list is a violation. An allow-list fails closed; a blocklist fails open, and here failing open means broadcasting a private conversation.
-
-2. **Hard-deny list on top of the allow-list.** Even if an exe somehow appears in `config.games`, a small frozenset of never-permitted executables (chrome, msedge, firefox, brave, discord, signal, slack, telegram, whatsapp, teams, zoom, obs64, explorer, powershell, cmd, windowsterminal, code, spotify) is refused. This is defence in depth against a bad config edit or a mistyped add-game, mirroring `window_safety.BLACKLISTED_EXES`. Sharing the exe-name normalisation with `window_safety` rather than duplicating it is the right factoring.
-
-3. **Refuse to stream on violation, do not silently fix.** The heartbeat already force-stops the stream when the Game Capture window is blacklisted. Audio gets the same escalation ladder, in this order of severity: EXCEPT checkbox ticked, which inverts the whole meaning of the list and is an instant stop; a hard-denied exe present, instant stop; an unknown exe present, instant stop; the currently-playing game missing from the list, which is a warning and an offer to add, not a stop, because the risk is silence rather than leakage. Auto-adding on the warning case is acceptable because it can only ever add an exe that is already a validated `config.games` key; auto-removing on the leak cases is not, because a wrong removal is invisible and the safe action there is to stop streaming and tell the human.
-
-4. **Also assert the negative space.** Desktop Audio and Mic/Aux are the other two leak paths and are visible in the mixer screenshot at -inf dB. Preflight should check that any input of kind `wasapi_output_capture` (desktop) or `wasapi_input_capture` (mic) is either absent from the scene, muted, or explicitly whitelisted in config. A perfect application-capture list is worthless if Desktop Audio is live.
-
-5. **Preflight plus heartbeat, both.** Validate once at daemon start and before every `start_stream()` (cheap, blocks a bad broadcast before it happens), then re-validate on the existing 2s heartbeat (catches David meddling in the OBS UI mid-session, which is the realistic drift path). Surface state on the dashboard as a single green/red "Audio: safe" line, because the whole point of the request is the at-a-glance relief.
-
-**Confirmed schema (probed live 2026-07-28, OBS 32.1.2, obs-websocket 5.7.3, `scripts/probe_audio_source.py`).** The source is NOT the stock `wasapi_process_output_capture`; it is kind **`audio_capture`**, the win-capture-audio plugin. All three fields are ordinary settings keys, fully readable via `GetInputSettings` and writable via `SetInputSettings`:
-
-- `executable_list` - array of `{"hidden": bool, "selected": bool, "uuid": "<guid>", "value": "Game.exe"}`. `selected` is just the dialog's highlighted row and has no effect on capture; every entry in the array is captured. `value` is the field that matters.
-- `mode` - int, `0` = capture the selected executables, `1` = capture foreground window with hotkey.
-- `exclude` - bool, the "Capture all audio EXCEPT" checkbox.
-- `active_session_list` - string, currently `"chrome.exe"`. This is only the "Add from currently active sessions" dropdown's current selection. It is NOT captured audio and must not be flagged as a violation, which is a genuine trap given the exe name.
-
-**The trap that dictates the read logic.** OBS omits keys sitting at their default value from `GetInputSettings`. On the live source, `mode` and `exclude` are both absent precisely because they are at their safe defaults. So the validator must resolve absent as the default from `GetInputDefaultSettings` (absent `exclude` means false, absent `mode` means 0) and must never treat absent as unknown-and-therefore-unsafe, or the guard will refuse to stream on a correctly configured OBS. Equally it must never treat absent as safe by accident once a non-default is set: read the value if present, fall back to the documented default if not.
-
-Desktop Audio (`wasapi_output_capture`) and Mic/Aux (`wasapi_input_capture`) both expose only `device_id`, so the leak check for those is mute state and volume via `GetInputMute` / `GetInputVolume`, not settings.
-
-Since writes are available, auto-adding a missing `config.games` exe is implementable. Auto-removal stays off by design, per point 3 above.
-
-**Tests.** Follow `tests/test_window_safety.py`: pure-function tests for the allow-list decision given a settings dict, then `MagicMock` OBS tests for the preflight and heartbeat paths, including the EXCEPT-ticked case and the unknown-exe case both asserting `stop_stream` was called.
-
 ## Security
 
 - **Full security review** - `config.json` stores OAuth token, OBS WebSocket password, and SABnzbd API key in plaintext. Review subprocess calls, WebSocket trust model, any network exposure. Assess risk level and hardening options (OS keychain, env vars).

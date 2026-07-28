@@ -24,7 +24,7 @@ Architecture: game-per-VOD
 ## Current OBS Setup
 
 Single scene with two sources:
-- `Application Audio Output Capture` - captures audio from a list of exes (one-time setup per new game)
+- `Application Audio Output Capture` - captures audio from a list of exes. A new game is auto-added on first launch (see the audio privacy guard rule below); anything else in the list is enforced, not manual upkeep.
 - `Game Capture` - target exe changes per game (StreamPilot automates this)
 
 ## Safety: never stream a non-game window (rule, added 2026-07-19)
@@ -52,7 +52,7 @@ mirror loop).
 
 ## Dashboard is the source of truth (rule)
 
-**Whenever a new feature sets or changes a Twitch/OBS setting (title, tags, category, anything else), it MUST be surfaced on the browser dashboard in the same change.** The dashboard exists so David never has to open Twitch or OBS to confirm something is set correctly - it's the single centralised view. Concretely: add the value to the daemon's dashboard-facing state (`self._current_*` in `daemon.py`, cleared in `_on_no_game`), include it in the `status_file.write_status(...)` call in `_print_heartbeat`, and add a row to `INDEX_HTML` in `dashboard_server.py` (both the static row markup and the JS `tick()` function that fills it in). Applied for Title and Tags (2026-07-18) - see `_current_title`/`_current_tags` in `daemon.py` and the Title/Tags rows in `dashboard_server.py`.
+**Whenever a new feature sets or changes a Twitch/OBS setting (title, tags, category, anything else), it MUST be surfaced on the browser dashboard in the same change.** The dashboard exists so David never has to open Twitch or OBS to confirm something is set correctly - it's the single centralised view. Concretely: add the value to the daemon's dashboard-facing state (`self._current_*` in `daemon.py`, cleared in `_on_no_game`), include it in the `status_file.write_status(...)` call in `_print_heartbeat`, and add a row to `INDEX_HTML` in `dashboard_server.py` (both the static row markup and the JS `tick()` function that fills it in). Applied for Title and Tags (2026-07-18) - see `_current_title`/`_current_tags` in `daemon.py` and the Title/Tags rows in `dashboard_server.py`. Applied for the audio privacy guard (2026-07-28) - see the Audio row in `dashboard_server.py` and the safety rule above.
 
 ## Key Behaviour
 
@@ -97,6 +97,13 @@ mirror loop).
     "port": 8080,
     "api_key": "..."
   },
+  "audio": {
+    "source_name": "Application Audio Output Capture",
+    "extra_allowed": [],
+    "enforce": true,
+    "auto_add_game": true,
+    "require_desktop_audio_muted": true
+  },
   "poll_interval_seconds": 2,
   "games": {
     "DeadByDaylight-Win64-Shipping.exe": {
@@ -125,6 +132,41 @@ to the live view. Passed from `config.py` -> `streampilot.py::cmd_start` ->
 `__TWITCH_LINK_HTML__` placeholder by `index_html_bytes()` per request (not baked in at
 import time, since it's config-driven, unlike everything else in `INDEX_HTML`). Omitted
 entirely (no link rendered) if not configured.
+
+**`audio`** (optional, all keys optional with the defaults shown above) - see the audio
+privacy guard rule below for what each key controls.
+
+## Safety: audio privacy guard (rule, added 2026-07-28)
+
+**A leaked private audio source (Discord, a second monitor's game audio, a browser tab)
+is invisible and unrecoverable once streamed - unlike a leaked window, the audience can't
+even tell something is wrong.** Because the failure mode is asymmetric, the audio side
+uses an allow-list (only known-safe exes may be present in the OBS "Application Audio
+Output Capture" source), the inverse of the video guard's blacklist above. Enforced in:
+1. **Pure-function core** (`src/audio_safety.py`) - `check_audio_settings` evaluates the
+   real OBS capture-list settings against the allow-list (`config.games` + `audio.
+   extra_allowed`), fails closed on unreadable/malformed input, and treats a hard-denied
+   exe (`DENIED_EXES`, e.g. Discord) or any non-allowed exe as a stop-severity violation
+   regardless of `extra_allowed`. `check_missing_game` is always warn-only.
+2. **Config validation** (`config.py::_validate`) - refuses to start if `audio.
+   extra_allowed` contains a hard-denied exe.
+3. **Preflight before every `start_stream()`** (`daemon.py::_preflight_audio_check`) -
+   blocks the stream from starting at all if the current audio settings are unsafe
+   (unless `audio.enforce` is `false`, in which case it logs only).
+4. **Live heartbeat check** (`daemon.py::_print_heartbeat`, the important one, mirroring
+   the video guard's pattern exactly) - re-reads OBS's actual current capture-list and
+   Desktop Audio/Mic mute state every cycle, force-stops the stream immediately on any
+   stop-severity violation, and skips that cycle's stream-restart-if-stopped correction
+   so it doesn't immediately undo the force-stop.
+5. **Auto-add on first launch** (`audio.auto_add_game`, default `true`) - if the active
+   game's exe is missing from the capture list, it's added automatically (additive-only,
+   `OBSClient.set_audio_capture_exes` never removes existing entries) rather than treated
+   as a hard failure, since a brand-new game hasn't been added yet by design.
+6. **Desktop Audio / Mic leak check** (`audio.require_desktop_audio_muted`, default
+   `true`) - Desktop Audio and Mic/Aux inputs must be muted or below -60 dB; either check
+   fails closed (unreadable mute/volume state is treated as unsafe, not safe) since these
+   sources are far more likely to carry private audio than a per-game capture entry.
+Surfaced on the dashboard per the rule below (green "safe" / red "UNSAFE: <reasons>").
 
 ## CLI Commands
 
