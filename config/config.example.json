@@ -19,6 +19,13 @@
     "port": 8080,
     "api_key": "YOUR_SABNZBD_API_KEY"
   },
+  "audio": {
+    "source_name": "Application Audio Output Capture",
+    "extra_allowed": [],
+    "enforce": true,
+    "auto_add_game": true,
+    "require_desktop_audio_muted": true
+  },
   "poll_interval_seconds": 2,
   "games": {
     "DeadByDaylight-Win64-Shipping.exe": {

@@ -35,10 +35,19 @@ def extract_exe(obs_window: str | None) -> str | None:
     return obs_window.rsplit(":", 1)[-1]
 
 
+def normalize_exe_name(exe: str | None) -> str | None:
+    """Lowercase an exe name for case-insensitive comparison. None/empty ->
+    None. The single shared normaliser - audio_safety.py reuses this rather
+    than duplicating the lowercase-compare logic."""
+    if not exe:
+        return None
+    return exe.lower()
+
+
 def is_blacklisted(obs_window: str | None) -> bool:
     """True if obs_window (a full 'Title:Class:Exe' string or a bare exe
     name) resolves to a blacklisted executable."""
-    exe = extract_exe(obs_window)
+    exe = normalize_exe_name(extract_exe(obs_window))
     if not exe:
         return False
-    return exe.lower() in BLACKLISTED_EXES
+    return exe in BLACKLISTED_EXES
