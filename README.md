@@ -9,6 +9,7 @@ Auto-manages OBS streaming + SABnzbd when you launch a known game.
 - Sets Twitch category to the matching game
 - Starts the stream (or swaps game mid-stream)
 - Pauses SABnzbd while gaming, resumes on exit
+- Guards your audio: only allow-listed game exes can be heard on stream, Discord and other private apps are blocked on sight, and a live check force-stops the stream the instant anything unsafe shows up
 
 ## How it works
 
@@ -22,7 +23,7 @@ Auto-manages OBS streaming + SABnzbd when you launch a known game.
 
 If you switch games mid-stream, StreamPilot swaps the capture source and Twitch category without interrupting the stream.
 
-> **Note:** "Application Audio Capture" in OBS is a one-time manual step per new game - add the game exe to that source yourself the first time. StreamPilot only automates Game Capture and Twitch category.
+> **Note:** StreamPilot also watches the "Application Audio Output Capture" source in OBS. A new game's exe is added to it automatically on first launch, and every other exe already in that list is checked against an allow-list on every stream start and continuously while streaming - anything unexpected (Discord, a browser, a second game) blocks the stream and force-stops it if it's already live.
 
 ---
 
