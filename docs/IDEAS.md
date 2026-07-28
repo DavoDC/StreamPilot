@@ -114,16 +114,40 @@ to match state. See HISTORY.md. Harder follow-ups, not done:
   useful if the second monitor isn't always in view. Simple `Audio()` object,
   but needs a user gesture first (browser autoplay policy) so isn't zero-effort.
 
-## Dashboard UI improvements
+## TIER 1 - Exclusive audio capture list (added 2026-07-28, David's feedback @ 0f09855)
 
-**Visual polish and API source indicators**
-- **Game poster/cover image** - display the game's cover art or poster in the dashboard, providing visual context of what's being streamed at a glance.
-- **Program API source icons** - add visual icons representing the data sources:
-  - Twitch icon for game title/status info (sourced from Twitch API)
-  - OBS icon for stream state and capture info (sourced from OBS WebSocket)
-  - SABnzbd icon for download status (sourced from SAB API)
-  - These icons reflect which programs/APIs are providing the displayed information, improving dashboard clarity.
-- **Overall dashboard polish** - refine the dashboard layout, spacing, typography, and visual hierarchy. Ensure icons and poster integrate naturally with existing status displays.
+**David's better idea, replacing the allow-list shipped earlier today.** The audio capture list should contain ONLY the game currently being streamed, nothing else. He kept all eleven games in there historically to avoid a manual step per game, but StreamPilot now manages that step, so the list can be exactly what is needed and nothing more. Two wins: verification becomes trivial (one entry, and it matches the game on screen), and it closes the rare case where two games are running at once and the second one's audio rides along uninvited.
+
+**Why this is strictly better than what shipped.** The allow-list built this morning validates against the union of `config.games` plus `audio.extra_allowed`, so a correct setup is any subset of eleven-plus exes. That is a wide permission surface defended by a checker. Exclusive mode collapses the surface itself to one entry, which is least privilege applied properly: the guard stops being a filter over a permissive list and becomes a convergence loop onto a single known-correct value. Less to check is better than more checking.
+
+**Design.**
+
+- `audio.exclusive_mode`, default true. On game detection, write `executable_list` to exactly `[running_game_exe]` plus anything in `audio.extra_allowed` (kept, because a legitimate non-game source like a voice changer or a music bed is a real future case and should not require turning the whole feature off).
+- On game exit, and whenever no game is detected and no stream is active, clear the list to empty. Empty is the correct resting state: it cannot leak, and the existing `empty_list` warn already covers it.
+- The guard rule becomes: anything in the list that is not the current game and not in `extra_allowed` is a `stop`. Same severity ladder as now, just a much narrower allowed set.
+- **This deliberately inverts the "never auto-remove" rule from the shipped design, and the inversion is sound.** That rule existed because silently removing an entry could hide a problem. But removal only ever reduces what reaches the stream, so it is the fail-safe direction; the worst outcome is silence, which is noticed in seconds. Adding is the dangerous direction and stays tightly constrained to a validated `config.games` key. Auto-removal is therefore permitted for exactly one purpose: converging the list to `{current game} + extra_allowed`. It is never permitted as a way to clear a violation the guard has flagged.
+- Keep the non-exclusive path working behind the config flag, so a bad interaction with the win-capture-audio plugin can be backed out without a code change.
+- Once this ships, `audio.extra_allowed` in the real `config/config.json` should shrink back to empty - the eight game exes added there this morning exist only to satisfy the wide allow-list and become dead weight under exclusive mode.
+
+**Watch for:** whether the plugin picks up a session correctly when the exe is added to the list *after* the game's audio session already exists (SP writes the list on detection, which may be seconds after launch). If it does not attach retroactively, the write needs to happen before or be retried. Verify against live OBS, do not assume.
+
+## TIER 1 - Dashboard grouped by API source (added 2026-07-28, David's feedback @ 0f09855)
+
+**Consolidates the former "Dashboard UI improvements" bullets** (game poster, program API source icons, general polish), which were the seed of this idea; David's feedback is the fuller version and those bullets are folded in here rather than left as a parallel item.
+
+**The problem, from the current dashboard.** It is one flat list of label-value rows, so information from three unrelated services sits interleaved with no visual grouping, and video and audio state are separated by four Twitch rows despite being the pair most needed together. `Game: Palworld` and `Category: Palworld` also print the same word twice, which wastes the most prominent row on redundancy.
+
+**Design.** Three soft-edged, colour-coded rectangles, one per API source, so related information stays together and the source of each fact is obvious at a glance:
+
+- **OBS card** - `Game Captured` showing the actual captured window TITLE (not the game name, which duplicates Category), with `Audio` directly beneath it so video and audio sit adjacent. Audio must not just say "safe": it should name the exe or exes the audio is coming from, which under exclusive mode above is a single entry and makes the whole thing verifiable in one glance. Red state shows the violation messages.
+- **Twitch card** - Category, Title, Tags, and the Watch on Twitch link.
+- **SABnzbd card** - status and the Keep SAB paused toggle.
+
+The existing per-source icons idea belongs here as the card headers. The game poster idea belongs in the Twitch card. Colour-coding should stay muted enough not to compete with the green/red OK/ISSUE signal at the top, which remains the primary state indicator.
+
+## TIER 2 - README does not properly cover the audio privacy guard (added 2026-07-28)
+
+The README change in commit `22ad61b` patched an existing note in place rather than restructuring around the feature. The audio privacy guard is a main feature and one of the strongest things the program does, so it needs proper README treatment as a headline capability, benefit-led. The stale note framing should be removed entirely, not edited: it no longer describes a caveat, it describes the product.
 
 ## P1 - AudioManager (next major feature - start after QOL batch is done)
 
