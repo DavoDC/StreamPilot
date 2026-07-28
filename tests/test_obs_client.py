@@ -118,3 +118,165 @@ def test_disconnect(client):
     client.disconnect()
     mock_client.disconnect.assert_called_once()
     assert client._client is None
+
+
+# --- Audio privacy guard methods ---
+
+def test_get_audio_capture_settings_returns_settings(client):
+    mock_resp = MagicMock()
+    mock_resp.input_settings = {"executable_list": [], "mode": 0}
+    client._client = MagicMock()
+    client._client.get_input_settings.return_value = mock_resp
+    assert client.get_audio_capture_settings() == {"executable_list": [], "mode": 0}
+    client._client.get_input_settings.assert_called_once_with(name="Application Audio Output Capture")
+
+
+def test_get_audio_capture_settings_no_client_returns_none(client):
+    assert client.get_audio_capture_settings() is None
+
+
+def test_get_audio_capture_settings_exception_returns_none(client):
+    client._client = MagicMock()
+    client._client.get_input_settings.side_effect = Exception("unreachable")
+    assert client.get_audio_capture_settings() is None
+
+
+def test_get_audio_capture_settings_uses_configured_source_name():
+    c = OBSClient("localhost", 4455, "pw", "Game Capture", audio_source_name="My Audio Source")
+    c._client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.input_settings = {}
+    c._client.get_input_settings.return_value = mock_resp
+    c.get_audio_capture_settings()
+    c._client.get_input_settings.assert_called_once_with(name="My Audio Source")
+
+
+def test_set_audio_capture_exes_adds_new_entry(client):
+    client._client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.input_settings = {"executable_list": []}
+    client._client.get_input_settings.return_value = mock_resp
+
+    result = client.set_audio_capture_exes(["game.exe"])
+
+    assert result is True
+    _, kwargs = client._client.set_input_settings.call_args
+    assert kwargs["name"] == "Application Audio Output Capture"
+    assert kwargs["overlay"] is True
+    new_list = kwargs["settings"]["executable_list"]
+    assert len(new_list) == 1
+    assert new_list[0]["value"] == "game.exe"
+    assert new_list[0]["hidden"] is False
+    assert new_list[0]["selected"] is False
+    assert new_list[0]["uuid"]  # a uuid4 string was generated
+
+
+def test_set_audio_capture_exes_preserves_existing_entries(client):
+    existing_entry = {"hidden": True, "selected": True, "uuid": "existing-uuid", "value": "old.exe"}
+    client._client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.input_settings = {"executable_list": [existing_entry]}
+    client._client.get_input_settings.return_value = mock_resp
+
+    client.set_audio_capture_exes(["new.exe"])
+
+    _, kwargs = client._client.set_input_settings.call_args
+    new_list = kwargs["settings"]["executable_list"]
+    assert existing_entry in new_list
+    assert any(e["value"] == "new.exe" for e in new_list)
+
+
+def test_set_audio_capture_exes_skips_already_present_exe(client):
+    existing_entry = {"hidden": False, "selected": False, "uuid": "existing-uuid", "value": "game.exe"}
+    client._client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.input_settings = {"executable_list": [existing_entry]}
+    client._client.get_input_settings.return_value = mock_resp
+
+    client.set_audio_capture_exes(["game.exe"])
+
+    _, kwargs = client._client.set_input_settings.call_args
+    new_list = kwargs["settings"]["executable_list"]
+    assert len(new_list) == 1
+    assert new_list[0]["uuid"] == "existing-uuid"
+
+
+def test_set_audio_capture_exes_no_client_returns_false(client):
+    assert client.set_audio_capture_exes(["game.exe"]) is False
+
+
+def test_set_audio_capture_exes_exception_returns_false(client):
+    client._client = MagicMock()
+    client._client.get_input_settings.side_effect = Exception("unreachable")
+    assert client.set_audio_capture_exes(["game.exe"]) is False
+
+
+def test_get_input_mute_returns_true_when_muted(client):
+    mock_resp = MagicMock()
+    mock_resp.input_muted = True
+    client._client = MagicMock()
+    client._client.get_input_mute.return_value = mock_resp
+    assert client.get_input_mute("Desktop Audio") is True
+    client._client.get_input_mute.assert_called_once_with(name="Desktop Audio")
+
+
+def test_get_input_mute_returns_false_when_not_muted(client):
+    mock_resp = MagicMock()
+    mock_resp.input_muted = False
+    client._client = MagicMock()
+    client._client.get_input_mute.return_value = mock_resp
+    assert client.get_input_mute("Desktop Audio") is False
+
+
+def test_get_input_mute_fails_closed_on_no_client(client):
+    """Privacy guard: unreachable must be treated as a potential leak, not safe."""
+    assert client.get_input_mute("Desktop Audio") is False
+
+
+def test_get_input_mute_fails_closed_on_exception(client):
+    client._client = MagicMock()
+    client._client.get_input_mute.side_effect = Exception("unreachable")
+    assert client.get_input_mute("Desktop Audio") is False
+
+
+def test_get_input_volume_db_returns_value(client):
+    mock_resp = MagicMock()
+    mock_resp.input_volume_db = -65.0
+    client._client = MagicMock()
+    client._client.get_input_volume.return_value = mock_resp
+    assert client.get_input_volume_db("Desktop Audio") == -65.0
+    client._client.get_input_volume.assert_called_once_with(name="Desktop Audio")
+
+
+def test_get_input_volume_db_fails_closed_on_no_client(client):
+    """Privacy guard: unreachable must be treated as full volume (leak), not safe."""
+    assert client.get_input_volume_db("Desktop Audio") == 0.0
+
+
+def test_get_input_volume_db_fails_closed_on_exception(client):
+    client._client = MagicMock()
+    client._client.get_input_volume.side_effect = Exception("unreachable")
+    assert client.get_input_volume_db("Desktop Audio") == 0.0
+
+
+def test_list_inputs_by_kind_filters_correctly(client):
+    mock_resp = MagicMock()
+    mock_resp.inputs = [
+        {"inputName": "Desktop Audio", "inputKind": "wasapi_output_capture"},
+        {"inputName": "Mic/Aux", "inputKind": "wasapi_input_capture"},
+        {"inputName": "Game Capture", "inputKind": "game_capture"},
+    ]
+    client._client = MagicMock()
+    client._client.get_input_list.return_value = mock_resp
+    assert client.list_inputs_by_kind("wasapi_output_capture") == ["Desktop Audio"]
+    assert client.list_inputs_by_kind("wasapi_input_capture") == ["Mic/Aux"]
+
+
+def test_list_inputs_by_kind_no_client_returns_empty(client):
+    assert client.list_inputs_by_kind("wasapi_output_capture") == []
+
+
+def test_list_inputs_by_kind_exception_returns_empty(client):
+    client._client = MagicMock()
+    client._client.get_input_list.side_effect = Exception("unreachable")
+    assert client.list_inputs_by_kind("wasapi_output_capture") == []
