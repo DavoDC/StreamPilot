@@ -18,6 +18,8 @@ import sys
 import time
 from pathlib import Path
 
+import psutil
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = REPO_ROOT / "src"
 sys.path.insert(0, str(SRC_DIR))
@@ -27,14 +29,31 @@ import config as config_module  # noqa: E402
 from obs_client import OBSClient  # noqa: E402
 
 
+def _detect_current_game(games: dict) -> str | None:
+    """Mirrors daemon.py::_detect_game - first configured game exe found in
+    the running process list, or None if no configured game is running.
+    Needed here because get_allowed_audio_exes() is exclusive-mode-aware by
+    default: without a current game, the allow-list would only be
+    audio.extra_allowed, which would misreport a legitimately-present
+    current-game exe as unsafe."""
+    running = {p.info['name'] for p in psutil.process_iter(['name']) if p.info.get('name')}
+    for exe in games:
+        if exe in running:
+            return exe
+    return None
+
+
 def main() -> int:
     print(f"=== Audio privacy guard check - {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n")
 
     cfg = config_module.load()
     audio_cfg = config_module.get_audio_config(cfg)
-    allowed_exes = config_module.get_allowed_audio_exes(cfg)
+    current_game = _detect_current_game(cfg.get("games", {}))
+    allowed_exes = config_module.get_allowed_audio_exes(cfg, current_game_exe=current_game)
 
+    print(f"Currently detected game: {current_game!r}")
     print(f"Audio source name: {audio_cfg['source_name']!r}")
+    print(f"exclusive_mode={audio_cfg.get('exclusive_mode', True)}")
     print(f"Allow-list ({len(allowed_exes)} exe(s)): {sorted(allowed_exes)}")
     print(f"enforce={audio_cfg['enforce']} auto_add_game={audio_cfg['auto_add_game']} "
           f"require_desktop_audio_muted={audio_cfg['require_desktop_audio_muted']}\n")

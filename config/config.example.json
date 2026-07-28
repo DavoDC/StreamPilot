@@ -24,7 +24,8 @@
     "extra_allowed": [],
     "enforce": true,
     "auto_add_game": true,
-    "require_desktop_audio_muted": true
+    "require_desktop_audio_muted": true,
+    "exclusive_mode": true
   },
   "poll_interval_seconds": 2,
   "games": {
