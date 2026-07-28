@@ -234,6 +234,31 @@ def test_index_html_contains_sab_toggle():
     assert "/sab_toggle" in html
 
 
+def test_index_html_contains_audio_row():
+    """Dashboard is the source of truth - the audio privacy guard must be
+    visible here, not just in the terminal heartbeat."""
+    html = dashboard_server.INDEX_HTML
+    assert 'id="audio"' in html
+    assert "setAudioRow" in html
+
+
+def test_status_json_bytes_includes_audio_fields(tmp_path):
+    path = tmp_path / "status.json"
+    status_file.write_status(
+        path, status="ISSUE", game="Marvel Rivals", streaming=True, category="Marvel Rivals",
+        sabnzbd="Paused", poll_interval=2, audio_ok=False, audio_violations=["'discord.exe' is a hard-denied executable"],
+    )
+    data = json.loads(dashboard_server.status_json_bytes(path))
+    assert data["audio_ok"] is False
+    assert data["audio_violations"] == ["'discord.exe' is a hard-denied executable"]
+
+
+def test_status_json_bytes_missing_file_has_null_audio_fields(tmp_path):
+    data = json.loads(dashboard_server.status_json_bytes(tmp_path / "nope.json"))
+    assert data["audio_ok"] is None
+    assert data["audio_violations"] is None
+
+
 def test_status_json_bytes_includes_sab_auto_manage(tmp_path):
     path = tmp_path / "status.json"
     status_file.write_status(
