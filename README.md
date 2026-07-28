@@ -9,7 +9,7 @@ Auto-manages OBS streaming + SABnzbd when you launch a known game.
 - Sets Twitch category to the matching game
 - Starts the stream (or swaps game mid-stream)
 - Pauses SABnzbd while gaming, resumes on exit
-- Guards your audio: only allow-listed game exes can be heard on stream, Discord and other private apps are blocked on sight, and a live check force-stops the stream the instant anything unsafe shows up
+- Private audio never reaches the stream, guaranteed continuously - not something you have to remember to check
 
 ## How it works
 
@@ -23,7 +23,11 @@ Auto-manages OBS streaming + SABnzbd when you launch a known game.
 
 If you switch games mid-stream, StreamPilot swaps the capture source and Twitch category without interrupting the stream.
 
-> **Note:** StreamPilot also watches the "Application Audio Output Capture" source in OBS. A new game's exe is added to it automatically on first launch, and every other exe already in that list is checked against an allow-list on every stream start and continuously while streaming - anything unexpected (Discord, a browser, a second game) blocks the stream and force-stops it if it's already live.
+## Private audio can never reach the stream
+
+Discord calls, Chrome tabs, Signal messages - anything you're not actively playing stays off the stream, every second you're live, without you having to remember to mute it, check a source list, or trust that you configured OBS correctly six months ago.
+
+StreamPilot enforces this by owning OBS's "Application Audio Output Capture" source directly: the moment your game launches, its exe becomes the *only* entry in that source's capture list - StreamPilot adds it and removes everything else. Every heartbeat while you're streaming, it re-checks the live list against that single allowed exe; if anything unexpected shows up (Discord, a browser, a second game, anything), it force-stops the stream immediately rather than just logging a warning. There's no separate allow-list to maintain and no wide list of "every game I've ever added" sitting in the capture source waiting to leak - it's exactly one exe, exactly the one you're currently playing.
 
 ---
 
