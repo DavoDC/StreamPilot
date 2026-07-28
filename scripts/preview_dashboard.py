@@ -17,6 +17,7 @@ Usage:
 import argparse
 import os
 import sys
+import threading
 import time
 
 SRC_DIR = os.path.join(os.path.dirname(__file__), '..', 'src')
@@ -83,6 +84,23 @@ def seed_status(unsafe: bool):
     )
 
 
+REFRESH_INTERVAL = 2  # seconds - matches poll_interval seeded above, and the
+# real daemon's heartbeat cadence (src/daemon.py). status_file.is_stale()
+# treats a status as dead once it's older than poll_interval * 4 (floor 8s),
+# so a preview seeded once at startup goes stale and the dashboard flips to
+# OFFLINE well before anyone views the page. Rewriting the file on this
+# interval keeps status["timestamp"] fresh for as long as the preview server
+# runs, exactly the way the real daemon's heartbeat keeps status.json fresh.
+
+
+def refresh_loop(unsafe: bool, stop_event: threading.Event):
+    """Background thread: reseed the preview status file on the same
+    interval as poll_interval so its timestamp never ages past the
+    is_stale() threshold in src/status_file.py."""
+    while not stop_event.wait(REFRESH_INTERVAL):
+        seed_status(unsafe=unsafe)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -98,6 +116,16 @@ def main():
 
     seed_status(unsafe=args.unsafe)
     print(f"[preview_dashboard] seeded {'UNSAFE' if args.unsafe else 'healthy'} case")
+
+    # A single seed at startup goes stale (see REFRESH_INTERVAL comment
+    # above) - keep it fresh for the life of the preview server with a
+    # daemon thread so it never blocks Ctrl+C shutdown.
+    stop_event = threading.Event()
+    refresher = threading.Thread(
+        target=refresh_loop, args=(args.unsafe, stop_event), daemon=True,
+    )
+    refresher.start()
+    print(f"[preview_dashboard] refreshing status every {REFRESH_INTERVAL}s to keep daemon looking alive")
 
     # dashboard_server.status_json_bytes(status_path=STATUS_PATH) binds the
     # live status path as a default argument AT MODULE IMPORT TIME, and
