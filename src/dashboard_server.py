@@ -152,6 +152,7 @@ INDEX_HTML = """<!doctype html>
     <div class="row"><span class="label">Title</span><span class="value" id="title">-</span></div>
     <div class="row" id="tagsRow"><span class="label">Tags</span><span class="value" id="tags"></span></div>
     <div class="row"><span class="label">SABnzbd</span><span class="value" id="sabnzbd">-</span></div>
+    <div class="row" id="audioRow"><span class="label">Audio</span><span class="value" id="audio">-</span></div>
     <div class="row"><span class="label">Keep SAB paused</span><span class="value"><label class="switch"><input type="checkbox" id="sabToggle" checked><span class="slider"></span></label></span></div>
   </div>
   __TWITCH_LINK_HTML__
@@ -189,6 +190,23 @@ function renderTags(tags) {
     chip.className = "tag";
     chip.textContent = tag;
     el.appendChild(chip);
+  }
+}
+
+function setAudioRow(audioOk, violations) {
+  const el = document.getElementById("audio");
+  if (audioOk === null || audioOk === undefined) {
+    el.textContent = "-";
+    el.style.color = "";
+    return;
+  }
+  if (audioOk) {
+    el.textContent = "safe";
+    el.style.color = "#3fd67a";
+  } else {
+    const messages = (violations || []).join("; ");
+    el.textContent = messages ? `UNSAFE: ${messages}` : "UNSAFE";
+    el.style.color = "#ff5d5d";
   }
 }
 
@@ -249,6 +267,7 @@ async function tick() {
     document.getElementById("title").textContent = "-";
     renderTags(null);
     document.getElementById("sabnzbd").textContent = "-";
+    setAudioRow(null, null);
     sabToggle.disabled = true;
     document.getElementById("footer").textContent = "No signal from daemon - is it running?";
     document.title = `${TITLE_DOTS[state]} Offline - StreamPilot`;
@@ -259,6 +278,7 @@ async function tick() {
     document.getElementById("title").textContent = s.title || "-";
     renderTags(s.tags);
     document.getElementById("sabnzbd").textContent = s.sabnzbd || "-";
+    setAudioRow(s.game ? s.audio_ok : null, s.audio_violations);
     sabToggle.disabled = false;
     const daemonValue = s.sab_auto_manage !== undefined ? s.sab_auto_manage : true;
     if (sabToggleDesired !== null && daemonValue === sabToggleDesired) {
@@ -346,7 +366,7 @@ def status_json_bytes(status_path=STATUS_PATH) -> bytes:
     if the daemon hasn't written anything yet."""
     data = status_file.read_status(status_path)
     if data is None:
-        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2, "build_id": None}
+        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2, "build_id": None, "audio_ok": None, "audio_violations": None}
     return json.dumps(data).encode("utf-8")
 
 
