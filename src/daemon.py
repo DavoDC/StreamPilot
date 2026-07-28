@@ -333,6 +333,7 @@ class Daemon:
         audio_ok = True
         audio_violations = []
         captured_window_title = None
+        captured_window_exe = None
         audio_exes = []
         # Consumed once - covers only the heartbeat that actually performs
         # the corrective re-pause right after the toggle flips on.
@@ -359,6 +360,10 @@ class Daemon:
             # falls back further to the game name) if the window string is
             # missing or malformed.
             captured_window_title = window_safety.extract_title(actual)
+            # Dashboard-visible: the exe actually behind that captured window,
+            # mirroring the Audio row's "safe (exe)" format so David can
+            # confirm video and audio come from the SAME source at a glance.
+            captured_window_exe = window_safety.extract_exe(actual)
 
             # SAFETY: never stream a blacklisted window (browser/desktop/
             # terminal) - Twitch is public. Checked against OBS's ACTUAL live
@@ -444,6 +449,7 @@ class Daemon:
                 audio_ok=audio_ok,
                 audio_violations=[v.message for v in audio_violations],
                 captured_window_title=captured_window_title,
+                captured_window_exe=captured_window_exe,
                 audio_exes=audio_exes,
             )
         except OSError as e:

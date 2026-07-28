@@ -274,16 +274,19 @@ def test_status_json_bytes_includes_captured_window_title_and_audio_exes(tmp_pat
     status_file.write_status(
         path, status="OK", game="Marvel Rivals", streaming=True, category="Marvel Rivals",
         sabnzbd="Paused", poll_interval=2, captured_window_title="Marvel Rivals  [PID 1234]",
+        captured_window_exe="MarvelRivals_Live.exe",
         audio_exes=["MarvelRivals_Live.exe"],
     )
     data = json.loads(dashboard_server.status_json_bytes(path))
     assert data["captured_window_title"] == "Marvel Rivals  [PID 1234]"
+    assert data["captured_window_exe"] == "MarvelRivals_Live.exe"
     assert data["audio_exes"] == ["MarvelRivals_Live.exe"]
 
 
 def test_status_json_bytes_missing_file_has_null_captured_window_and_audio_exes(tmp_path):
     data = json.loads(dashboard_server.status_json_bytes(tmp_path / "nope.json"))
     assert data["captured_window_title"] is None
+    assert data["captured_window_exe"] is None
     assert data["audio_exes"] is None
 
 
@@ -306,6 +309,16 @@ def test_index_html_obs_card_contains_captured_window_and_audio_adjacent():
     obs_card = html.split('class="card card-obs"')[1].split('class="card card-twitch"')[0]
     assert 'id="capturedWindow"' in obs_card
     assert 'id="audio"' in obs_card
+
+
+def test_index_html_captured_window_shows_exe_alongside_title():
+    """Game Captured mirrors the Audio row's "safe (exe)" format so David
+    can confirm video and audio come from the SAME source at a glance -
+    see setCapturedWindow() and the .exeSuffix de-emphasis style."""
+    html = dashboard_server.INDEX_HTML
+    assert "s.captured_window_exe" in html
+    assert "exeSuffix" in html
+    assert "function setCapturedWindow" in html
 
 
 def test_index_html_audio_row_names_the_capturing_exe():

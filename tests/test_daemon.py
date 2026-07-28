@@ -1548,6 +1548,7 @@ def test_print_heartbeat_writes_captured_window_title_and_audio_exes(daemon):
 
     _, kwargs = mock_write.call_args
     assert kwargs["captured_window_title"] == "My Game"
+    assert kwargs["captured_window_exe"] == "game.exe"
     assert kwargs["audio_exes"] == ["game.exe"]
 
 
@@ -1569,6 +1570,30 @@ def test_print_heartbeat_captured_window_title_none_when_window_malformed(daemon
 
     _, kwargs = mock_write.call_args
     assert kwargs["captured_window_title"] is None
+    # A bare exe name (no "Title:Class:" prefix) has no title, but extract_exe
+    # still resolves it - the exe is independent of the title fallback.
+    assert kwargs["captured_window_exe"] == "game.exe"
+
+
+def test_print_heartbeat_captured_window_exe_none_when_no_window(daemon):
+    daemon.obs = _safe_obs_mock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = None
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    with patch("daemon.log"), patch("daemon.status_file.write_status") as mock_write:
+        daemon._print_heartbeat()
+
+    _, kwargs = mock_write.call_args
+    assert kwargs["captured_window_title"] is None
+    assert kwargs["captured_window_exe"] is None
 
 
 # --- Exclusive mode (TIER 1 - added 2026-07-28) ---
