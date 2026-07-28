@@ -197,9 +197,18 @@ Implementation:
 
 5. **Preflight plus heartbeat, both.** Validate once at daemon start and before every `start_stream()` (cheap, blocks a bad broadcast before it happens), then re-validate on the existing 2s heartbeat (catches David meddling in the OBS UI mid-session, which is the realistic drift path). Surface state on the dashboard as a single green/red "Audio: safe" line, because the whole point of the request is the at-a-glance relief.
 
-**Open question, blocking implementation.** Whether the executables list, the mode, and the EXCEPT flag are readable and writable through obs-websocket v5 `GetInputSettings` / `SetInputSettings`, or whether they are properties-dialog-only state. Research so far confirms the stock core source `wasapi_process_output_capture` exposes only `window` and `priority`, with no multi-executable keys in the OBS source, which suggests the multi-exe mode in David's build is either a newer OBS version or the `bozbez/win-capture-audio` plugin (kind `audio_capture`, keys `mode` / `executable_list` / `exclude`). `scripts/probe_audio_source.py` exists to settle this: it dumps every audio input's kind and full settings JSON from the live OBS. Run it with OBS open before writing any implementation.
+**Confirmed schema (probed live 2026-07-28, OBS 32.1.2, obs-websocket 5.7.3, `scripts/probe_audio_source.py`).** The source is NOT the stock `wasapi_process_output_capture`; it is kind **`audio_capture`**, the win-capture-audio plugin. All three fields are ordinary settings keys, fully readable via `GetInputSettings` and writable via `SetInputSettings`:
 
-**Degraded mode if the list is not writable.** Read-only validation still delivers most of the value, since the request is assurance rather than automation. If the settings JSON exposes the list but rejects writes, StreamPilot still refuses to stream on a violation and tells David exactly which exe to remove. If the list is not even readable, fall back to asserting what is checkable (the source exists, is not muted, Desktop Audio and Mic are muted) and say plainly in the dashboard that the executables list is unverifiable, rather than showing a green light that means nothing.
+- `executable_list` - array of `{"hidden": bool, "selected": bool, "uuid": "<guid>", "value": "Game.exe"}`. `selected` is just the dialog's highlighted row and has no effect on capture; every entry in the array is captured. `value` is the field that matters.
+- `mode` - int, `0` = capture the selected executables, `1` = capture foreground window with hotkey.
+- `exclude` - bool, the "Capture all audio EXCEPT" checkbox.
+- `active_session_list` - string, currently `"chrome.exe"`. This is only the "Add from currently active sessions" dropdown's current selection. It is NOT captured audio and must not be flagged as a violation, which is a genuine trap given the exe name.
+
+**The trap that dictates the read logic.** OBS omits keys sitting at their default value from `GetInputSettings`. On the live source, `mode` and `exclude` are both absent precisely because they are at their safe defaults. So the validator must resolve absent as the default from `GetInputDefaultSettings` (absent `exclude` means false, absent `mode` means 0) and must never treat absent as unknown-and-therefore-unsafe, or the guard will refuse to stream on a correctly configured OBS. Equally it must never treat absent as safe by accident once a non-default is set: read the value if present, fall back to the documented default if not.
+
+Desktop Audio (`wasapi_output_capture`) and Mic/Aux (`wasapi_input_capture`) both expose only `device_id`, so the leak check for those is mute state and volume via `GetInputMute` / `GetInputVolume`, not settings.
+
+Since writes are available, auto-adding a missing `config.games` exe is implementable. Auto-removal stays off by design, per point 3 above.
 
 **Tests.** Follow `tests/test_window_safety.py`: pure-function tests for the allow-list decision given a settings dict, then `MagicMock` OBS tests for the preflight and heartbeat paths, including the EXCEPT-ticked case and the unknown-exe case both asserting `stop_stream` was called.
 
