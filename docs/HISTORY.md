@@ -2,6 +2,71 @@
 
 ---
 
+## 2026-07-28 - Exclusive audio capture list (TIER 1, David's feedback @ 0f09855)
+
+**Concept:** collapses the audio allow-list built earlier the same day from "every
+`config.games` key + `audio.extra_allowed`" down to "only the currently streaming game +
+`audio.extra_allowed`". StreamPilot manages the OBS `executable_list` itself, so it can be
+exactly what's needed and nothing more; this also closes the case where two games happen
+to be running at once (the second game's audio no longer rides along uninvited).
+
+- **`src/audio_safety.py`** - unchanged. Already accepted `allowed_exes: set` as a plain
+  parameter to `check_audio_settings`, so the module stayed fully pure - all
+  exclusive-vs-wide-list config knowledge lives in the caller, not here.
+- **`src/config.py`** - new `audio.exclusive_mode` key, default `true`.
+  `get_allowed_audio_exes(cfg, current_game_exe=None)` now returns `{current_game_exe} |
+  extra_allowed` when exclusive (the default), or the original wide `config.games |
+  extra_allowed` when `exclusive_mode: false` - kept as a config-only opt-out so this can
+  be backed out without a code change.
+- **`src/obs_client.py`** - `set_audio_capture_exes` gained `exact: bool = False`.
+  `exact=True` converges the list to contain ONLY the given exes (dropping anything else,
+  preserving `uuid`/`hidden`/`selected` for retained entries, skipping the write entirely
+  when already converged so a 2s heartbeat doesn't hammer OBS with identical writes) -
+  this is the ONE sanctioned removal path in the whole guard, reused rather than
+  duplicated as a second writer. `exact=False` (default) keeps the original additive-only
+  behaviour for the warn-only "game just launched, add it" path.
+- **`src/daemon.py`** - `_audio_allowed_exes(game_exe)` mirrors
+  `config.get_allowed_audio_exes` but reads the cached `self.audio_cfg` (consistent with
+  every other audio flag this class reads). `_converge_audio_capture_list(game_exe,
+  obs_streaming)` writes `[game_exe] + extra_allowed` on game launch (first action in
+  `_on_game_launch`, before the game-capture window is even set, to get the exe into
+  OBS's list as early as possible) and every heartbeat cycle; clears to empty on game
+  exit and whenever idle with no stream active. Called on every heartbeat cycle EXCEPT
+  one that just force-stopped for an audio violation (`not audio_blocked`) - this is the
+  structural guarantee that auto-removal is never the mechanism that clears a flagged
+  violation; the violation always force-stops first against the true current state.
+- **`config/config.example.json`** / **`config/config.json`** - added `exclusive_mode:
+  true`; emptied the real `config.json`'s `audio.extra_allowed` (the eight game exes
+  there existed only to satisfy the old wide allow-list, dead weight under exclusive
+  mode).
+- **`scripts/check_audio_safety.py`** - now detects the currently-running configured
+  game (mirroring `daemon._detect_game`) and passes it to `get_allowed_audio_exes` so the
+  live check stays accurate under exclusive mode's default-on narrowing.
+- Verified end-to-end against the live running OBS instance (localhost:4455) with
+  Palworld genuinely running: before the change, the guard flagged the pre-existing
+  11-exe wide list as UNSAFE (10 `unknown_exe` stop violations) under the new narrow
+  allow-list, exactly as designed; converged the live list down to
+  `['Palworld-Win64-Shipping.exe']` via `set_audio_capture_exes(exact=True)`, re-ran the
+  check - SAFE, 0 violations. Final live OBS `executable_list` left in that converged
+  state (single entry, the actual running game).
+- **Unresolved, honestly flagged:** the design's "watch for" question - whether
+  win-capture-audio attaches to a game's audio session correctly when the exe is added to
+  `executable_list` *after* the session already exists - was NOT conclusively verified.
+  Palworld was already running before the list was narrowed to it, giving a real
+  after-the-fact-add scenario to test, but the only readable proxy signal available
+  through `GetInputSettings` (an `active_session_list` field) did not change across the
+  edit and its semantics under multi-exe capture mode are unclear (it may be a stale
+  artifact from a different/legacy single-process selector, not evidence either way).
+  Confirming this properly needs either watching/listening to actual OBS output during a
+  fresh game launch, or subscribing to the `InputVolumeMeters` WebSocket event stream to
+  observe real audio levels - neither was in scope for a read-mostly verification pass.
+  Follow-up: confirm audio is actually present in the stream the next time a game
+  launches for real under exclusive mode; if the plugin does NOT retroactively attach,
+  the convergence write in `_on_game_launch` needs to happen even earlier, or be retried
+  a few seconds after launch.
+- New/extended tests across `test_config.py`, `test_obs_client.py`, `test_daemon.py`;
+  full suite green (341 passed).
+
 ## 2026-07-28 - Audio privacy guard
 
 **Concept:** the video guard (`window_safety.py`, added 2026-07-19) blocks OBS from

@@ -102,7 +102,8 @@ mirror loop).
     "extra_allowed": [],
     "enforce": true,
     "auto_add_game": true,
-    "require_desktop_audio_muted": true
+    "require_desktop_audio_muted": true,
+    "exclusive_mode": true
   },
   "poll_interval_seconds": 2,
   "games": {
@@ -144,10 +145,18 @@ even tell something is wrong.** Because the failure mode is asymmetric, the audi
 uses an allow-list (only known-safe exes may be present in the OBS "Application Audio
 Output Capture" source), the inverse of the video guard's blacklist above. Enforced in:
 1. **Pure-function core** (`src/audio_safety.py`) - `check_audio_settings` evaluates the
-   real OBS capture-list settings against the allow-list (`config.games` + `audio.
-   extra_allowed`), fails closed on unreadable/malformed input, and treats a hard-denied
-   exe (`DENIED_EXES`, e.g. Discord) or any non-allowed exe as a stop-severity violation
-   regardless of `extra_allowed`. `check_missing_game` is always warn-only.
+   real OBS capture-list settings against an allow-list passed in by the caller (stays
+   pure, never reads config itself), fails closed on unreadable/malformed input, and
+   treats a hard-denied exe (`DENIED_EXES`, e.g. Discord) or any non-allowed exe as a
+   stop-severity violation regardless of `extra_allowed`. `check_missing_game` is always
+   warn-only. The allow-list itself (`config.py::get_allowed_audio_exes`,
+   `daemon.py::_audio_allowed_exes`) depends on `audio.exclusive_mode` (default `true`):
+   exclusive mode narrows it to just `{current game} + audio.extra_allowed` - StreamPilot
+   manages the OBS `executable_list` itself (see point 7 below), so it can be exactly
+   what's needed and nothing more, closing the case where two games run at once.
+   `exclusive_mode: false` restores the original wide list (every `config.games` key +
+   `audio.extra_allowed`), kept as a config-only opt-out if exclusive mode ever needs
+   backing out without a code change.
 2. **Config validation** (`config.py::_validate`) - refuses to start if `audio.
    extra_allowed` contains a hard-denied exe.
 3. **Preflight before every `start_stream()`** (`daemon.py::_preflight_audio_check`) -
@@ -166,6 +175,19 @@ Output Capture" source), the inverse of the video guard's blacklist above. Enfor
    `true`) - Desktop Audio and Mic/Aux inputs must be muted or below -60 dB; either check
    fails closed (unreadable mute/volume state is treated as unsafe, not safe) since these
    sources are far more likely to carry private audio than a per-game capture entry.
+7. **Exclusive-mode convergence** (`daemon.py::_converge_audio_capture_list`, default on
+   via `audio.exclusive_mode`) - on game launch (first action in `_on_game_launch`, before
+   even the game-capture window is set) and every heartbeat cycle, writes the OBS
+   `executable_list` to exactly `[current_game_exe] + audio.extra_allowed`
+   (`OBSClient.set_audio_capture_exes(..., exact=True)`, which reuses each retained
+   entry's `uuid`/`hidden`/`selected` and skips the write entirely when already
+   converged); on game exit and whenever idle with no stream running, clears it to empty.
+   This is the ONE sanctioned removal path and it deliberately inverts the "never
+   auto-remove" bias elsewhere in this guard - but only for converging onto the single
+   known-correct value, never to clear a flagged violation. The heartbeat only calls it
+   on cycles that did NOT just force-stop for an audio violation (`not audio_blocked`),
+   so a flagged violation always force-stops first and is never silently "cleaned up" by
+   the same cycle that caught it.
 Surfaced on the dashboard per the rule below (green "safe" / red "UNSAFE: <reasons>").
 
 ## CLI Commands

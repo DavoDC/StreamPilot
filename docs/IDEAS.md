@@ -114,23 +114,6 @@ to match state. See HISTORY.md. Harder follow-ups, not done:
   useful if the second monitor isn't always in view. Simple `Audio()` object,
   but needs a user gesture first (browser autoplay policy) so isn't zero-effort.
 
-## TIER 1 - Exclusive audio capture list (added 2026-07-28, David's feedback @ 0f09855)
-
-**David's better idea, replacing the allow-list shipped earlier today.** The audio capture list should contain ONLY the game currently being streamed, nothing else. He kept all eleven games in there historically to avoid a manual step per game, but StreamPilot now manages that step, so the list can be exactly what is needed and nothing more. Two wins: verification becomes trivial (one entry, and it matches the game on screen), and it closes the rare case where two games are running at once and the second one's audio rides along uninvited.
-
-**Why this is strictly better than what shipped.** The allow-list built this morning validates against the union of `config.games` plus `audio.extra_allowed`, so a correct setup is any subset of eleven-plus exes. That is a wide permission surface defended by a checker. Exclusive mode collapses the surface itself to one entry, which is least privilege applied properly: the guard stops being a filter over a permissive list and becomes a convergence loop onto a single known-correct value. Less to check is better than more checking.
-
-**Design.**
-
-- `audio.exclusive_mode`, default true. On game detection, write `executable_list` to exactly `[running_game_exe]` plus anything in `audio.extra_allowed` (kept, because a legitimate non-game source like a voice changer or a music bed is a real future case and should not require turning the whole feature off).
-- On game exit, and whenever no game is detected and no stream is active, clear the list to empty. Empty is the correct resting state: it cannot leak, and the existing `empty_list` warn already covers it.
-- The guard rule becomes: anything in the list that is not the current game and not in `extra_allowed` is a `stop`. Same severity ladder as now, just a much narrower allowed set.
-- **This deliberately inverts the "never auto-remove" rule from the shipped design, and the inversion is sound.** That rule existed because silently removing an entry could hide a problem. But removal only ever reduces what reaches the stream, so it is the fail-safe direction; the worst outcome is silence, which is noticed in seconds. Adding is the dangerous direction and stays tightly constrained to a validated `config.games` key. Auto-removal is therefore permitted for exactly one purpose: converging the list to `{current game} + extra_allowed`. It is never permitted as a way to clear a violation the guard has flagged.
-- Keep the non-exclusive path working behind the config flag, so a bad interaction with the win-capture-audio plugin can be backed out without a code change.
-- Once this ships, `audio.extra_allowed` in the real `config/config.json` should shrink back to empty - the eight game exes added there this morning exist only to satisfy the wide allow-list and become dead weight under exclusive mode.
-
-**Watch for:** whether the plugin picks up a session correctly when the exe is added to the list *after* the game's audio session already exists (SP writes the list on detection, which may be seconds after launch). If it does not attach retroactively, the write needs to happen before or be retried. Verify against live OBS, do not assume.
-
 ## TIER 1 - Dashboard grouped by API source (added 2026-07-28, David's feedback @ 0f09855)
 
 **Consolidates the former "Dashboard UI improvements" bullets** (game poster, program API source icons, general polish), which were the seed of this idea; David's feedback is the fuller version and those bullets are folded in here rather than left as a parallel item.
