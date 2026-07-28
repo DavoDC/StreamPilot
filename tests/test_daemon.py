@@ -1511,6 +1511,66 @@ def test_print_heartbeat_no_audio_check_when_idle(daemon):
     daemon.obs.get_audio_capture_settings.assert_not_called()
 
 
+def test_current_audio_capture_exes_returns_list(daemon):
+    daemon.obs = _safe_obs_mock()
+    daemon.obs.get_audio_capture_settings.return_value = {
+        "executable_list": [{"value": "game.exe"}],
+    }
+
+    assert daemon._current_audio_capture_exes() == ["game.exe"]
+
+
+def test_current_audio_capture_exes_empty_when_settings_unreadable(daemon):
+    daemon.obs = _safe_obs_mock()
+    daemon.obs.get_audio_capture_settings.return_value = None
+
+    assert daemon._current_audio_capture_exes() == []
+
+
+def test_print_heartbeat_writes_captured_window_title_and_audio_exes(daemon):
+    daemon.obs = _safe_obs_mock()
+    daemon.obs.get_audio_capture_settings.return_value = {
+        "executable_list": [{"value": "game.exe"}],
+    }
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    with patch("daemon.log"), patch("daemon.status_file.write_status") as mock_write:
+        daemon._print_heartbeat()
+
+    _, kwargs = mock_write.call_args
+    assert kwargs["captured_window_title"] == "My Game"
+    assert kwargs["audio_exes"] == ["game.exe"]
+
+
+def test_print_heartbeat_captured_window_title_none_when_window_malformed(daemon):
+    daemon.obs = _safe_obs_mock()
+    daemon.twitch = MagicMock()
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "game.exe"
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+
+    with patch("daemon.log"), patch("daemon.status_file.write_status") as mock_write:
+        daemon._print_heartbeat()
+
+    _, kwargs = mock_write.call_args
+    assert kwargs["captured_window_title"] is None
+
+
 # --- Exclusive mode (TIER 1 - added 2026-07-28) ---
 # audio.exclusive_mode defaults True: the allowed set is ONLY the current
 # game + extra_allowed, not the full config.games list. StreamPilot manages

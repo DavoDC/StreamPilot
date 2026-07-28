@@ -35,6 +35,25 @@ def extract_exe(obs_window: str | None) -> str | None:
     return obs_window.rsplit(":", 1)[-1]
 
 
+def extract_title(obs_window: str | None) -> str | None:
+    """Pull the human-readable window title out of an OBS window string
+    ('Title:Class:Executable.exe') - the dashboard's 'Game Captured' row
+    shows this instead of the configured game name, so it reflects what's
+    ACTUALLY captured. Mirrors extract_exe's convention of splitting from
+    the right (Class/Executable never contain ':', but a title
+    theoretically could). None for a bare exe name, an empty/None input, or
+    anything that doesn't have the full 3-part shape - callers fall back
+    sensibly (e.g. to the configured game name) rather than showing a
+    mangled partial string."""
+    if not obs_window:
+        return None
+    parts = obs_window.rsplit(":", 2)
+    if len(parts) != 3:
+        return None
+    title = parts[0].strip()
+    return title or None
+
+
 def normalize_exe_name(exe: str | None) -> str | None:
     """Lowercase an exe name for case-insensitive comparison. None/empty ->
     None. The single shared normaliser - audio_safety.py reuses this rather

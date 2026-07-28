@@ -332,6 +332,8 @@ class Daemon:
         blacklisted_window = None
         audio_ok = True
         audio_violations = []
+        captured_window_title = None
+        audio_exes = []
         # Consumed once - covers only the heartbeat that actually performs
         # the corrective re-pause right after the toggle flips on.
         sab_suppress_issue = self._sab_just_enabled
@@ -351,6 +353,12 @@ class Daemon:
             # OBS window verification + correction
             expected = self.games[self._active_game_exe]["obs_window"]
             actual = self.obs.get_game_capture_window()
+            # Dashboard-visible: the actual captured WINDOW TITLE, not the
+            # configured game name - shows what OBS is really doing, not
+            # just what StreamPilot asked for. Falls back to None (dashboard
+            # falls back further to the game name) if the window string is
+            # missing or malformed.
+            captured_window_title = window_safety.extract_title(actual)
 
             # SAFETY: never stream a blacklisted window (browser/desktop/
             # terminal) - Twitch is public. Checked against OBS's ACTUAL live
@@ -373,6 +381,11 @@ class Daemon:
             # like the window check above, independent of how a leak got there
             # (config drift, OBS meddled with directly). See src/audio_safety.py.
             audio_ok, audio_violations = self._check_audio_safety(self._active_game_exe)
+            # Dashboard-visible: the actual exe(s) OBS is currently capturing
+            # audio from, so the Audio row is verifiable at a glance instead
+            # of a bare safe/unsafe verdict - under exclusive mode this is
+            # normally a single entry.
+            audio_exes = self._current_audio_capture_exes()
             audio_blocked = False
             if not audio_ok and self.audio_cfg.get("enforce", True):
                 stop_messages = "; ".join(v.message for v in audio_violations if v.severity == "stop")
@@ -430,6 +443,8 @@ class Daemon:
                 sab_auto_manage=self.sab_auto_manage,
                 audio_ok=audio_ok,
                 audio_violations=[v.message for v in audio_violations],
+                captured_window_title=captured_window_title,
+                audio_exes=audio_exes,
             )
         except OSError as e:
             log.warning(f"Could not write dashboard status file: {e}")
@@ -520,6 +535,19 @@ class Daemon:
 
         is_safe = not any(v.severity == "stop" for v in violations)
         return is_safe, violations
+
+    def _current_audio_capture_exes(self) -> list[str]:
+        """The exe(s) currently present in OBS's audio capture list - shown
+        on the dashboard so the Audio row names what's actually being
+        captured instead of a bare safe/unsafe verdict (normally a single
+        entry under exclusive mode, making it verifiable at a glance).
+        Empty list if settings are unreadable - _check_audio_safety already
+        flags that as a stop violation, so the dashboard shows UNSAFE
+        regardless of this list being empty."""
+        settings = self.obs.get_audio_capture_settings()
+        if settings is None:
+            return []
+        return audio_safety.extract_capture_exes(settings)
 
     def _auto_add_game_to_audio(self, settings: dict, game_exe: str) -> None:
         """Warn-only 'game_missing' path: add the just-launched game to the

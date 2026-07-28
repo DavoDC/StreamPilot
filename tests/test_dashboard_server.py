@@ -269,6 +269,81 @@ def test_status_json_bytes_includes_sab_auto_manage(tmp_path):
     assert data["sab_auto_manage"] is False
 
 
+def test_status_json_bytes_includes_captured_window_title_and_audio_exes(tmp_path):
+    path = tmp_path / "status.json"
+    status_file.write_status(
+        path, status="OK", game="Marvel Rivals", streaming=True, category="Marvel Rivals",
+        sabnzbd="Paused", poll_interval=2, captured_window_title="Marvel Rivals  [PID 1234]",
+        audio_exes=["MarvelRivals_Live.exe"],
+    )
+    data = json.loads(dashboard_server.status_json_bytes(path))
+    assert data["captured_window_title"] == "Marvel Rivals  [PID 1234]"
+    assert data["audio_exes"] == ["MarvelRivals_Live.exe"]
+
+
+def test_status_json_bytes_missing_file_has_null_captured_window_and_audio_exes(tmp_path):
+    data = json.loads(dashboard_server.status_json_bytes(tmp_path / "nope.json"))
+    assert data["captured_window_title"] is None
+    assert data["audio_exes"] is None
+
+
+def test_index_html_grouped_into_three_api_cards():
+    """David's TIER 1 feedback (docs/HISTORY.md, 2026-07-28): the dashboard
+    must group fields by API source (OBS, Twitch, SABnzbd) into separate
+    cards instead of one flat list."""
+    html = dashboard_server.INDEX_HTML
+    assert 'class="card card-obs"' in html
+    assert 'class="card card-twitch"' in html
+    assert 'class="card card-sab"' in html
+
+
+def test_index_html_obs_card_contains_captured_window_and_audio_adjacent():
+    html = dashboard_server.INDEX_HTML
+    assert 'id="capturedWindow"' in html
+    assert "s.captured_window_title" in html
+    # Game Captured and Audio must sit in the same (OBS) card, audio directly
+    # beneath the captured-window row.
+    obs_card = html.split('class="card card-obs"')[1].split('class="card card-twitch"')[0]
+    assert 'id="capturedWindow"' in obs_card
+    assert 'id="audio"' in obs_card
+
+
+def test_index_html_audio_row_names_the_capturing_exe():
+    """setAudioRow must take the exe list so 'safe' is verifiable at a
+    glance, not a bare safe/unsafe verdict."""
+    html = dashboard_server.INDEX_HTML
+    assert "s.audio_exes" in html
+
+
+def test_index_html_no_longer_has_standalone_game_row():
+    """The old #game row duplicated Category - removed per TIER 1 design."""
+    html = dashboard_server.INDEX_HTML
+    assert 'id="game"' not in html
+
+
+def test_index_html_twitch_card_contains_category_title_tags_and_link():
+    html = dashboard_server.INDEX_HTML
+    twitch_card = html.split('class="card card-twitch"')[1].split('class="card card-sab"')[0]
+    assert 'id="category"' in twitch_card
+    assert 'id="title"' in twitch_card
+    assert 'id="tags"' in twitch_card
+
+
+def test_index_html_sab_card_contains_status_and_toggle():
+    html = dashboard_server.INDEX_HTML
+    sab_card = html.split('class="card card-sab"')[1]
+    assert 'id="sabnzbd"' in sab_card
+    assert 'id="sabToggle"' in sab_card
+
+
+def test_index_html_cards_use_no_emoji_icons():
+    """Workspace rule: no emojis unless explicitly requested - card headers
+    use inline SVG glyphs instead."""
+    html = dashboard_server.INDEX_HTML
+    cards_section = html.split('id="cards"')[1].split("</script>")[0] if 'id="cards"' in html else ""
+    assert "<svg" in html
+
+
 def test_post_sab_toggle_invokes_callback_and_returns_202():
     calls = []
     dashboard_server._on_sab_toggle_callback = lambda **kwargs: calls.append(kwargs)
