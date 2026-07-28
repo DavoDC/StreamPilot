@@ -101,6 +101,60 @@ def test_load_handles_non_ascii_unicode_in_config(tmp_path, monkeypatch):
     assert cfg["games"]["game.exe"]["emoji"] == "🐰"
 
 
+def test_get_audio_config_defaults_when_no_audio_section():
+    cfg = {"games": {}}
+    audio = cfg_module.get_audio_config(cfg)
+    assert audio == cfg_module.AUDIO_DEFAULTS
+
+
+def test_get_audio_config_merges_partial_overrides():
+    cfg = {"games": {}, "audio": {"enforce": False}}
+    audio = cfg_module.get_audio_config(cfg)
+    assert audio["enforce"] is False
+    assert audio["source_name"] == "Application Audio Output Capture"
+    assert audio["auto_add_game"] is True
+
+
+def test_get_allowed_audio_exes_combines_games_and_extra_allowed():
+    cfg = {
+        "games": {"game.exe": {}},
+        "audio": {"extra_allowed": ["spotify_legit.exe"]},
+    }
+    allowed = cfg_module.get_allowed_audio_exes(cfg)
+    assert allowed == {"game.exe", "spotify_legit.exe"}
+
+
+def test_validate_fails_denied_exe_in_audio_extra_allowed(tmp_path, monkeypatch):
+    """Defense in depth: a hand-edited audio.extra_allowed can never contain
+    a hard-denied exe like Discord, even though extra_allowed is otherwise
+    a free-form allow-list extension."""
+    data = {
+        "obs": {"host": "localhost", "port": 4455, "password": "pw", "game_capture_source": "Game Capture"},
+        "twitch": {"client_id": "cid", "oauth_token": "tok"},
+        "games": {},
+        "audio": {"extra_allowed": ["discord.exe"]},
+    }
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps(data))
+    monkeypatch.setattr(cfg_module, "CONFIG_PATH", str(cfg_path))
+    with pytest.raises(SystemExit):
+        cfg_module.load()
+
+
+def test_validate_passes_with_legit_audio_extra_allowed(tmp_path, monkeypatch):
+    data = {
+        "obs": {"host": "localhost", "port": 4455, "password": "pw", "game_capture_source": "Game Capture"},
+        "twitch": {"client_id": "cid", "oauth_token": "tok"},
+        "games": {},
+        "audio": {"extra_allowed": ["some_legit_tool.exe"]},
+    }
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps(data))
+    monkeypatch.setattr(cfg_module, "CONFIG_PATH", str(cfg_path))
+    cfg = cfg_module.load()
+    assert cfg["audio"]["extra_allowed"] == ["some_legit_tool.exe"]
+
+
 def test_add_game_writes_to_config(tmp_path, monkeypatch):
     data = {
         "obs": {"host": "localhost", "port": 4455, "password": "pw", "game_capture_source": "GC"},

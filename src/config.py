@@ -4,10 +4,33 @@ import json
 import os
 import sys
 
+import audio_safety
 import window_safety
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'config.json')
 CONFIG_EXAMPLE_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'config.example.json')
+
+# All keys optional - existing config.json files with no 'audio' section
+# keep working untouched. See docs/HISTORY.md "Audio privacy guard".
+AUDIO_DEFAULTS = {
+    "source_name": "Application Audio Output Capture",
+    "extra_allowed": [],
+    "enforce": True,
+    "auto_add_game": True,
+    "require_desktop_audio_muted": True,
+}
+
+
+def get_audio_config(cfg: dict) -> dict:
+    """The 'audio' block merged with defaults - every key optional."""
+    audio = cfg.get("audio") or {}
+    return {**AUDIO_DEFAULTS, **audio}
+
+
+def get_allowed_audio_exes(cfg: dict) -> set:
+    """The audio allow-list: every config.games key, plus audio.extra_allowed."""
+    audio = get_audio_config(cfg)
+    return set(cfg.get("games", {}).keys()) | set(audio.get("extra_allowed", []))
 
 
 def load() -> dict:
@@ -45,6 +68,14 @@ def _validate(cfg: dict):
             _fail(f"'{exe}' is blacklisted (see src/window_safety.py) - refusing to stream it as a game")
         if window_safety.is_blacklisted(game.get('obs_window')):
             _fail(f"games.{exe}.obs_window resolves to a blacklisted exe - refusing to stream it")
+
+    # Same defense in depth on the audio side: even a hand-edited
+    # audio.extra_allowed can never contain a hard-denied exe (Discord,
+    # Chrome, etc) - see src/audio_safety.py.
+    audio_cfg = cfg.get('audio') or {}
+    for exe in audio_cfg.get('extra_allowed', []):
+        if window_safety.normalize_exe_name(exe) in audio_safety.DENIED_EXES:
+            _fail(f"audio.extra_allowed entry '{exe}' is on the audio hard-deny list (see src/audio_safety.py) - refusing to allow it")
 
 
 def _fail(msg: str):
