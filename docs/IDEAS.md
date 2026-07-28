@@ -84,6 +84,20 @@ both fixed 2026-07-13, see HISTORY.md)*
   exact feature the 2026-07-18/21 viewer-growth work shipped - with zero visible
   signal today.
 
+- **Eight games David plays are missing from `config.games` - user action needed, not a code bug (raised 2026-07-28)** -
+  SSF2.exe, FortniteClient-Win64-Shipping.exe, DOOMEternalx64vk.exe, javaw.exe,
+  OblivionRemastered-Win64-Shipping.exe, SkyrimTogether.exe, Overwatch.exe, and wwm.exe
+  are not entries in `config.games`. They used to work only because the old wide audio
+  allow-list tolerated any exe; under `audio.exclusive_mode` (now the default, see
+  HISTORY.md) the audio guard only allows the exe of the currently-detected game, and none
+  of these will ever be detected as the current game since they aren't in `config.games` at
+  all - the video-capture side (window detection, category switch, title/tags) won't work
+  for them either. Streaming any of these titles needs a proper `add-game` run per game
+  (captures the Twitch category id and the OBS window string), not a code fix. Note:
+  `javaw.exe` is generic Java, not a specific game (many unrelated Java apps share that
+  process name) - worth deciding whether it should be added at all, and if so, whether a
+  narrower identifier (window title match) is needed instead of the bare exe name.
+
 - **`tests/test_daemon.py` failed intermittently on 2026-07-26, cause unidentified** -
   during an unrelated git-history rewrite the full suite came back with several
   failures confined to `test_daemon.py`. Re-running the file on its own later the
