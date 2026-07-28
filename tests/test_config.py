@@ -115,13 +115,42 @@ def test_get_audio_config_merges_partial_overrides():
     assert audio["auto_add_game"] is True
 
 
-def test_get_allowed_audio_exes_combines_games_and_extra_allowed():
+def test_get_allowed_audio_exes_wide_list_when_exclusive_mode_false():
+    """The pre-exclusive-mode behaviour, kept as a config-only opt-out."""
+    cfg = {
+        "games": {"game.exe": {}, "other_game.exe": {}},
+        "audio": {"extra_allowed": ["spotify_legit.exe"], "exclusive_mode": False},
+    }
+    allowed = cfg_module.get_allowed_audio_exes(cfg)
+    assert allowed == {"game.exe", "other_game.exe", "spotify_legit.exe"}
+
+
+def test_get_allowed_audio_exes_exclusive_mode_defaults_true():
+    cfg = {"games": {}, "audio": {}}
+    audio = cfg_module.get_audio_config(cfg)
+    assert audio["exclusive_mode"] is True
+
+
+def test_get_allowed_audio_exes_exclusive_mode_only_current_game():
+    """Exclusive mode (default): the allowed set is ONLY the currently
+    streaming game plus extra_allowed - other config.games entries are
+    excluded even though they're valid games."""
+    cfg = {
+        "games": {"game.exe": {}, "other_game.exe": {}},
+        "audio": {"extra_allowed": ["spotify_legit.exe"]},
+    }
+    allowed = cfg_module.get_allowed_audio_exes(cfg, current_game_exe="game.exe")
+    assert allowed == {"game.exe", "spotify_legit.exe"}
+    assert "other_game.exe" not in allowed
+
+
+def test_get_allowed_audio_exes_exclusive_mode_no_current_game_is_extra_allowed_only():
     cfg = {
         "games": {"game.exe": {}},
         "audio": {"extra_allowed": ["spotify_legit.exe"]},
     }
-    allowed = cfg_module.get_allowed_audio_exes(cfg)
-    assert allowed == {"game.exe", "spotify_legit.exe"}
+    allowed = cfg_module.get_allowed_audio_exes(cfg, current_game_exe=None)
+    assert allowed == {"spotify_legit.exe"}
 
 
 def test_validate_fails_denied_exe_in_audio_extra_allowed(tmp_path, monkeypatch):
