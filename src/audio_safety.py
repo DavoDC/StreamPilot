@@ -51,6 +51,12 @@ DENIED_EXES = frozenset({
 DEFAULT_MODE = 0
 DEFAULT_EXCLUDE = False
 
+# Returned by resolve_mode when 'mode' is present but not an int (e.g. "1",
+# 1.5, [1], None). Guaranteed != DEFAULT_MODE so check_audio_settings' mode
+# != DEFAULT_MODE rule still fires a stop violation instead of the
+# malformed value silently reading as the safe default.
+UNRESOLVABLE_MODE = -1
+
 
 @dataclass(frozen=True)
 class Violation:
@@ -81,11 +87,19 @@ def extract_capture_exes(settings: dict) -> list[str]:
 
 def resolve_mode(settings: dict) -> int:
     """Return settings['mode'] if present, else the documented default (0 =
-    capture selected executables)."""
+    capture selected executables).
+
+    A present-but-not-int value is resolved to UNRESOLVABLE_MODE rather than
+    falling back to the default. Only an ABSENT key means "default". This
+    matters because mode selects capture-selected vs capture-all-except, so
+    a surprising value ("1", 1.5, None) must fail closed, not silently read
+    as safe."""
     if not isinstance(settings, dict):
         return DEFAULT_MODE
-    value = settings.get("mode")
-    return value if isinstance(value, int) else DEFAULT_MODE
+    if "mode" not in settings:
+        return DEFAULT_MODE
+    value = settings["mode"]
+    return value if isinstance(value, int) else UNRESOLVABLE_MODE
 
 
 def resolve_exclude(settings: dict) -> bool:
@@ -135,10 +149,15 @@ def check_audio_settings(settings: dict, allowed_exes: set) -> list["Violation"]
 
         mode = resolve_mode(settings)
         if mode != DEFAULT_MODE:
-            violations.append(Violation(
-                "stop", "wrong_mode",
-                f"Audio capture mode is {mode}, expected {DEFAULT_MODE} (capture selected executables)",
-            ))
+            raw_mode = settings.get("mode")
+            if "mode" in settings and not isinstance(raw_mode, int):
+                message = (
+                    f"Audio capture mode is {raw_mode!r} (not a recognised int), "
+                    f"expected {DEFAULT_MODE} (capture selected executables)"
+                )
+            else:
+                message = f"Audio capture mode is {mode}, expected {DEFAULT_MODE} (capture selected executables)"
+            violations.append(Violation("stop", "wrong_mode", message))
 
         allowed_lower = {window_safety.normalize_exe_name(e) for e in allowed_exes if e}
         exes = extract_capture_exes(settings)
