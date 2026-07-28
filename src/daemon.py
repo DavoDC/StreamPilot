@@ -13,6 +13,8 @@ from obs_client import OBSClient
 from twitch_client import TwitchClient
 from sabnzbd_client import SABnzbdClient
 from stream_meta import build_title, build_tags
+import audio_safety
+import config as config_module
 import status_file
 import window_safety
 
@@ -28,11 +30,14 @@ class Daemon:
         self.poll_interval = cfg.get("poll_interval_seconds", 2)
         self.games = cfg.get("games", {})
 
+        self.audio_cfg = config_module.get_audio_config(cfg)
+        self.audio_allowed_exes = config_module.get_allowed_audio_exes(cfg)
         self.obs = OBSClient(
             host=cfg["obs"]["host"],
             port=cfg["obs"]["port"],
             password=cfg["obs"]["password"],
             game_capture_source=cfg["obs"]["game_capture_source"],
+            audio_source_name=self.audio_cfg["source_name"],
         )
         self.twitch_cfg = cfg.get("twitch", {})
         self.twitch = TwitchClient(
@@ -237,6 +242,8 @@ class Daemon:
         blacklisted_window: str | None = None,
         sab_auto_manage: bool = True,
         sab_suppress_issue: bool = False,
+        audio_ok: bool = True,
+        audio_violation_count: int = 0,
     ) -> dict:
         """Turn raw heartbeat readings into the shared status shape consumed by
         both the terminal log line and the dashboard JSON file."""
@@ -267,6 +274,7 @@ class Daemon:
         issue = game_active and (
             not obs_streaming or sab_issue
             or not obs_window_ok or stream_restarted or blacklisted_window
+            or not audio_ok
         )
         status = "ISSUE" if issue else ("OK" if game_active else "IDLE")
 
@@ -279,6 +287,8 @@ class Daemon:
             "obs_window_ok": obs_window_ok,
             "stream_restarted": stream_restarted,
             "blacklisted_window": blacklisted_window,
+            "audio_ok": audio_ok,
+            "audio_violation_count": audio_violation_count,
         }
 
     def _format_heartbeat(
@@ -293,9 +303,14 @@ class Daemon:
         blacklisted_window: str | None = None,
         sab_auto_manage: bool = True,
         sab_suppress_issue: bool = False,
+        audio_ok: bool = True,
+        audio_violation_count: int = 0,
     ) -> str:
-        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, sab_auto_manage, sab_suppress_issue)
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count)
         line = f"Status: {c['status'] if c['game_active'] else 'OK'} | Streaming: {c['game_str']} | Category: {c['cat_str']} | SABnzbd: {c['sab_str']}"
+        if c["game_active"]:
+            audio_str = "OK" if c["audio_ok"] else f"VIOLATION ({c['audio_violation_count']})"
+            line += f" | Audio: {audio_str}"
         if c["game_active"] and not c["obs_window_ok"]:
             line += " | OBS Window: REAPPLIED"
         if c["game_active"] and c["stream_restarted"]:
@@ -316,6 +331,8 @@ class Daemon:
         sab_corrected = False
         stream_restarted = False
         blacklisted_window = None
+        audio_ok = True
+        audio_violations = []
         # Consumed once - covers only the heartbeat that actually performs
         # the corrective re-pause right after the toggle flips on.
         sab_suppress_issue = self._sab_just_enabled
@@ -353,10 +370,23 @@ class Daemon:
                 self.obs.set_game_capture_window(expected)
                 obs_window_ok = False
 
+            # SAFETY: audio privacy guard - re-checked every heartbeat exactly
+            # like the window check above, independent of how a leak got there
+            # (config drift, OBS meddled with directly). See src/audio_safety.py.
+            audio_ok, audio_violations = self._check_audio_safety(self._active_game_exe)
+            audio_blocked = False
+            if not audio_ok and self.audio_cfg.get("enforce", True):
+                stop_messages = "; ".join(v.message for v in audio_violations if v.severity == "stop")
+                log.error(f"AUDIO SAFETY: force-stopping stream - {stop_messages}")
+                self.obs.stop_stream()
+                obs_streaming = False
+                audio_blocked = True
+
             # Stream correction: only when WebSocket is alive (avoids restart-on-crash loop).
-            # Skipped when we just force-stopped for a blacklisted window - restarting
-            # immediately would defeat the whole point of stopping it.
-            if obs_live and not obs_streaming and not blacklisted_window:
+            # Skipped when we just force-stopped for a blacklisted window or an
+            # audio leak - restarting immediately would defeat the whole point
+            # of stopping it.
+            if obs_live and not obs_streaming and not blacklisted_window and not audio_blocked:
                 log.warning("Stream stopped while game active - restarting")
                 self.obs.start_stream()
                 stream_restarted = True
@@ -369,8 +399,9 @@ class Daemon:
         else:
             obs_streaming = self.obs.is_streaming()
 
-        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue)
-        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue))
+        audio_violation_count = len(audio_violations)
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count)
+        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count))
         try:
             status_file.write_status(
                 STATUS_PATH,
@@ -387,6 +418,8 @@ class Daemon:
                 build_id=self.build_id,
                 blacklisted_window=blacklisted_window,
                 sab_auto_manage=self.sab_auto_manage,
+                audio_ok=audio_ok,
+                audio_violations=[v.message for v in audio_violations],
             )
         except OSError as e:
             log.warning(f"Could not write dashboard status file: {e}")
@@ -405,6 +438,76 @@ class Daemon:
             if exe in running:
                 return exe
         return None
+
+    def _check_audio_safety(self, game_exe: str | None) -> tuple[bool, list]:
+        """Evaluate the audio capture source (allow-list) plus the Desktop
+        Audio / Mic leak paths against the current OBS state. Returns
+        (is_safe, violations) - is_safe reflects only 'stop' severity
+        violations; 'warn' violations (missing game, empty list) never
+        block streaming on their own. See src/audio_safety.py."""
+        settings = self.obs.get_audio_capture_settings()
+        if settings is None:
+            violations = [audio_safety.Violation(
+                "stop", "unreadable",
+                f"Could not read audio capture settings for "
+                f"'{self.audio_cfg['source_name']}' - refusing to treat as safe",
+            )]
+        else:
+            violations = audio_safety.check_audio_settings(settings, self.audio_allowed_exes)
+            missing = audio_safety.check_missing_game(settings, game_exe)
+            if missing:
+                violations.append(missing)
+                if self.audio_cfg.get("auto_add_game", True):
+                    self._auto_add_game_to_audio(settings, game_exe)
+
+        if self.audio_cfg.get("require_desktop_audio_muted", True):
+            violations.extend(self._check_desktop_audio_leak())
+
+        is_safe = not any(v.severity == "stop" for v in violations)
+        return is_safe, violations
+
+    def _auto_add_game_to_audio(self, settings: dict, game_exe: str) -> None:
+        """Warn-only 'game_missing' path: add the just-launched game to the
+        audio capture list so its own audio streams next time. Additive
+        only - set_audio_capture_exes() never removes an existing entry."""
+        exes = audio_safety.extract_capture_exes(settings)
+        if self.obs.set_audio_capture_exes(exes + [game_exe]):
+            log.info(f"Audio: auto-added '{game_exe}' to the capture list")
+
+    def _check_desktop_audio_leak(self) -> list:
+        """Desktop Audio / Mic sources are open microphones/system-audio
+        into the stream if not muted (or effectively silent). Checked by
+        input kind since these sources only expose device_id in their
+        settings - mute/volume is the only readable signal."""
+        violations = []
+        for kind, code, label in (
+            ("wasapi_output_capture", "desktop_audio_live", "Desktop Audio"),
+            ("wasapi_input_capture", "mic_live", "Mic/Aux"),
+        ):
+            for name in self.obs.list_inputs_by_kind(kind):
+                if self.obs.get_input_mute(name):
+                    continue
+                if self.obs.get_input_volume_db(name) <= -60:
+                    continue
+                violations.append(audio_safety.Violation(
+                    "stop", code,
+                    f"'{name}' ({label}) is live (not muted, above -60 dB) - potential audio leak",
+                ))
+        return violations
+
+    def _preflight_audio_check(self, game_exe: str) -> bool:
+        """Run before every start_stream() call - blocks a bad broadcast
+        before it ever goes out, rather than starting then stopping."""
+        is_safe, violations = self._check_audio_safety(game_exe)
+        for v in violations:
+            if v.severity == "stop":
+                log.error(f"AUDIO SAFETY: {v.message}")
+            else:
+                log.warning(f"AUDIO: {v.message}")
+        if not is_safe and self.audio_cfg.get("enforce", True):
+            log.error("AUDIO SAFETY: blocking stream start")
+            return False
+        return True
 
     def _on_game_launch(self, exe: str):
         game = self.games[exe]
@@ -430,8 +533,12 @@ class Daemon:
         if self.obs.is_streaming():
             self.obs.stop_stream()
             log.info("Ending previous VOD")
-        self.obs.start_stream()
-        log.info(f"Stream started for {name}")
+
+        if self._preflight_audio_check(exe):
+            self.obs.start_stream()
+            log.info(f"Stream started for {name}")
+        else:
+            log.error(f"Stream NOT started for {name} - audio safety check failed")
 
         if self.sab_enabled and self.sab and self.sab_auto_manage:
             self.sab.pause()
