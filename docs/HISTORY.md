@@ -2,6 +2,38 @@
 
 ---
 
+## 2026-07-30 - SABnzbd dashboard row distinguishes Idle from Downloading
+
+**The problem.** The SAB card only ever showed `Running` / `Running (manual)` / `Paused` /
+`Disabled` / `Unreachable`. "Running" was ambiguous - true whether SAB was sitting idle or
+actively pulling a multi-GB download eating upload bandwidth mid-stream, which is exactly
+the condition David wants visibility into without opening the SAB web UI (raised from a
+dashboard screenshot showing `Running (manual)` with no way to tell).
+
+**The fix.** SABnzbd's `mode=queue` API - already polled every heartbeat for `paused` -
+also returns a `status` field (`Idle`, `Downloading`, `Paused`, plus busy sub-states like
+`Propagating`/`Fetching`/`Checking`) that was being read and discarded. Read straight off
+SABnzbd's own reported value, never inferred, per the existing "Status/state field design"
+rule.
+
+- **`src/sabnzbd_client.py`** - new `is_downloading()`, a sibling to `is_paused()` (same
+  `_get("queue")` call shape, kept as a separate method rather than merging into
+  `is_paused()` to avoid touching that method's ~40 existing test call sites for a small
+  additive feature). Buckets any non-`Idle`/non-`Paused` status as downloading; returns
+  `None` on missing field or unreachable, never fabricates a value.
+- **`src/daemon.py`** - `_print_heartbeat` fetches `sab_downloading` alongside `sab_paused`.
+  `_classify` takes a new `sab_downloading: bool | None = None` param and appends
+  ` - Downloading` / ` - Idle` to the Running/Running (manual) states only (Paused states
+  are unaffected; `None` yields no suffix rather than guessing). `_format_heartbeat`
+  threads the param through. No dashboard_server.py change needed - `sab_str` already
+  flows straight to the existing SABnzbd row.
+- New tests in `test_sabnzbd_client.py` (`is_downloading` for each SAB status value,
+  unreachable, missing field) and `test_daemon.py` (Running+Downloading, Running+Idle,
+  unknown-omits-suffix, Paused-ignores-downloading, manual-mode); full suite green
+  (375 passed). Verified live via hot-reload against the actual running daemon mid-stream -
+  dashboard flipped to `Running (manual) - Idle`, confirming SAB genuinely wasn't
+  downloading at that moment.
+
 ## 2026-07-28 - Game Captured row shows the exe, not just the window title
 
 **The problem.** `Game Captured` showed only the window title (e.g. `Palworld`), which
