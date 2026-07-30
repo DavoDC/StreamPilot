@@ -260,22 +260,39 @@ class Daemon:
             else ""
         )
 
-        # sab_str reflects only current physical truth (Running/Paused), never a
-        # transient "just corrected" annotation - a one-heartbeat label is easy
-        # to miss or asymmetric (e.g. no counterpart on the resume direction).
-        # Corrective actions are still visible in the log line that triggers
-        # them (see _print_heartbeat); sab_corrected here only affects sab_issue
-        # below. See CLAUDE.md "Status/state field design".
+        # sab_status_str reflects only current physical truth (Running/Paused),
+        # never a transient "just corrected" annotation - a one-heartbeat label
+        # is easy to miss or asymmetric (e.g. no counterpart on the resume
+        # direction). Corrective actions are still visible in the log line that
+        # triggers them (see _print_heartbeat); sab_corrected here only affects
+        # sab_issue below. See CLAUDE.md "Status/state field design".
         if not self.sab_enabled:
-            sab_str = "Disabled"
+            sab_status_str = "Disabled"
         elif not sab_auto_manage:
-            sab_str = f"Running (manual){activity_suffix}" if sab_paused is not True else "Paused (manual)"
+            sab_status_str = "Running (manual)" if sab_paused is not True else "Paused (manual)"
         elif sab_paused is None:
-            sab_str = "Unreachable"
+            sab_status_str = "Unreachable"
         elif sab_paused:
-            sab_str = "Paused"
+            sab_status_str = "Paused"
         else:
-            sab_str = f"Running{activity_suffix}"
+            sab_status_str = "Running"
+
+        # Activity (Downloading/Idle) is its own fact, independent of mode -
+        # only meaningful while actually Running, "-" otherwise (dashboard's
+        # existing not-applicable convention, see docs/DESIGN.md). Kept as its
+        # own field (sab_activity_str) rather than folded into sab_status_str
+        # so the dashboard can show them as two separate rows instead of one
+        # cramped hyphenated string (docs/IDEAS.md, raised 2026-07-30).
+        sab_running = sab_status_str.startswith("Running")
+        sab_activity_str = (
+            ("Downloading" if sab_downloading is True else "Idle" if sab_downloading is False else "-")
+            if sab_running else "-"
+        )
+
+        # sab_str stays the combined human-readable string for the terminal
+        # log line only (tests assert on this exact format) - the dashboard
+        # uses sab_status_str/sab_activity_str instead.
+        sab_str = sab_status_str + (activity_suffix if sab_running else "")
 
         # SABnzbd only contributes to ISSUE when homeostasis is actually
         # trying to manage it - David turned that off on purpose for idle
@@ -294,6 +311,8 @@ class Daemon:
             "game_str": game_name if game_active else "Idle",
             "cat_str": twitch_category if twitch_category else "Unknown",
             "sab_str": sab_str,
+            "sab_status_str": sab_status_str,
+            "sab_activity_str": sab_activity_str,
             "status": status,
             "obs_window_ok": obs_window_ok,
             "stream_restarted": stream_restarted,
@@ -446,6 +465,8 @@ class Daemon:
                 streaming=obs_streaming,
                 category=twitch_category,
                 sabnzbd=c["sab_str"],
+                sab_status=c["sab_status_str"],
+                sab_activity=c["sab_activity_str"],
                 poll_interval=self.poll_interval,
                 obs_window_ok=obs_window_ok,
                 stream_restarted=stream_restarted,
