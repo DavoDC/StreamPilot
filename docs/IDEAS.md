@@ -257,3 +257,11 @@ Future polish, do not implement yet:
   revisiting only if SAB gains a third heartbeat-read field (a natural trigger to
   consolidate into one `get_queue_state()`-style call returning `{paused, downloading, ...}`
   and updating call sites once) - not worth doing for its own sake with only two fields.
+- **SABnzbd card: `Running (manual) - Downloading` reads as one cramped string, not two facts (raised 2026-07-30, David's screenshot)** -
+  the row crams two independent axes (auto/manual + paused/running mode, and idle/downloading
+  activity) into a single hyphenated label under one "Status" heading, which is visually
+  busier than the OBS card's clean Video/Audio pairing. Possible split: two rows, e.g.
+  `Status: Running (manual)` / `Activity: Downloading` - or a single row with the activity
+  as a smaller/dimmer suffix rather than inline with equal weight. Needs a real design pass
+  against `docs/DESIGN.md` (the white-normal/colour-attention rule, muted accent colours)
+  before touching markup - do not implement yet, this is a polish idea only.
