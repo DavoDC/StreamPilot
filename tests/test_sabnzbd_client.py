@@ -56,3 +56,49 @@ def test_is_paused_false(client):
 def test_is_paused_unreachable(client):
     with patch("sabnzbd_client.requests.get", side_effect=Exception("connection refused")):
         assert client.is_paused() is None
+
+
+def test_is_downloading_true(client):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"queue": {"status": "Downloading"}}
+    with patch("sabnzbd_client.requests.get", return_value=mock_resp):
+        assert client.is_downloading() is True
+
+
+@pytest.mark.parametrize("status", ["Propagating", "Fetching", "Checking", "Queued"])
+def test_is_downloading_true_for_other_busy_statuses(client, status):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"queue": {"status": status}}
+    with patch("sabnzbd_client.requests.get", return_value=mock_resp):
+        assert client.is_downloading() is True
+
+
+def test_is_downloading_false_when_idle(client):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"queue": {"status": "Idle"}}
+    with patch("sabnzbd_client.requests.get", return_value=mock_resp):
+        assert client.is_downloading() is False
+
+
+def test_is_downloading_false_when_paused(client):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"queue": {"status": "Paused"}}
+    with patch("sabnzbd_client.requests.get", return_value=mock_resp):
+        assert client.is_downloading() is False
+
+
+def test_is_downloading_unreachable(client):
+    with patch("sabnzbd_client.requests.get", side_effect=Exception("connection refused")):
+        assert client.is_downloading() is None
+
+
+def test_is_downloading_missing_status_field(client):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"queue": {}}
+    with patch("sabnzbd_client.requests.get", return_value=mock_resp):
+        assert client.is_downloading() is None

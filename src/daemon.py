@@ -243,10 +243,22 @@ class Daemon:
         sab_suppress_issue: bool = False,
         audio_ok: bool = True,
         audio_violation_count: int = 0,
+        sab_downloading: bool | None = None,
     ) -> dict:
         """Turn raw heartbeat readings into the shared status shape consumed by
         both the terminal log line and the dashboard JSON file."""
         game_active = game_name is not None
+
+        # "Running" alone doesn't say whether SAB is actually pulling a download
+        # or just idle - append a suffix built straight from SABnzbd's own queue
+        # status field, never inferred. None (field missing/unreachable) yields no
+        # suffix rather than guessing. Only meaningful while not paused, so it's
+        # only applied to the Running branches below.
+        activity_suffix = (
+            " - Downloading" if sab_downloading is True
+            else " - Idle" if sab_downloading is False
+            else ""
+        )
 
         # sab_str reflects only current physical truth (Running/Paused), never a
         # transient "just corrected" annotation - a one-heartbeat label is easy
@@ -257,13 +269,13 @@ class Daemon:
         if not self.sab_enabled:
             sab_str = "Disabled"
         elif not sab_auto_manage:
-            sab_str = "Running (manual)" if sab_paused is not True else "Paused (manual)"
+            sab_str = f"Running (manual){activity_suffix}" if sab_paused is not True else "Paused (manual)"
         elif sab_paused is None:
             sab_str = "Unreachable"
         elif sab_paused:
             sab_str = "Paused"
         else:
-            sab_str = "Running"
+            sab_str = f"Running{activity_suffix}"
 
         # SABnzbd only contributes to ISSUE when homeostasis is actually
         # trying to manage it - David turned that off on purpose for idle
@@ -304,8 +316,9 @@ class Daemon:
         sab_suppress_issue: bool = False,
         audio_ok: bool = True,
         audio_violation_count: int = 0,
+        sab_downloading: bool | None = None,
     ) -> str:
-        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count)
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count, sab_downloading)
         line = f"Status: {c['status'] if c['game_active'] else 'OK'} | Streaming: {c['game_str']} | Category: {c['cat_str']} | SABnzbd: {c['sab_str']}"
         if c["game_active"]:
             audio_str = "OK" if c["audio_ok"] else f"VIOLATION ({c['audio_violation_count']})"
@@ -325,6 +338,7 @@ class Daemon:
         # skips a pointless API call while idle).
         twitch_category = self.twitch.get_current_game_name() if self._active_game_exe else None
         sab_paused = self.sab.is_paused() if (self.sab_enabled and self.sab) else None
+        sab_downloading = self.sab.is_downloading() if (self.sab_enabled and self.sab) else None
 
         obs_window_ok = True
         sab_corrected = False
@@ -422,8 +436,8 @@ class Daemon:
             self._converge_audio_capture_list(None, obs_streaming)
 
         audio_violation_count = len(audio_violations)
-        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count)
-        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count))
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count, sab_downloading)
+        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count, sab_downloading))
         try:
             status_file.write_status(
                 STATUS_PATH,

@@ -43,3 +43,16 @@ class SABnzbdClient:
         if result:
             return result.get("queue", {}).get("paused", False)
         return None
+
+    def is_downloading(self):
+        """True if the queue is actively working through a download (any busy
+        sub-state - Downloading, Propagating, Fetching, Checking, etc.), False if
+        Idle or Paused, None if the status field is missing/unreachable. Never
+        infers activity from anything but SABnzbd's own reported status string."""
+        result = self._get("queue")
+        if result:
+            status = result.get("queue", {}).get("status")
+            if status is None:
+                return None
+            return status not in ("Idle", "Paused")
+        return None

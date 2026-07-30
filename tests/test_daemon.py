@@ -371,6 +371,71 @@ def test_format_heartbeat_sab_running_while_game_active(daemon):
     assert "should be paused" not in line
 
 
+def test_format_heartbeat_sab_running_downloading(daemon):
+    """Running + sab_downloading=True surfaces the activity, reading straight off
+    SABnzbd's own queue status rather than inferring it."""
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=False,
+        sab_downloading=True,
+    )
+    assert "Running - Downloading" in line
+
+
+def test_format_heartbeat_sab_running_idle(daemon):
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=False,
+        sab_downloading=False,
+    )
+    assert "Running - Idle" in line
+
+
+def test_format_heartbeat_sab_running_downloading_unknown_omits_suffix(daemon):
+    """sab_downloading=None (field unreachable/missing) must never fabricate an
+    Idle or Downloading label - falls back to plain 'Running'."""
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=False,
+        sab_downloading=None,
+    )
+    sab_field = line.split("SABnzbd:")[1].split("|")[0].strip()
+    assert sab_field == "Running"
+
+
+def test_format_heartbeat_sab_paused_ignores_downloading(daemon):
+    """Paused is paused regardless of sab_downloading - no activity suffix leaks
+    onto the Paused label."""
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=True,
+        sab_downloading=True,
+    )
+    assert "Paused" in line
+    assert "Downloading" not in line
+
+
+def test_format_heartbeat_sab_manual_running_downloading(daemon):
+    line = daemon._format_heartbeat(
+        game_name="My Game",
+        obs_streaming=True,
+        twitch_category="My Game",
+        sab_paused=False,
+        sab_auto_manage=False,
+        sab_downloading=True,
+    )
+    assert "Running (manual) - Downloading" in line
+    assert "Status: ISSUE" not in line
+
+
 def test_format_heartbeat_idle_no_game(daemon):
     line = daemon._format_heartbeat(
         game_name=None,
