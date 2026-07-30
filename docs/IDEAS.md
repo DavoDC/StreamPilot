@@ -246,3 +246,14 @@ Future polish, do not implement yet:
 ## Low priority
 
 - **SABnzbd per-game config for offline games** - in config, flag games that SHOULDN'T pause SAB. Only multiplayer games need SAB paused; offline/single-player games should leave it running. No offline games currently, but worth designing for.
+- **`sabnzbd_client.py`: `is_paused()` + `is_downloading()` are two separate calls to the same `mode=queue` endpoint (added 2026-07-30, design note from the Idle/Downloading feature)** -
+  each heartbeat now does two local SABnzbd HTTP round-trips that both fetch the same
+  queue JSON, reading different keys (`paused` vs `status`). Deliberately kept as two
+  methods rather than one combined call when built, because `is_paused()` alone has ~40
+  existing test call sites across `test_daemon.py` and merging/reshaping its return value
+  would have been a much bigger, riskier diff for what was a small additive feature -
+  the extra local call is negligible cost per the "polling cadence has no external cost"
+  note in CLAUDE.md, so there was no correctness reason to rush the merge. Worth
+  revisiting only if SAB gains a third heartbeat-read field (a natural trigger to
+  consolidate into one `get_queue_state()`-style call returning `{paused, downloading, ...}`
+  and updating call sites once) - not worth doing for its own sake with only two fields.
