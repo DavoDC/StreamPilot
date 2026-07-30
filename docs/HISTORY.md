@@ -2,6 +2,32 @@
 
 ---
 
+## 2026-07-30 - SABnzbd card splits Status and Activity into two rows
+
+**The problem.** `Running (manual) - Downloading` crammed two independent facts (auto/manual
++ paused/running mode, and idle/downloading activity) into one hyphenated string under a
+single "Status" heading - visually busier than the OBS card's clean Video/Audio pairing
+(raised from David's dashboard screenshot).
+
+**The fix.** Split into two rows, reusing the existing `.row`/`.label`/`.value` classes
+verbatim (no new CSS, no dimmed/muted variant) - per `docs/DESIGN.md`'s white-is-normal
+rule, a smaller/dimmer suffix would have made Activity a decoration rather than a fact of
+equal standing to Status.
+
+- **`src/daemon.py::_classify()`** - `sab_status_str` (`Running (manual)` / `Paused` /
+  `Disabled` / `Unreachable`, no activity suffix) and `sab_activity_str` (`Downloading` /
+  `Idle` / `-`, only meaningful while actually Running) are now separate fields.
+  `sab_str` (the combined string) is kept only for the terminal log line's existing format
+  - tests assert on that exact string.
+- **`src/status_file.py`** call site - `write_status(...)` now also writes `sab_status` and
+  `sab_activity` alongside the existing `sabnzbd` field.
+- **`src/dashboard_server.py`** - new `Activity` row under `Status` in the SAB card;
+  `tick()` reads `s.sab_status`/`s.sab_activity` (falls back to the old combined `s.sabnzbd`
+  field if a stale status.json is ever read mid-transition).
+- Verified live against the actual running dashboard mid-stream via the hot-reload trigger
+  (`data/state/reload.trigger`) - never restarted the process, so the live stream was
+  untouched. `375 passed` in the existing suite, no test changes needed.
+
 ## 2026-07-30 - SABnzbd dashboard row distinguishes Idle from Downloading
 
 **The problem.** The SAB card only ever showed `Running` / `Running (manual)` / `Paused` /

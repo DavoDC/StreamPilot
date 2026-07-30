@@ -197,6 +197,7 @@ INDEX_HTML = """<!doctype html>
         SABnzbd
       </div>
       <div class="row"><span class="label">Status</span><span class="value" id="sabnzbd">-</span></div>
+      <div class="row"><span class="label">Activity</span><span class="value" id="sabActivity">-</span></div>
       <div class="row"><span class="label">Keep SAB paused</span><span class="value"><label class="switch"><input type="checkbox" id="sabToggle" checked><span class="slider"></span></label></span></div>
     </div>
   </div>
@@ -333,6 +334,7 @@ async function tick() {
     document.getElementById("title").textContent = "-";
     renderTags(null);
     document.getElementById("sabnzbd").textContent = "-";
+    document.getElementById("sabActivity").textContent = "-";
     setAudioRow(null, null, null);
     sabToggle.disabled = true;
     document.getElementById("footer").textContent = "No signal from daemon - is it running?";
@@ -343,7 +345,8 @@ async function tick() {
     document.getElementById("category").textContent = s.category || "Unknown";
     document.getElementById("title").textContent = s.title || "-";
     renderTags(s.tags);
-    document.getElementById("sabnzbd").textContent = s.sabnzbd || "-";
+    document.getElementById("sabnzbd").textContent = s.sab_status || s.sabnzbd || "-";
+    document.getElementById("sabActivity").textContent = s.sab_activity || "-";
     setAudioRow(s.game ? s.audio_ok : null, s.audio_violations, s.audio_exes);
     sabToggle.disabled = false;
     const daemonValue = s.sab_auto_manage !== undefined ? s.sab_auto_manage : true;
