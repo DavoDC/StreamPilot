@@ -1,5 +1,9 @@
-# Config with secrets
-config/config.json
+# Config with secrets.
+# The trailing glob is load-bearing: it covers backups and editor copies such
+# as config.json.bak-<date>, which hold the same live credentials as the file
+# itself. An exact-path rule ignores the original while leaving every copy of
+# it stageable, which is the more dangerous half.
+config/config.json*
 
 # Python
 __pycache__/
