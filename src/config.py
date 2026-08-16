@@ -85,6 +85,14 @@ def _validate(cfg: dict):
             _fail(f"'{exe}' is blacklisted (see src/window_safety.py) - refusing to stream it as a game")
         if window_safety.is_blacklisted(game.get('obs_window')):
             _fail(f"games.{exe}.obs_window resolves to a blacklisted exe - refusing to stream it")
+        emoji = game.get('emoji')
+        if emoji and _is_mojibake(emoji):
+            _fail(
+                f"games.{exe}.emoji ('{emoji}') looks double-encoded (UTF-8 bytes "
+                "re-interpreted as a Windows codepage, then re-saved) - re-edit "
+                "config.json with an editor that saves UTF-8, don't retype it via "
+                "a shell command"
+            )
 
     # Same defense in depth on the audio side: even a hand-edited
     # audio.extra_allowed can never contain a hard-denied exe (Discord,
@@ -93,6 +101,42 @@ def _validate(cfg: dict):
     for exe in audio_cfg.get('extra_allowed', []):
         if window_safety.normalize_exe_name(exe) in audio_safety.DENIED_EXES:
             _fail(f"audio.extra_allowed entry '{exe}' is on the audio hard-deny list (see src/audio_safety.py) - refusing to allow it")
+
+
+# Windows' ANSI decode (what a cmd.exe/PowerShell 5.1 console or an
+# ANSI-mode editor uses to turn bytes into characters) leniently passes
+# undefined cp1252 byte values through as their own codepoint instead of
+# raising, unlike Python's strict 'cp1252' codec. Model that here so the
+# detector below catches the same corruption Windows actually produces.
+_ANSI_DECODE_TABLE = {}
+for _i in range(256):
+    try:
+        _c = bytes([_i]).decode('cp1252')
+    except UnicodeDecodeError:
+        _c = chr(_i)
+    _ANSI_DECODE_TABLE[_c] = _i
+
+
+def _is_mojibake(text: str) -> bool:
+    """Detect UTF-8 bytes that were decoded as a Windows ANSI codepage and
+    re-saved as UTF-8 - the exact corruption that hit config.json's
+    'emoji' fields on 2026-08-14 (see docs/HISTORY.md). A non-ASCII string
+    whose characters all map back to single ANSI byte values, and whose
+    resulting bytes are themselves valid UTF-8, is virtually never
+    legitimate text - it's the fingerprint of a UTF-8 file edited through
+    a tool that wrote it out via the system codepage instead of UTF-8.
+    """
+    if not any(ord(c) > 127 for c in text):
+        return False  # pure ASCII can't be mojibake - nothing to mis-decode
+    try:
+        raw = bytes(_ANSI_DECODE_TABLE[c] for c in text)
+    except KeyError:
+        return False  # a genuine emoji/unicode char has no single-byte ANSI form
+    try:
+        raw.decode('utf-8')
+    except UnicodeDecodeError:
+        return False
+    return True
 
 
 def _fail(msg: str):
