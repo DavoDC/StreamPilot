@@ -2,6 +2,48 @@
 
 ---
 
+## 2026-08-14 - Fixed double-encoded (mojibake) per-game emoji in config.json, added a validation guard
+
+**The problem.** David spotted a corrupted title on the live dashboard: "Davo plays
+Palworld! " with a garbled glyph instead of the rabbit emoji. `config.json`'s three
+`emoji` values (⚡ Marvel Rivals, 🔪 Dead by Daylight, 🐰 Palworld - added in the
+2026-07-21 entry below) had all been double-encoded: each emoji's UTF-8 bytes had been
+decoded through Windows' ANSI codepage (cp1252, the way a `cmd.exe`/PowerShell 5.1
+console or a non-UTF-8-aware editor reads bytes) and the resulting mangled text
+re-saved as UTF-8. Confirmed by round-tripping the stored bytes back through that
+exact ANSI codepage - it reproduced the original emoji exactly. This is a different
+failure mode than the 2026-07-21 incident below: that one was a **crash** (invalid
+UTF-8, `json.load()` raised); this one was **silent semantic corruption** - the bytes
+were perfectly valid UTF-8 the whole way through, so `config.py::load()` accepted it
+and the daemon happily PATCHed the garbled text to the live Twitch title.
+
+**The fix.**
+- Repaired the three `emoji` values in the real `config.json` back to their correct
+  single codepoints.
+- **`config.py::_is_mojibake`** - new validation check, called from `_validate()` for
+  every game's `emoji` field. Builds a lenient ANSI decode table (cp1252 where
+  defined, byte-value passthrough where cp1252 leaves it undefined - matching what
+  Windows' actual ANSI decode does, not Python's stricter `cp1252` codec) and flags a
+  non-ASCII string as mojibake if every character maps back to a single ANSI byte
+  *and* those bytes are themselves valid UTF-8. A legitimate emoji can't round-trip
+  this way (astral codepoints have no single-byte ANSI form at all), so this has no
+  false positives on real emoji or plain text. `load()` now fails loud (`_fail()`,
+  same as a blacklisted exe) instead of shipping the corruption to Twitch.
+- 2 new tests in `test_config.py`: `test_validate_fails_double_encoded_mojibake_emoji`
+  (end-to-end via `load()`) and `test_is_mojibake_true_positives_and_false_positives`
+  (direct unit coverage, including the Palworld case specifically - its emoji contains
+  a byte, `0x90`, that's undefined in strict cp1252 and would false-negative on a
+  naive `text.encode('cp1252')` check).
+
+**Root cause, not just the symptom:** the corruption happened at edit time, not read
+time - `config.py`'s `open()` calls already had `encoding='utf-8'` from the 2026-07-21
+fix below, so loading was never the problem. Something (very likely a shell command
+or console-based edit rather than a UTF-8-aware editor) wrote the emoji characters
+through Windows' system codepage instead of UTF-8. Prevention here is the validation
+guard above, catching it at the next `load()` regardless of how a future edit
+reintroduces it - never retype non-ASCII text through a Windows console; edit the
+file directly with a UTF-8-aware tool instead.
+
 ## 2026-07-30 - SABnzbd card splits Status and Activity into two rows
 
 **The problem.** `Running (manual) - Downloading` crammed two independent facts (auto/manual

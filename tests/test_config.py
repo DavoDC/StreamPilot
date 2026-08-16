@@ -101,6 +101,45 @@ def test_load_handles_non_ascii_unicode_in_config(tmp_path, monkeypatch):
     assert cfg["games"]["game.exe"]["emoji"] == "🐰"
 
 
+def test_validate_fails_double_encoded_mojibake_emoji(tmp_path, monkeypatch):
+    """Regression (2026-08-14): all three per-game emoji in the live
+    config.json were double-encoded - UTF-8 bytes decoded through the
+    Windows ANSI codepage and re-saved as UTF-8 - by whatever tool last
+    hand-edited the file. It loaded fine (valid UTF-8 the whole way) so
+    nothing crashed; the daemon just silently pushed 'Davo plays Palworld!
+    ðŸ°' as the live Twitch title. load() must catch this at validation
+    time instead of shipping it to Twitch."""
+    data = {
+        "obs": {"host": "localhost", "port": 4455, "password": "pw", "game_capture_source": "Game Capture"},
+        "twitch": {"client_id": "cid", "oauth_token": "tok"},
+        "games": {
+            "game.exe": {"name": "Game", "twitch_game_id": "1", "obs_window": "Game:Class:game.exe", "emoji": "âš¡"}
+        },
+    }
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(cfg_module, "CONFIG_PATH", str(cfg_path))
+    with pytest.raises(SystemExit):
+        cfg_module.load()
+
+
+def test_is_mojibake_true_positives_and_false_positives():
+    """Direct unit coverage of the detector itself, independent of load()."""
+    # double-encoded (bad) - includes the undefined-cp1252-byte case (0x90,
+    # part of Palworld's rabbit emoji) that a naive text.encode('cp1252')
+    # check misses because Windows' lenient ANSI decode passes it through
+    # while Python's strict codec raises on it.
+    assert cfg_module._is_mojibake("âš¡") is True
+    assert cfg_module._is_mojibake("ðŸ”ª") is True
+    assert cfg_module._is_mojibake("ðŸ\x90°") is True
+    # legitimate (good) - real emoji, plain ASCII
+    assert cfg_module._is_mojibake("⚡") is False
+    assert cfg_module._is_mojibake("🔪") is False
+    assert cfg_module._is_mojibake("🐰") is False
+    assert cfg_module._is_mojibake("Palworld") is False
+    assert cfg_module._is_mojibake("") is False
+
+
 def test_get_audio_config_defaults_when_no_audio_section():
     cfg = {"games": {}}
     audio = cfg_module.get_audio_config(cfg)
