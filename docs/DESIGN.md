@@ -38,7 +38,7 @@ interactive element gets it for free and never needs to repeat it.
 | IDLE | `#6b7280` | status badge/dot |
 | OFFLINE | `#4b5563` | status badge/dot |
 | Twitch accent (purple) | `#a970ff` | `#twitchLink` |
-| Keep-streaming accent (blue) | `#3fa1ff` | `#quitKeepStream`, toggle "on" |
+| Keep-streaming accent (blue) | `#3fa1ff` | `#quitKeepStream`, toggle "on", `.footerBtn.accent-blue` (Restart Stream) |
 | End-stream accent (red) | `#ff5d5d` / `#ff8787` | `#quitEndStream` |
 
 New status colors or accents should reuse one of these rather than
@@ -62,9 +62,21 @@ introducing a new hue - the palette is deliberately small.
 - Border-radius `6px`.
 - Rest state: transparent or dark background, muted border/text color.
 - Hover/`:focus-visible`: border and text brighten to the accent color for
-  that action (see `#quitBtn`, `.quitActions button` for examples).
+  that action.
 - Destructive actions (End stream) use the red accent; safe/default actions
   use neutral or blue.
+- Footer action buttons (Quit, Restart Stream) share the `.footerBtn` class
+  in the `#actions` wrapper; a button that needs the blue accent (e.g.
+  Restart) adds the `.footerBtn.accent-blue` modifier rather than new CSS.
+  Reuse `.footerBtn` for any future footer-level action button.
+
+## Confirmation dialogs
+
+Any action that's disruptive enough to need a confirm step (Quit, Restart
+Stream) reuses the shared `.dialog`/`.dialogTitle`/`.dialogDesc`/
+`.dialogActions` classes (see the Quit and Restart dialogs in `INDEX_HTML`
+for the reference structure) rather than writing new dialog CSS per
+feature - only the IDs and copy differ between them.
 
 ## Toggle switches
 

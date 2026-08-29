@@ -5,6 +5,7 @@ import logging
 import os
 import subprocess
 import time
+from datetime import datetime, timezone
 import psutil
 
 HEARTBEAT_EVERY = 1  # every poll; API calls in heartbeat provide natural throttling (~3-5s/cycle)
@@ -56,6 +57,16 @@ class Daemon:
         self._running = False
         self._current_title = None
         self._current_tags = None
+        self._stream_started_at = None
+        # Set only by restart_stream() - guards the lazy-fetch below from
+        # latching onto a stale started_at that Twitch's backend hasn't
+        # rolled over yet (see restart_stream() docstring for the race).
+        self._restart_requested_at = None
+        # Consumed once - covers only the heartbeat(s) during a manual
+        # restart's brief OBS down/up transition, so it doesn't flash ISSUE
+        # for an intentional, user-initiated action (mirrors
+        # _sab_just_enabled below).
+        self._manual_restart_pending = False
         self._end_stream_on_stop = True
         # Dashboard toggle: whether homeostasis actively pauses SABnzbd while
         # a game is active. Off for overnight "idle streaming" (game running
@@ -203,6 +214,10 @@ class Daemon:
             self.twitch.set_channel_info(title=title, tags=tags or None)
             self._current_title = title
             self._current_tags = tags
+            # Adopted session is already live on Twitch - fetch its actual
+            # start time now rather than leaving it None until the next
+            # heartbeat's lazy fetch (see _print_heartbeat).
+            self._stream_started_at = self.twitch.get_stream_started_at()
             log.info(f"Resuming existing session for {game['name']} - stream already live, not restarting it. Reapplied title/tags to Twitch.")
 
     def stop(self, end_stream: bool = True):
@@ -244,6 +259,7 @@ class Daemon:
         audio_ok: bool = True,
         audio_violation_count: int = 0,
         sab_downloading: bool | None = None,
+        restart_suppress_issue: bool = False,
     ) -> dict:
         """Turn raw heartbeat readings into the shared status shape consumed by
         both the terminal log line and the dashboard JSON file."""
@@ -299,8 +315,15 @@ class Daemon:
         # streaming, so a "running during game" state there is expected, not
         # a fault.
         sab_issue = sab_auto_manage and not sab_suppress_issue and (not sab_paused or sab_paused is None or sab_corrected)
+        # Manual restart (dashboard button) briefly reports obs_streaming as
+        # False mid-transition - that's expected, user-initiated, and not a
+        # fault, so it's suppressed for that one heartbeat just like
+        # sab_suppress_issue above. Does NOT suppress stream_restarted (the
+        # daemon's own unexpected-stop auto-recovery), which is still a real
+        # fault worth flagging.
+        obs_issue = not obs_streaming and not restart_suppress_issue
         issue = game_active and (
-            not obs_streaming or sab_issue
+            obs_issue or sab_issue
             or not obs_window_ok or stream_restarted or blacklisted_window
             or not audio_ok
         )
@@ -336,8 +359,9 @@ class Daemon:
         audio_ok: bool = True,
         audio_violation_count: int = 0,
         sab_downloading: bool | None = None,
+        restart_suppress_issue: bool = False,
     ) -> str:
-        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count, sab_downloading)
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count, sab_downloading, restart_suppress_issue)
         line = f"Status: {c['status'] if c['game_active'] else 'OK'} | Streaming: {c['game_str']} | Category: {c['cat_str']} | SABnzbd: {c['sab_str']}"
         if c["game_active"]:
             audio_str = "OK" if c["audio_ok"] else f"VIOLATION ({c['audio_violation_count']})"
@@ -371,6 +395,8 @@ class Daemon:
         # the corrective re-pause right after the toggle flips on.
         sab_suppress_issue = self._sab_just_enabled
         self._sab_just_enabled = False
+        restart_suppress_issue = self._manual_restart_pending
+        self._manual_restart_pending = False
 
         if self._active_game_exe:
             # OBS connectivity - attempt reconnect before other OBS calls
@@ -434,6 +460,44 @@ class Daemon:
                 log.warning("Stream stopped while game active - restarting")
                 self.obs.start_stream()
                 stream_restarted = True
+                # New broadcast session - the cached start time no longer
+                # applies, and next heartbeat's lazy fetch below will pick up
+                # the fresh one once Twitch has registered it as live again.
+                self._stream_started_at = None
+                # Not a manual restart - clear any leftover staleness guard
+                # from an earlier restart_stream() call so it can't wrongly
+                # reject this auto-recovery's freshly fetched value.
+                self._restart_requested_at = None
+
+            # Uptime: fetched lazily (not every heartbeat) since started_at
+            # is fixed for the life of a broadcast - Twitch also needs a few
+            # seconds after start_stream() to register the channel as live,
+            # so a None result here just means "try again next heartbeat"
+            # rather than "give up". Also covers the restart branch above:
+            # obs_streaming itself isn't flipped back to True until next
+            # cycle's is_streaming() call, but a restart just fired
+            # start_stream() this cycle, so it's worth trying now too.
+            if (obs_streaming or stream_restarted) and self._stream_started_at is None:
+                fetched = self.twitch.get_stream_started_at()
+                # Guard against Twitch's backend lagging a restart: a restart
+                # stops+starts OBS within the same or next heartbeat, but
+                # /helix/streams can keep reporting the PREVIOUS broadcast's
+                # started_at for a few seconds until Twitch rolls the stream
+                # row over. Caching that stale value here would latch onto it
+                # permanently, since this whole block only runs while
+                # self._stream_started_at is None. If the fetched value
+                # predates the restart request, treat it as not-yet-updated
+                # and keep retrying next heartbeat instead of accepting it.
+                if fetched is not None and self._restart_requested_at is not None:
+                    try:
+                        fetched_dt = datetime.fromisoformat(fetched.replace("Z", "+00:00"))
+                    except ValueError:
+                        fetched_dt = None
+                    if fetched_dt is not None and fetched_dt < self._restart_requested_at:
+                        fetched = None
+                    else:
+                        self._restart_requested_at = None
+                self._stream_started_at = fetched
 
             # Audio list convergence: CRITICAL - only when this cycle did NOT
             # just force-stop for an audio violation. audio_blocked means the
@@ -455,8 +519,8 @@ class Daemon:
             self._converge_audio_capture_list(None, obs_streaming)
 
         audio_violation_count = len(audio_violations)
-        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count, sab_downloading)
-        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count, sab_downloading))
+        c = self._classify(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count, sab_downloading, restart_suppress_issue)
+        log.info(self._format_heartbeat(game_name, obs_streaming, twitch_category, sab_paused, obs_window_ok, sab_corrected, stream_restarted, blacklisted_window, self.sab_auto_manage, sab_suppress_issue, audio_ok, audio_violation_count, sab_downloading, restart_suppress_issue))
         try:
             status_file.write_status(
                 STATUS_PATH,
@@ -472,6 +536,7 @@ class Daemon:
                 stream_restarted=stream_restarted,
                 title=self._current_title,
                 tags=self._current_tags,
+                stream_started_at=self._stream_started_at,
                 build_id=self.build_id,
                 blacklisted_window=blacklisted_window,
                 sab_auto_manage=self.sab_auto_manage,
@@ -657,6 +722,8 @@ class Daemon:
         if self.obs.is_streaming():
             self.obs.stop_stream()
             log.info("Ending previous VOD")
+            self._stream_started_at = None
+            self._restart_requested_at = None
 
         if self._preflight_audio_check(exe):
             self.obs.start_stream()
@@ -687,6 +754,32 @@ class Daemon:
 
         self._current_title = None
         self._current_tags = None
+        self._stream_started_at = None
+        self._restart_requested_at = None
+
+    def restart_stream(self) -> bool:
+        """Dashboard 'Restart Stream' button - ends the current VOD and
+        starts a fresh one for the still-active game, without quitting
+        StreamPilot (David's prior workaround: quit and relaunch the whole
+        program just to split a VOD). Same title/category/tags - only the
+        broadcast session itself is new, so uptime resets from here. No-op
+        if no game is currently active."""
+        if not self._active_game_exe:
+            log.info("Restart stream requested but no game active - ignoring")
+            return False
+        exe = self._active_game_exe
+        if self.obs.is_streaming():
+            self.obs.stop_stream()
+            log.info("Restart stream requested - ending current VOD")
+        self._stream_started_at = None
+        self._restart_requested_at = datetime.now(timezone.utc)
+        self._manual_restart_pending = True
+        if self._preflight_audio_check(exe):
+            self.obs.start_stream()
+            log.info(f"Restart stream requested - new VOD started for {self.games[exe]['name']}")
+            return True
+        log.error("Restart stream requested but audio safety check failed - stream not restarted")
+        return False
 
     def get_status(self) -> dict:
         streaming = self.obs.is_streaming() if self.obs._client else False

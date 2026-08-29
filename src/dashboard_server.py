@@ -37,6 +37,10 @@ _twitch_channel = None
 # thread when the dashboard's SAB auto-pause toggle is flipped.
 _on_sab_toggle_callback = None
 
+# Same pattern as _on_quit_callback - set by run(), called from the request
+# thread when the dashboard's Restart Stream button is confirmed.
+_on_restart_stream_callback = None
+
 INDEX_HTML = """<!doctype html>
 <html lang="en">
 <head>
@@ -135,13 +139,19 @@ INDEX_HTML = """<!doctype html>
   }
   #twitchLink:hover, #twitchLink:focus-visible { border-color: #a970ff; color: #c9a3ff; }
 
-  #quitBtn {
-    margin-top: 2px;
+  #actions { display: flex; gap: 8px; margin-top: 2px; }
+  /* Shared by Quit and Restart Stream so a new footer button never needs its
+     own CSS block - just this class plus an optional accent modifier. */
+  .footerBtn {
     background: none; border: 1px solid #262b34; border-radius: 6px;
     color: #565e6b; font-size: 12px; padding: 5px 14px;
     cursor: pointer; transition: border-color 0.2s ease, color 0.2s ease;
   }
-  #quitBtn:hover, #quitBtn:focus-visible { border-color: #4b5563; color: #9ca3af; }
+  .footerBtn:hover, .footerBtn:focus-visible { border-color: #4b5563; color: #9ca3af; }
+  .footerBtn:disabled { opacity: 0.5; cursor: default; }
+  /* Restart Stream keeps the stream going (unlike End stream) - reuses the
+     existing blue "keep streaming" accent rather than inventing a new hue. */
+  .footerBtn.accent-blue:hover, .footerBtn.accent-blue:focus-visible { border-color: #3fa1ff; color: #a9d8ff; }
 
   .overlay {
     position: fixed; inset: 0; background: rgba(10, 12, 15, 0.6);
@@ -149,24 +159,29 @@ INDEX_HTML = """<!doctype html>
   }
   .overlay[hidden] { display: none; }
 
-  #quitDialog {
+  /* Shared by the Quit and Restart Stream confirmation dialogs - reused by
+     class rather than duplicated per-dialog CSS. IDs stay on the elements
+     for aria-labelledby/aria-describedby and JS hooks. */
+  .dialog {
     background: #1a1e26; border: 1px solid #262b34; border-radius: 10px;
     padding: 22px 24px; max-width: 320px; text-align: left;
   }
-  #quitDialog:focus { outline: none; }
-  #quitTitle { font-size: 16px; font-weight: 700; color: #e5e7eb; margin-bottom: 8px; }
-  #quitDesc { font-size: 13px; color: #9ca3af; line-height: 1.5; }
-  .quitActions { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
-  .quitActions button {
+  .dialog:focus { outline: none; }
+  .dialogTitle { font-size: 16px; font-weight: 700; color: #e5e7eb; margin-bottom: 8px; }
+  .dialogDesc { font-size: 13px; color: #9ca3af; line-height: 1.5; }
+  .dialogActions { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+  .dialogActions button {
     font-size: 13px; padding: 8px 16px; border-radius: 6px; cursor: pointer;
     border: 1px solid #2a2f38; background: #12151a; color: #c9d1d9; text-align: center;
   }
-  #quitCancel:hover, #quitCancel:focus-visible { border-color: #4b5563; }
-  #quitKeepStream { border-color: #1f3a52; color: #7cc4ff; }
-  #quitKeepStream:hover, #quitKeepStream:focus-visible { background: #12212e; border-color: #3fa1ff; color: #a9d8ff; }
+  #quitCancel:hover, #quitCancel:focus-visible,
+  #restartCancel:hover, #restartCancel:focus-visible { border-color: #4b5563; }
+  #quitKeepStream, #restartConfirm { border-color: #1f3a52; color: #7cc4ff; }
+  #quitKeepStream:hover, #quitKeepStream:focus-visible,
+  #restartConfirm:hover, #restartConfirm:focus-visible { background: #12212e; border-color: #3fa1ff; color: #a9d8ff; }
   #quitEndStream { background: #3a1418; border-color: #6b2530; color: #ff8787; }
   #quitEndStream:hover, #quitEndStream:focus-visible { background: #4a1a20; border-color: #ff5d5d; color: #ffb3b3; }
-  .quitActions button:disabled { opacity: 0.5; cursor: default; }
+  .dialogActions button:disabled { opacity: 0.5; cursor: default; }
 </style>
 </head>
 <body>
@@ -187,6 +202,7 @@ INDEX_HTML = """<!doctype html>
         Twitch
       </div>
       <div class="row"><span class="label">Category</span><span class="value" id="category">-</span></div>
+      <div class="row"><span class="label">Live for</span><span class="value" id="uptime">-</span></div>
       <div class="row"><span class="label">Title</span><span class="value" id="title">-</span></div>
       <div class="row" id="tagsRow"><span class="label">Tags</span><span class="value" id="tags"></span></div>
       __TWITCH_LINK_HTML__
@@ -202,16 +218,30 @@ INDEX_HTML = """<!doctype html>
     </div>
   </div>
   <div id="footer">waiting for daemon...</div>
-  <button id="quitBtn" type="button">Quit</button>
+  <div id="actions">
+    <button id="restartBtn" class="footerBtn accent-blue" type="button">Restart Stream</button>
+    <button id="quitBtn" class="footerBtn" type="button">Quit</button>
+  </div>
 
   <div id="quitOverlay" class="overlay" hidden>
-    <div id="quitDialog" role="alertdialog" aria-modal="true" aria-labelledby="quitTitle" aria-describedby="quitDesc" tabindex="-1">
-      <div id="quitTitle">Quit StreamPilot?</div>
-      <div id="quitDesc">Choose what happens to your stream.</div>
-      <div class="quitActions">
+    <div id="quitDialog" class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="quitTitle" aria-describedby="quitDesc" tabindex="-1">
+      <div id="quitTitle" class="dialogTitle">Quit StreamPilot?</div>
+      <div id="quitDesc" class="dialogDesc">Choose what happens to your stream.</div>
+      <div class="dialogActions">
         <button id="quitCancel" type="button">Cancel</button>
         <button id="quitKeepStream" type="button">Keep streaming</button>
         <button id="quitEndStream" type="button">End stream</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="restartOverlay" class="overlay" hidden>
+    <div id="restartDialog" class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="restartTitle" aria-describedby="restartDesc" tabindex="-1">
+      <div id="restartTitle" class="dialogTitle">Restart Stream?</div>
+      <div id="restartDesc" class="dialogDesc">Ends the current VOD and starts a new one for the same game. StreamPilot keeps running.</div>
+      <div class="dialogActions">
+        <button id="restartCancel" type="button">Cancel</button>
+        <button id="restartConfirm" type="button">Restart Stream</button>
       </div>
     </div>
   </div>
@@ -224,6 +254,21 @@ function setFavicon(color) {
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>` +
               `<circle cx='16' cy='16' r='13' fill='${color}'/></svg>`;
   document.getElementById("favicon").href = "data:image/svg+xml," + encodeURIComponent(svg);
+}
+
+function formatUptime(startedAt) {
+  // started_at is fixed for the life of a broadcast (see daemon.py) - elapsed
+  // is computed client-side from it each tick, same approach already used
+  // for the "updated Xs ago" footer, so no extra polling is needed.
+  if (!startedAt) return "-";
+  const start = Date.parse(startedAt);
+  if (isNaN(start)) return "-";
+  const secs = Math.max(0, Math.floor((Date.now() - start) / 1000));
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  return `${m}m ${s}s`;
 }
 
 function renderTags(tags) {
@@ -331,24 +376,30 @@ async function tick() {
   if (stale) {
     setVideoRow(false, null, null);
     document.getElementById("category").textContent = "-";
+    document.getElementById("uptime").textContent = "-";
     document.getElementById("title").textContent = "-";
     renderTags(null);
     document.getElementById("sabnzbd").textContent = "-";
     document.getElementById("sabActivity").textContent = "-";
     setAudioRow(null, null, null);
     sabToggle.disabled = true;
+    restartBtn.disabled = true;
     document.getElementById("footer").textContent = "No signal from daemon - is it running?";
     document.title = `${TITLE_DOTS[state]} Offline - StreamPilot`;
   } else {
     const game = s.game || "Idle";
     setVideoRow(!!s.game, s.captured_window_exe, s.blacklisted_window);
     document.getElementById("category").textContent = s.category || "Unknown";
+    document.getElementById("uptime").textContent = formatUptime(s.stream_started_at);
     document.getElementById("title").textContent = s.title || "-";
     renderTags(s.tags);
     document.getElementById("sabnzbd").textContent = s.sab_status || s.sabnzbd || "-";
     document.getElementById("sabActivity").textContent = s.sab_activity || "-";
     setAudioRow(s.game ? s.audio_ok : null, s.audio_violations, s.audio_exes);
     sabToggle.disabled = false;
+    // Only meaningful once a stream is actually live - nothing to restart
+    // for an idle/not-yet-live game.
+    restartBtn.disabled = !s.streaming;
     const daemonValue = s.sab_auto_manage !== undefined ? s.sab_auto_manage : true;
     if (sabToggleDesired !== null && daemonValue === sabToggleDesired) {
       sabToggleDesired = null;  // daemon caught up - resume following polls
@@ -364,6 +415,7 @@ async function tick() {
 tick();
 setInterval(tick, __POLL_MS__);
 
+const restartBtn = document.getElementById("restartBtn");
 const quitBtn = document.getElementById("quitBtn");
 const quitOverlay = document.getElementById("quitOverlay");
 const quitDialog = document.getElementById("quitDialog");
@@ -408,6 +460,40 @@ quitKeepStream.addEventListener("click", () => {
 quitEndStream.addEventListener("click", () => {
   confirmQuit(true, "Stopping the stream and closing StreamPilot...");
 });
+
+const restartOverlay = document.getElementById("restartOverlay");
+const restartDialog = document.getElementById("restartDialog");
+const restartCancel = document.getElementById("restartCancel");
+const restartConfirm = document.getElementById("restartConfirm");
+
+function onRestartKeydown(e) {
+  if (e.key === "Escape") closeRestartDialog();
+}
+function openRestartDialog() {
+  restartOverlay.hidden = false;
+  restartDialog.focus();
+  document.addEventListener("keydown", onRestartKeydown);
+}
+function closeRestartDialog() {
+  restartOverlay.hidden = true;
+  document.removeEventListener("keydown", onRestartKeydown);
+  restartCancel.disabled = false;
+  restartConfirm.disabled = false;
+  restartBtn.focus();
+}
+
+restartBtn.addEventListener("click", openRestartDialog);
+restartCancel.addEventListener("click", closeRestartDialog);
+restartOverlay.addEventListener("click", (e) => {
+  if (e.target === restartOverlay) closeRestartDialog();
+});
+restartConfirm.addEventListener("click", () => {
+  restartCancel.disabled = true;
+  restartConfirm.disabled = true;
+  fetch("/restart_stream", { method: "POST" })
+    .catch(() => {})
+    .finally(closeRestartDialog);
+});
 </script>
 </body>
 </html>
@@ -435,7 +521,7 @@ def status_json_bytes(status_path=STATUS_PATH) -> bytes:
     if the daemon hasn't written anything yet."""
     data = status_file.read_status(status_path)
     if data is None:
-        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2, "build_id": None, "audio_ok": None, "audio_violations": None, "captured_window_exe": None, "audio_exes": None, "blacklisted_window": None}
+        data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2, "build_id": None, "audio_ok": None, "audio_violations": None, "captured_window_exe": None, "audio_exes": None, "blacklisted_window": None, "stream_started_at": None}
     return json.dumps(data).encode("utf-8")
 
 
@@ -499,15 +585,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif self.path == "/restart_stream":
+            if _on_restart_stream_callback:
+                _on_restart_stream_callback()
+            body = b'{"ok": true}'
+            self.send_response(202)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         else:
             self.send_error(404)
 
 
-def run(port: int = PORT, open_browser: bool = True, on_quit=None, twitch_channel: str = None, on_sab_toggle=None):
-    global _on_quit_callback, _twitch_channel, _on_sab_toggle_callback
+def run(port: int = PORT, open_browser: bool = True, on_quit=None, twitch_channel: str = None, on_sab_toggle=None, on_restart_stream=None):
+    global _on_quit_callback, _twitch_channel, _on_sab_toggle_callback, _on_restart_stream_callback
     _on_quit_callback = on_quit
     _twitch_channel = twitch_channel
     _on_sab_toggle_callback = on_sab_toggle
+    _on_restart_stream_callback = on_restart_stream
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://localhost:{port}/"
     print(f"[StreamPilot Dashboard] Serving at {url}")

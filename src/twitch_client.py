@@ -95,6 +95,29 @@ class TwitchClient:
             log.warning(f"Twitch get_current_game_name failed: {e}")
         return None
 
+    def get_stream_started_at(self) -> str | None:
+        """Return the live stream's start time (ISO 8601, from Twitch) or
+        None if not currently live / unavailable. Unlike get_current_game_name
+        (which reads /channels - channel info that persists whether or not
+        the channel is live), this hits /streams, which only returns a row
+        while the channel is actually broadcasting."""
+        if not self._broadcaster_id:
+            return None
+        try:
+            resp = requests.get(
+                f"{HELIX_BASE}/streams",
+                headers=self._headers(),
+                params={"user_id": self._broadcaster_id},
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                data = resp.json().get("data", [])
+                if data:
+                    return data[0].get("started_at")
+        except Exception as e:
+            log.warning(f"Twitch get_stream_started_at failed: {e}")
+        return None
+
     def search_game(self, name: str) -> list:
         """Search for games by name. Returns list of dicts with id and name.
 

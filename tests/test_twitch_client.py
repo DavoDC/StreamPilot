@@ -169,6 +169,36 @@ def test_search_game_robust_both_empty(client):
     assert results == []
 
 
+# --- get_stream_started_at ---
+
+def test_get_stream_started_at_live(client):
+    client._broadcaster_id = "123456"
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"data": [{"started_at": "2026-08-16T05:23:45Z"}]}
+    with patch("twitch_client.requests.get", return_value=mock_resp):
+        assert client.get_stream_started_at() == "2026-08-16T05:23:45Z"
+
+
+def test_get_stream_started_at_not_live(client):
+    client._broadcaster_id = "123456"
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"data": []}
+    with patch("twitch_client.requests.get", return_value=mock_resp):
+        assert client.get_stream_started_at() is None
+
+
+def test_get_stream_started_at_no_broadcaster_id(client):
+    assert client.get_stream_started_at() is None
+
+
+def test_get_stream_started_at_network_error(client):
+    client._broadcaster_id = "123456"
+    with patch("twitch_client.requests.get", side_effect=Exception("timeout")):
+        assert client.get_stream_started_at() is None
+
+
 # --- set_channel_info ---
 
 def test_set_channel_info_sends_all_fields_in_one_patch(client):

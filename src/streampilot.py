@@ -62,6 +62,7 @@ def cmd_start(args):
                 'on_quit': daemon.stop,
                 'twitch_channel': cfg.get('twitch', {}).get('channel_name'),
                 'on_sab_toggle': daemon.set_sab_auto_manage,
+                'on_restart_stream': daemon.restart_stream,
             },
             daemon=True,
         )

@@ -102,6 +102,15 @@ def test_index_html_contains_quit_confirmation_dialog():
     assert "/quit" in html
 
 
+def test_index_html_contains_restart_stream_dialog():
+    html = dashboard_server.INDEX_HTML
+    assert 'id="restartBtn"' in html
+    assert 'id="restartDialog"' in html
+    assert 'id="restartCancel"' in html
+    assert 'id="restartConfirm"' in html
+    assert "/restart_stream" in html
+
+
 def test_index_html_quit_dialog_offers_keep_streaming_option():
     """The 'Keep streaming' quit option must exist and send end_stream:false,
     distinct from 'End stream' which sends end_stream:true."""
@@ -400,6 +409,35 @@ def test_index_html_cards_use_no_emoji_icons():
     html = dashboard_server.INDEX_HTML
     cards_section = html.split('id="cards"')[1].split("</script>")[0] if 'id="cards"' in html else ""
     assert "<svg" in html
+
+
+def test_post_restart_stream_invokes_callback_and_returns_202():
+    calls = []
+    dashboard_server._on_restart_stream_callback = lambda: calls.append(True)
+    server, port = _run_server()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn.request("POST", "/restart_stream")
+        resp = conn.getresponse()
+        resp.read()
+        assert resp.status == 202
+        assert calls
+    finally:
+        server.shutdown()
+        dashboard_server._on_restart_stream_callback = None
+
+
+def test_post_restart_stream_no_callback_registered_still_returns_202():
+    dashboard_server._on_restart_stream_callback = None
+    server, port = _run_server()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn.request("POST", "/restart_stream")
+        resp = conn.getresponse()
+        resp.read()
+        assert resp.status == 202
+    finally:
+        server.shutdown()
 
 
 def test_post_sab_toggle_invokes_callback_and_returns_202():
