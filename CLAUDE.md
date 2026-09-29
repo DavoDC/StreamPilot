@@ -60,7 +60,7 @@ mirror loop).
 - On game launch: updates Game Capture window target, sets Twitch category + a dynamic per-game title and tags (one PATCH, see Config section), starts stream (stopping any existing stream first for a fresh VOD), pauses SABnzbd
 - On game exit: stops stream, resumes SABnzbd
 - SABnzbd paused/resumed per game session only - daemon idle with no game = SABnzbd runs freely
-- Unknown/unconfigured game: `_detect_game()` only matches exes already in `config.games`, so an unrecognised process is silently ignored - no notification today (corrected 2026-07-21; this line previously claimed a Windows toast exists, but no such code is in `src/`). Run `streampilot config add-game` manually while it's running. A real toast notification is tracked as an open idea in `docs/IDEAS.md` (Medium priority).
+- Unknown/unconfigured game: `_detect_game()` only matches exes already in `config.games`, so an unrecognised process is silently ignored - no notification today (corrected 2026-07-21; this line previously claimed a Windows toast exists, but no such code is in `src/`). Run `streampilot config add-game` manually while it's running. A real toast notification is a planned idea, not built.
 - SABnzbd unreachable: logs warning + prints prompt to pause manually
 - **Heartbeat homeostasis (every 2s when game active):** verifies + self-heals all critical state - OBS WebSocket reconnect, OBS window reapply, stream restart if dropped, SABnzbd repause if drifted. Each correction shows as named field in `Status: ISSUE` line. Pattern: `observe -> compare -> correct -> flag`. Guard: stream restart only fires if `is_connected()` - prevents restart loop when OBS process is dead.
 - **Dashboard (`src/dashboard_server.py`):** every heartbeat, the daemon also writes `data/state/status.json` (`src/status_file.py` - atomic write, gitignored; lives under `data/state/` not `data/logs/` since it's live runtime state, not a timestamped log). The dashboard is a tiny local web server (Python stdlib `http.server`, zero new deps, no Flask/FastAPI/Node) serving a single-file HTML/CSS/JS page that polls `/status.json` every second - opens at `http://localhost:8765/` in a browser tab, no socket/IPC coupling to the daemon, same "write state, read state" pattern as AudioManager's GUI. **Security: the handler serves exactly two routes** (`/` and `/status.json`) rather than the directory tree, so `config.json`'s secrets (OAuth token, OBS password, SABnzbd API key) can never be reached through it - never switch this to `SimpleHTTPRequestHandler`. Shows a big OK/ISSUE/IDLE/OFFLINE badge, a continuously-pulsing heartbeat dot (CSS animation - proves the page itself is alive, independent of daemon state), and Game/Category/Title/Tags/SABnzbd rows, plus a "Watch on Twitch ↗" link
@@ -284,7 +284,7 @@ The already-open dashboard browser tab then reloads **itself**: `Daemon.build_id
 heartbeat; the dashboard's `tick()` JS remembers the first `build_id` it sees and
 calls `location.reload()` the moment a later poll shows a different one - so a code
 change shows up in the open tab within about a second of the restart, no manual F5.
-This is the concrete case the "dashboard live-reload" idea in `docs/IDEAS.md`
+This is the concrete case the earlier "dashboard live-reload" idea
 proposed generalizing further (serving HTML from disk, etc.) - the `--watch` +
 `build_id` mechanism above is the version actually shipped (2026-07-19).
 
@@ -305,7 +305,7 @@ game is already live, so the heartbeat resumes monitoring without touching OBS.
 **Also re-PATCHes title/tags to Twitch** (no `game_id` - category is untouched, stream
 not restarted) so a code-only change to title-building logic takes effect on the live
 title immediately, not just on the dashboard, without waiting for the next game launch
-(added 2026-07-21, see HISTORY.md).
+(added 2026-07-21).
 
 **Incident (2026-07-19): the daemon crashed and stayed down** while iterating with
 `--watch` live. Root cause: `_detect_game()` called `p.name()` live on each process in
@@ -351,8 +351,9 @@ StreamPilot/
 │   ├── config.example.json
 │   └── config.json          # gitignored
 ├── docs/
-│   ├── IDEAS.md
-│   └── HISTORY.md
+│   ├── DESIGN.md            # Dashboard design rules
+│   ├── TWITCH_API.md
+│   └── References/DevContext.md
 ├── scripts/
 │   ├── run.bat              # desktop shortcut target - launches with --watch by default
 │   ├── run-tests.bat

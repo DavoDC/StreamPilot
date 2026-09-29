@@ -299,7 +299,7 @@ def test_status_json_bytes_missing_file_has_null_captured_window_and_audio_exes(
 
 
 def test_index_html_grouped_into_three_api_cards():
-    """David's TIER 1 feedback (docs/HISTORY.md, 2026-07-28): the dashboard
+    """David's TIER 1 feedback (2026-07-28): the dashboard
     must group fields by API source (OBS, Twitch, SABnzbd) into separate
     cards instead of one flat list."""
     html = dashboard_server.INDEX_HTML

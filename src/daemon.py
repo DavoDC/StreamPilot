@@ -298,7 +298,7 @@ class Daemon:
         # existing not-applicable convention, see docs/DESIGN.md). Kept as its
         # own field (sab_activity_str) rather than folded into sab_status_str
         # so the dashboard can show them as two separate rows instead of one
-        # cramped hyphenated string (docs/IDEAS.md, raised 2026-07-30).
+        # cramped hyphenated string.
         sab_running = sab_status_str.startswith("Running")
         sab_activity_str = (
             ("Downloading" if sab_downloading is True else "Idle" if sab_downloading is False else "-")
@@ -698,8 +698,7 @@ class Daemon:
 
         # Converge the audio capture list to this game as early as possible,
         # before anything else - addresses the win-capture-audio plugin
-        # attach-timing concern (docs/HISTORY.md "Exclusive audio capture
-        # list"): the exe should be in OBS's list before its audio session
+        # attach-timing concern: the exe should be in OBS's list before its audio session
         # is likely to exist, not after. No-op when exclusive_mode is False.
         self._converge_audio_capture_list(exe, obs_streaming=False)
 

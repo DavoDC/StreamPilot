@@ -72,7 +72,7 @@ INDEX_HTML = """<!doctype html>
   #badge { font-size: 28px; font-weight: 700; letter-spacing: 1px; }
   /* One soft-edged, colour-coded card per API source (OBS / Twitch /
      SABnzbd) so related facts stay together and each fact's origin is
-     obvious - see docs/IDEAS.md "Dashboard grouped by API source". The
+     obvious (see docs/DESIGN.md). The
      big OK/ISSUE badge above stays the primary state signal; card colours
      are deliberately muted (dark fill, a thin accent border only) so they
      never compete with it. */

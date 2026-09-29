@@ -11,7 +11,7 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'config.js
 CONFIG_EXAMPLE_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'config.example.json')
 
 # All keys optional - existing config.json files with no 'audio' section
-# keep working untouched. See docs/HISTORY.md "Audio privacy guard".
+# keep working untouched. See CLAUDE.md, "Safety: audio privacy guard".
 AUDIO_DEFAULTS = {
     "source_name": "Application Audio Output Capture",
     "extra_allowed": [],
@@ -120,7 +120,7 @@ for _i in range(256):
 def _is_mojibake(text: str) -> bool:
     """Detect UTF-8 bytes that were decoded as a Windows ANSI codepage and
     re-saved as UTF-8 - the exact corruption that hit config.json's
-    'emoji' fields on 2026-08-14 (see docs/HISTORY.md). A non-ASCII string
+    'emoji' fields on 2026-08-14. A non-ASCII string
     whose characters all map back to single ANSI byte values, and whose
     resulting bytes are themselves valid UTF-8, is virtually never
     legitimate text - it's the fingerprint of a UTF-8 file edited through

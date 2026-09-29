@@ -138,7 +138,7 @@ class OBSClient:
         (daemon.py::_auto_add_game_to_audio) - a wrong removal there would
         be invisible, so the safe response to a leak is stopping the
         stream and telling the human, not silently editing this list
-        further (see docs/HISTORY.md 'Audio privacy guard').
+        further (see CLAUDE.md, 'Safety: audio privacy guard').
 
         exact=True: converge the list to contain ONLY exe_values, in that
         order - existing entries not in exe_values are dropped, existing
