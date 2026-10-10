@@ -11,6 +11,10 @@ Auto-manages OBS streaming + SABnzbd when you launch a known game.
 - Pauses SABnzbd while gaming, resumes on exit
 - Private audio never reaches the stream, guaranteed continuously - not something you have to remember to check
 
+## Dashboard
+
+![StreamPilot dashboard showing OBS, Twitch and SABnzbd status](assets/dashboard.png)
+
 ## How it works
 
 1. Start StreamPilot by running `scripts\run.bat` - this also opens a live dashboard in your browser showing at a glance whether everything's OK (the tab title and icon update with status too, so you can tell just by glancing at the tab).
