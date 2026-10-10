@@ -256,7 +256,7 @@ once a second (`snapshot()`/`watch_loop()`, stdlib only).
   for a deliberate multi-file/multi-minute feature build: keep editing across several
   files for as long as needed (a long pause mid-build never auto-restarts anything),
   then touch the trigger once everything is actually wired up and ready.
-  From Claude's Bash tool: `touch "C:/Users/David/GitHubRepos/StreamPilot/data/state/reload.trigger"`
+  From Claude's Bash tool: `touch data/state/reload.trigger` (relative to the repo root)
   (create the file if the `touch` command isn't available - content doesn't matter, only
   its existence).
 - **Passive fallback (very long debounce, 1 hour default - `DEBOUNCE_SECONDS`):** if
