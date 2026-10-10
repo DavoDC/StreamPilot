@@ -2,7 +2,9 @@
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/G2G31WKOCN)
 
-Auto-manages OBS streaming + SABnzbd when you launch a known game.
+Launch a game and you are live: StreamPilot sets up OBS, sets your Twitch category, and pauses SABnzbd for you, with no private audio ever reaching the stream.
+
+Key outcomes:
 
 - Detects game launch via process polling
 - Updates OBS Game Capture source to the game's window
