@@ -4,7 +4,7 @@
 
 Launch a game and you are live. One click starts StreamPilot, and from then on it runs your whole stream: it opens OBS, points it at your game, sets your Twitch category, title and tags, starts the stream, and keeps your downloads from choking your upload. Close the game and it ends the stream and tidies up. You never touch OBS or Twitch settings again.
 
-[Watch the 20 second video](https://raw.githubusercontent.com/DavoDC/StreamPilot/main/assets/streampilot-launch.mp4)
+https://github.com/user-attachments/assets/f252d147-f5b1-4a5c-a0dd-580a6ae9bed9
 
 ## Why you will want it
 
