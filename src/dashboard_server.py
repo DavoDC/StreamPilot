@@ -214,7 +214,7 @@ INDEX_HTML = """<!doctype html>
       </div>
       <div class="row"><span class="label">Status</span><span class="value" id="sabnzbd">-</span></div>
       <div class="row"><span class="label">Activity</span><span class="value" id="sabActivity">-</span></div>
-      <div class="row"><span class="label">Keep SAB paused</span><span class="value"><label class="switch"><input type="checkbox" id="sabToggle" checked><span class="slider"></span></label></span></div>
+      <div class="row"><span class="label" title="ON: StreamPilot pauses SABnzbd when a game starts, re-pauses it if it drifts, and resumes it when the game exits. When no game is running (idle), SABnzbd runs freely. OFF: StreamPilot never touches SABnzbd (resumes it immediately).">Keep SAB paused while gaming</span><span class="value"><label class="switch"><input type="checkbox" id="sabToggle" checked><span class="slider"></span></label></span></div>
     </div>
   </div>
   <div id="footer">waiting for daemon...</div>

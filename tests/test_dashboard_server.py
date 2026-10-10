@@ -509,3 +509,13 @@ def test_index_html_button_font_family_reset():
     make <button> inherit the page font by default, so it must be explicit."""
     html = dashboard_server.INDEX_HTML
     assert "font-family: inherit" in html
+
+
+def test_sab_toggle_label_says_it_only_applies_while_gaming():
+    """The toggle is auto-manage (pause on game start, repause on drift, resume
+    on game exit). With no game active SAB runs freely, so a bare 'Keep SAB
+    paused' label misleads: it must say 'while gaming' and carry a tooltip."""
+    html = dashboard_server.INDEX_HTML
+    assert "Keep SAB paused while gaming" in html
+    assert 'Keep SAB paused</span>' not in html
+    assert "SABnzbd runs freely" in html  # tooltip explains the idle behaviour

@@ -59,7 +59,7 @@ mirror loop).
 - Polls for known game exes every 2s via `psutil`
 - On game launch: updates Game Capture window target, sets Twitch category + a dynamic per-game title and tags (one PATCH, see Config section), starts stream (stopping any existing stream first for a fresh VOD), pauses SABnzbd
 - On game exit: stops stream, resumes SABnzbd
-- SABnzbd paused/resumed per game session only - daemon idle with no game = SABnzbd runs freely
+- SABnzbd paused/resumed per game session only - daemon idle with no game = SABnzbd runs freely. The dashboard toggle "Keep SAB paused while gaming" is `sab_auto_manage`: ON = pause on launch, repause on drift, resume on exit (idle: untouched); OFF = never touch SAB (and resumes it immediately). The Status row shows SAB's real `queue.paused`, not intent
 - Unknown/unconfigured game: `_detect_game()` only matches exes already in `config.games`, so an unrecognised process is silently ignored - no notification today (corrected 2026-07-21; this line previously claimed a Windows toast exists, but no such code is in `src/`). Run `streampilot config add-game` manually while it's running. A real toast notification is a planned idea, not built.
 - SABnzbd unreachable: logs warning + prints prompt to pause manually
 - **Heartbeat homeostasis (every 2s when game active):** verifies + self-heals all critical state - OBS WebSocket reconnect, OBS window reapply, stream restart if dropped, SABnzbd repause if drifted. Each correction shows as named field in `Status: ISSUE` line. Pattern: `observe -> compare -> correct -> flag`. Guard: stream restart only fires if `is_connected()` - prevents restart loop when OBS process is dead.
