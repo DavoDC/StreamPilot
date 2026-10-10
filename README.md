@@ -2,16 +2,17 @@
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/G2G31WKOCN)
 
-Launch a game and you are live: StreamPilot sets up OBS, sets your Twitch category, and pauses SABnzbd for you, with no private audio ever reaching the stream.
+Launch a game and you are live. One click starts StreamPilot, and from then on it runs your whole stream for you: it opens OBS, points it at your game, sets your Twitch category, title and tags, starts the stream, and keeps your downloads from wrecking your bandwidth. Close the game and it stops the stream and tidies up. You never touch OBS or Twitch settings again.
 
-Key outcomes:
+## Why you will want it
 
-- Detects game launch via process polling
-- Updates OBS Game Capture source to the game's window
-- Sets Twitch category to the matching game
-- Starts the stream (or swaps game mid-stream)
-- Pauses SABnzbd while gaming, resumes on exit
-- Private audio never reaches the stream, guaranteed continuously - not something you have to remember to check
+- **One click, then forget it.** Start it once; every game after that is automatic.
+- **Everything handled for you.** Right window captured, right Twitch category, a fresh title and tags for each game, stream started, SABnzbd paused so downloads never choke your upload.
+- **It keeps fixing itself.** Every couple of seconds it checks that OBS is connected, the right window is captured, the stream is still up and SABnzbd is still paused, and puts anything that drifted back.
+- **Know it is all good at a glance.** A live dashboard on your second screen shows OBS, Twitch and SABnzbd in one place, and the browser tab title and icon change colour with the status.
+- **Safe to stream.** It will not broadcast a non-game window, and your private audio (Discord, browser tabs, messages) can never reach the stream.
+- **Light and local.** It runs entirely on your own PC, with no cloud service of its own and no heavy dependencies.
+- **Heavily tested.** A large automated test suite covers the daemon, the OBS and Twitch clients, and the dashboard.
 
 ## Dashboard
 
