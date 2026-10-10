@@ -12,7 +12,7 @@ Launch a game and you are live. One click starts StreamPilot, and from then on i
 - **Know it is all good at a glance.** A live dashboard on your second screen shows OBS, Twitch and SABnzbd in one place, and the browser tab title and icon change colour with the status.
 - **Safe to stream.** It will not broadcast a non-game window, and your private audio (Discord, browser tabs, messages) can never reach the stream.
 - **Light and local.** It runs entirely on your own PC, with no cloud service of its own and no heavy dependencies.
-- **Heavily tested.** A large automated test suite covers the daemon, the OBS and Twitch clients, and the dashboard.
+- **Rock solid.** Used for real streams, built to keep working without you babysitting it.
 
 ## Dashboard
 
@@ -28,7 +28,7 @@ Launch a game and you are live. One click starts StreamPilot, and from then on i
 6. Exit the game - StreamPilot stops the stream and resumes SABnzbd
 7. Done for the night? Click **Quit** on the dashboard and confirm - StreamPilot stops the stream, resumes SABnzbd, and closes itself. `run.bat` launches with no console window, so this is the only way to shut it down other than Task Manager.
 
-If you switch games mid-stream, StreamPilot swaps the capture source and Twitch category without interrupting the stream.
+Each game gets its own stream: when you close a game the stream ends, and when you launch the next game a fresh stream starts with the right category, title and tags.
 
 ## Private audio can never reach the stream
 
