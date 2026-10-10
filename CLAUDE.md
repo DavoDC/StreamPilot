@@ -352,6 +352,7 @@ StreamPilot/
 │   └── config.json          # gitignored
 ├── docs/
 │   ├── DESIGN.md            # Dashboard design rules
+│   ├── SETUP.md             # One-time setup steps (linked from README)
 │   ├── TWITCH_API.md
 │   └── References/DevContext.md
 ├── scripts/

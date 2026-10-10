@@ -122,7 +122,7 @@ def cmd_add_game(args):
     twitch = TwitchClient(cfg["twitch"]["client_id"], cfg["twitch"]["oauth_token"])
     if not twitch.validate():
         print("WARNING: Twitch token appears invalid or expired - category search below will fail.")
-        print("Get a new token: https://twitchtokengenerator.com (see README Step 4)")
+        print("Get a new token: https://twitchtokengenerator.com (see docs/SETUP.md, Step 4)")
         print("Continuing - you can still enter a Twitch game ID manually.\n")
 
     windows = []
