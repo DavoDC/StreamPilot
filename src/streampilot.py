@@ -173,7 +173,9 @@ def cmd_add_game(args):
         return
 
     title, cls, exe = windows[choice]
-    obs_window = f"{title.strip()}:{cls}:{exe}"
+    # Stored string is only a fallback (daemon sends the live window and OBS
+    # matches on exe), so store the cleaned title; class stays as the OBS format needs it.
+    obs_window = f"{_clean_title(title)}:{cls}:{exe}"
 
     game_name = questionary.text(
         "Display name in StreamPilot dashboard:",
