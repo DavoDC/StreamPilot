@@ -150,7 +150,20 @@ def _defer_if_busy() -> bool:
     return True
 
 
+_pre_exec_hooks = []
+
+
+def add_pre_exec_hook(fn) -> None:
+    """Cleanup that must run just before os.execv (e.g. remove the tray icon, execv skips atexit)."""
+    _pre_exec_hooks.append(fn)
+
+
 def _restart():
+    for fn in list(_pre_exec_hooks):
+        try:
+            fn()
+        except Exception:  # noqa: BLE001 - cleanup must never block a reload
+            pass
     os.environ[RESTART_ENV_VAR] = "1"
     os.execv(sys.executable, [sys.executable] + sys.argv)
 

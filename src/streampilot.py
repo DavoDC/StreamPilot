@@ -77,6 +77,10 @@ def cmd_start(args):
             daemon=True,
         )
         t.start()
+        import tray
+        tray_port = getattr(args, 'port', None) or launcher.DEFAULT_PORT
+        if tray.requested(tray_port):
+            tray.start(tray_port, on_stop=daemon.stop, log=logging.getLogger('tray').info)
     if getattr(args, 'watch', False):
         import hot_reload
         hot_reload.add_before_restart_hook(daemon.restart_busy_reason)
