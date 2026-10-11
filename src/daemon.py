@@ -17,6 +17,7 @@ from stream_meta import build_title, build_tags
 import audio_safety
 import config as config_module
 import status_file
+import window_resolver
 import window_safety
 
 log = logging.getLogger(__name__)
@@ -430,9 +431,15 @@ class Daemon:
                 obs_streaming = False
                 blacklisted_window = actual
 
-            if actual != expected:
+            # Compare the exe field ONLY: some games use a random window
+            # class/title per launch, and OBS matches on exe priority, so a
+            # changed class or title is not a mismatch.
+            if window_safety.normalize_exe_name(window_safety.extract_exe(actual)) != \
+                    window_safety.normalize_exe_name(window_safety.extract_exe(expected)):
                 log.warning(f"OBS window mismatch (expected '{expected}', got '{actual}') - reapplying")
-                self.obs.set_game_capture_window(expected)
+                self.obs.set_game_capture_window(
+                    window_resolver.resolve_obs_window(self._active_game_exe, expected)
+                )
                 obs_window_ok = False
 
             # SAFETY: audio privacy guard - re-checked every heartbeat exactly
@@ -702,7 +709,9 @@ class Daemon:
         # is likely to exist, not after. No-op when exclusive_mode is False.
         self._converge_audio_capture_list(exe, obs_streaming=False)
 
-        self.obs.set_game_capture_window(game["obs_window"])
+        self.obs.set_game_capture_window(
+            window_resolver.resolve_obs_window(exe, game["obs_window"])
+        )
 
         title = build_title(name, game, self.twitch_cfg)
         tags = build_tags(game, self.twitch_cfg)

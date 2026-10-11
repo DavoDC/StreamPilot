@@ -55,9 +55,19 @@ def test_set_game_capture_window(client):
     client.set_game_capture_window("Title:Class:game.exe")
     client._client.set_input_settings.assert_called_once_with(
         name="Game Capture",
-        settings={"window": "Title:Class:game.exe"},
+        settings={"window": "Title:Class:game.exe", "priority": 2},
         overlay=True,
     )
+
+
+def test_set_game_capture_window_sets_exe_priority(client):
+    """Random per-launch class/title must be ignored by OBS matching: priority
+    2 is OBS's WINDOW_PRIORITY_EXE (CLASS=0, TITLE=1, EXE=2)."""
+    client._client = MagicMock()
+    client.set_game_capture_window("Title:RandomClass!1:game.exe")
+    kwargs = client._client.set_input_settings.call_args.kwargs
+    assert kwargs["settings"]["priority"] == 2
+    assert kwargs["settings"]["window"] == "Title:RandomClass!1:game.exe"
 
 
 def test_set_game_capture_window_no_client(client):

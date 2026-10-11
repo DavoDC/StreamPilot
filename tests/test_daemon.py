@@ -22,6 +22,13 @@ SAMPLE_CFG = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _no_live_window_lookup(monkeypatch):
+    """Never enumerate real windows in tests: default to 'no live window found'
+    so the stored obs_window is used. Tests of live resolution override this."""
+    monkeypatch.setattr("window_resolver.find_live_window", lambda exe: None)
+
+
 @pytest.fixture
 def daemon(tmp_path, monkeypatch):
     # Isolate from the real data/state/sab_settings.json - reading the actual
@@ -2161,3 +2168,76 @@ def test_print_heartbeat_does_not_converge_audio_list_when_force_stopped_this_cy
         daemon._print_heartbeat()
 
     daemon.obs.set_audio_capture_exes.assert_not_called()
+
+
+# --- Random-per-launch window class (ARC Raiders): exe-only matching ---
+
+def _hb_daemon(daemon, actual_window):
+    daemon.obs = _safe_obs_mock()
+    daemon.twitch = MagicMock()
+    daemon.twitch.get_stream_started_at.return_value = None
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon._active_game_exe = "game.exe"
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = actual_window
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.sab.is_paused.return_value = True
+    return daemon
+
+
+def test_heartbeat_class_and_title_change_is_not_a_mismatch(daemon):
+    """Same exe, different (random) class and title: no reapply, no ISSUE."""
+    _hb_daemon(daemon, "Zero​Width Title:UninvitedGnu!10f5f50f:game.exe")
+    with patch("daemon.log") as mock_log:
+        daemon._print_heartbeat()
+    daemon.obs.set_game_capture_window.assert_not_called()
+    assert "OBS Window" not in mock_log.info.call_args[0][0]
+
+
+def test_heartbeat_different_exe_still_reapplies(daemon):
+    _hb_daemon(daemon, "Other:Cls:other.exe")
+    with patch("daemon.log") as mock_log:
+        daemon._print_heartbeat()
+    daemon.obs.set_game_capture_window.assert_called_once_with("My Game:GameClass:game.exe")
+    assert "OBS Window: REAPPLIED" in mock_log.info.call_args[0][0]
+
+
+def test_heartbeat_reapply_uses_live_window(daemon, monkeypatch):
+    monkeypatch.setattr("window_resolver.find_live_window", lambda exe: "Live:NewClass:game.exe")
+    _hb_daemon(daemon, "Other:Cls:other.exe")
+    with patch("daemon.log"):
+        daemon._print_heartbeat()
+    daemon.obs.set_game_capture_window.assert_called_once_with("Live:NewClass:game.exe")
+
+
+def test_heartbeat_blacklisted_window_still_force_stops_even_if_class_matches(daemon):
+    _hb_daemon(daemon, "My Game:GameClass:chrome.exe")
+    with patch("daemon.log") as mock_log:
+        daemon._print_heartbeat()
+    daemon.obs.stop_stream.assert_called_once()
+    assert "SAFETY: BLOCKED" in mock_log.info.call_args[0][0]
+
+
+def test_on_game_launch_sends_live_window(daemon, monkeypatch):
+    monkeypatch.setattr("window_resolver.find_live_window", lambda exe: "Live:RandomCls:game.exe")
+    daemon.obs = _safe_obs_mock()
+    daemon.twitch = MagicMock()
+    daemon.twitch.get_stream_started_at.return_value = None
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.obs.is_streaming.return_value = False
+    daemon._on_game_launch("game.exe")
+    daemon.obs.set_game_capture_window.assert_called_once_with("Live:RandomCls:game.exe")
+
+
+def test_on_game_launch_falls_back_to_stored_window_when_not_live(daemon):
+    daemon.obs = _safe_obs_mock()
+    daemon.twitch = MagicMock()
+    daemon.twitch.get_stream_started_at.return_value = None
+    daemon.sab = MagicMock()
+    daemon.sab_enabled = True
+    daemon.obs.is_streaming.return_value = False
+    daemon._on_game_launch("game.exe")
+    daemon.obs.set_game_capture_window.assert_called_once_with("My Game:GameClass:game.exe")

@@ -10,6 +10,9 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
+# OBS game_capture 'priority' values (window-helpers.h): CLASS=0, TITLE=1, EXE=2.
+WINDOW_PRIORITY_EXE = 2
+
 DEFAULT_AUDIO_SOURCE_NAME = "Application Audio Output Capture"
 
 
@@ -78,13 +81,15 @@ class OBSClient:
             log.warning(f"OBS stop_stream failed: {e}")
 
     def set_game_capture_window(self, obs_window: str):
-        """Update the Game Capture source's window property."""
+        """Update the Game Capture source's window property. Also sets
+        'priority' to WINDOW_PRIORITY_EXE (OBS: CLASS=0, TITLE=1, EXE=2) so a
+        random per-launch window class/title is ignored when matching."""
         if not self._client:
             return
         try:
             self._client.set_input_settings(
                 name=self.game_capture_source,
-                settings={'window': obs_window},
+                settings={'window': obs_window, 'priority': WINDOW_PRIORITY_EXE},
                 overlay=True,
             )
             log.info(f"Game Capture window set to: {obs_window}")
