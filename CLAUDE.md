@@ -387,3 +387,7 @@ The time saving (2 min manual OBS + Twitch switch) is secondary. The real value 
 2. Twitch: `streampilot auth` to get and store OAuth token
 3. Fill `config/config.json` with passwords/keys
 4. `streampilot config add-game` for each game (while game is running)
+
+## Webapp standard
+
+This dashboard follows a shared webapp standard (checklist of WS ids); backlog items cite WS ids.
