@@ -237,3 +237,48 @@ def test_add_game_writes_to_config(tmp_path, monkeypatch):
     assert "game.exe" in result["games"]
     assert result["games"]["game.exe"]["name"] == "My Game"
     assert result["games"]["game.exe"]["twitch_game_id"] == "12345"
+
+
+def _write_cfg(tmp_path, monkeypatch, games):
+    data = {
+        "obs": {"host": "localhost", "port": 4455, "password": "pw", "game_capture_source": "GC"},
+        "twitch": {"client_id": "cid", "oauth_token": "tok"},
+        "games": games,
+    }
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setattr(cfg_module, "CONFIG_PATH", str(cfg_path))
+    return cfg_path
+
+
+def test_add_game_keeps_existing_tags_and_emoji(tmp_path, monkeypatch):
+    existing = {"emoji": "\U0001F916", "tags": ["A"], "obs_window": "old:C:game.exe",
+                "twitch_game_id": "1", "name": "Old"}
+    cfg_path = _write_cfg(tmp_path, monkeypatch, {"game.exe": existing})
+    cfg_module.add_game("game.exe", "New", "2", "New:C:game.exe")
+    entry = json.loads(cfg_path.read_text(encoding="utf-8"))["games"]["game.exe"]
+    assert entry["tags"] == ["A"] and entry["emoji"] == "\U0001F916"
+    assert entry["name"] == "New" and entry["obs_window"] == "New:C:game.exe"
+
+
+def test_add_game_writes_canonical_key_order_and_literal_emoji(tmp_path, monkeypatch):
+    cfg_path = _write_cfg(tmp_path, monkeypatch, {
+        "game.exe": {"emoji": "\U0001F916", "tags": ["A"], "name": "G"}})
+    cfg_module.add_game("game.exe", "G", "2", "G:C:game.exe")
+    text = cfg_path.read_text(encoding="utf-8")
+    assert "\U0001F916" in text and "\ud83e" not in text
+    entry = json.loads(text)["games"]["game.exe"]
+    assert list(entry) == ["name", "twitch_game_id", "obs_window", "tags", "emoji"]
+
+
+def test_order_game_entry_unknown_keys_go_last():
+    out = cfg_module.order_game_entry({"zzz": 1, "emoji": "e", "name": "n", "title": "t"})
+    assert list(out) == ["name", "title", "emoji", "zzz"]
+
+
+def test_example_config_games_use_canonical_key_order():
+    path = os.path.join(os.path.dirname(cfg_module.__file__), "..", "config", "config.example.json")
+    with open(path, encoding="utf-8") as f:
+        games = json.load(f)["games"]
+    for exe, entry in games.items():
+        assert list(entry) == list(cfg_module.order_game_entry(entry)), exe

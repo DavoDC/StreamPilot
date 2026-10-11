@@ -145,16 +145,28 @@ def _fail(msg: str):
     sys.exit(1)
 
 
+# Canonical key order for a games.<exe> entry (matches config.example.json).
+# Unknown keys keep their relative order after the known ones.
+GAME_KEY_ORDER = ('name', 'twitch_game_id', 'obs_window', 'title', 'tags', 'emoji')
+
+
+def order_game_entry(entry: dict) -> dict:
+    known = [k for k in GAME_KEY_ORDER if k in entry]
+    extra = [k for k in entry if k not in GAME_KEY_ORDER]
+    return {k: entry[k] for k in known + extra}
+
+
 def add_game(exe: str, name: str, twitch_game_id: str, obs_window: str):
     """Add or update a game entry in config.json."""
     path = os.path.abspath(CONFIG_PATH)
     with open(path, 'r', encoding='utf-8') as f:
         cfg = json.load(f)
-    cfg.setdefault('games', {})[exe] = {
-        'name': name,
-        'twitch_game_id': twitch_game_id,
-        'obs_window': obs_window,
-    }
+    games = cfg.setdefault('games', {})
+    # Merge into any existing entry so re-adding a game keeps its tags/emoji/etc.
+    entry = dict(games.get(exe, {}))
+    entry.update({'name': name, 'twitch_game_id': twitch_game_id, 'obs_window': obs_window})
+    games[exe] = order_game_entry(entry)
+    # ensure_ascii=False: emoji stay readable in editors (still valid UTF-8 JSON).
     with open(path, 'w', encoding='utf-8') as f:
-        json.dump(cfg, f, indent=2)
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
     print(f"[StreamPilot] Added game: {name} ({exe})")
