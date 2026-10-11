@@ -16,11 +16,13 @@ import json
 import hmac
 import os
 import secrets
+import socket
 import threading
 import time
 import webbrowser
 from urllib.parse import urlsplit
 
+import build
 import status_file
 
 STATUS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'state', 'status.json')
@@ -610,6 +612,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(200, "text/html; charset=utf-8", index_html_bytes())
         elif self.path == "/status.json":
             self._send(200, "application/json", status_json_bytes())
+        elif self.path == "/api/build":
+            self._send(200, "application/json", json.dumps(build.info()).encode("utf-8"))
         else:
             self.send_error(404)
 
@@ -651,11 +655,35 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
 
 
+class ExclusiveServer(http.server.ThreadingHTTPServer):
+    """On Windows SO_REUSEADDR lets a second process bind a port another is
+    already listening on, so a stale dashboard keeps answering. Bind exclusively."""
+    allow_reuse_address = False
+    daemon_threads = True
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def make_server(port: int = PORT, host: str = BIND_HOST) -> http.server.ThreadingHTTPServer:
     """Create the dashboard server. Refuses any non-loopback host (WS-020)."""
     if host != BIND_HOST:
         raise ValueError(f"dashboard must bind {BIND_HOST} only, got {host!r}")
-    return http.server.ThreadingHTTPServer((host, port), Handler)
+    return ExclusiveServer((host, port), Handler)
+
+
+def bind_with_retry(port: int, attempts: int = 50, delay: float = 0.2, sleep=time.sleep):
+    """Bind, retrying briefly: after an os.execv hot reload the old socket can
+    linger for a moment (WS-006). Raises the last OSError when it never frees."""
+    for i in range(attempts):
+        try:
+            return make_server(port)
+        except OSError:
+            if i == attempts - 1:
+                raise
+            sleep(delay)
 
 
 def run(port: int = PORT, open_browser: bool = True, on_quit=None, twitch_channel: str = None, on_sab_toggle=None, on_restart_stream=None):
@@ -664,7 +692,8 @@ def run(port: int = PORT, open_browser: bool = True, on_quit=None, twitch_channe
     _twitch_channel = twitch_channel
     _on_sab_toggle_callback = on_sab_toggle
     _on_restart_stream_callback = on_restart_stream
-    server = make_server(port)
+    server = bind_with_retry(port)
+    port = server.server_address[1]
     url = f"http://localhost:{port}/"
     print(f"[StreamPilot Dashboard] Serving at {url}")
     print("Press Ctrl+C to stop.")

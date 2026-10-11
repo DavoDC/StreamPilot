@@ -7,6 +7,7 @@ import subprocess
 import time
 from datetime import datetime, timezone
 import psutil
+import build
 
 HEARTBEAT_EVERY = 1  # every poll; API calls in heartbeat provide natural throttling (~3-5s/cycle)
 
@@ -82,7 +83,7 @@ class Daemon:
         # Changes every process start (including a hot-reload self-restart) so
         # the dashboard can tell "the server behind me restarted" and reload
         # itself - see hot_reload.py and the build_id check in dashboard JS.
-        self.build_id = str(time.time())
+        self.build_id = build.BOOT_ID
 
     def _ensure_obs_running(self) -> bool:
         """Launch OBS if not running, wait for WebSocket. Returns True if already connected."""

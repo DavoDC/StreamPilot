@@ -20,6 +20,7 @@ if sys.stderr is None:
 
 import config as cfg_module
 from daemon import Daemon
+import launcher
 import window_safety
 
 LOG_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'logs')
@@ -66,7 +67,8 @@ def cmd_start(args):
         t = threading.Thread(
             target=dashboard_server.run,
             kwargs={
-                'open_browser': not is_hot_reload_restart,
+                'port': getattr(args, 'port', None) or launcher.DEFAULT_PORT,
+                'open_browser': not is_hot_reload_restart and not getattr(args, 'no_browser', False),
                 'on_quit': daemon.stop,
                 'twitch_channel': cfg.get('twitch', {}).get('channel_name'),
                 'on_sab_toggle': daemon.set_sab_auto_manage,
@@ -210,7 +212,7 @@ def cmd_add_game(args):
 
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(
         prog='streampilot',
         description='StreamPilot - auto-manage OBS streaming when games launch',
@@ -223,17 +225,53 @@ def main():
         '--watch', action='store_true',
         help='Dev mode: auto-restart on any source code change (src/*.py), dashboard tab reloads itself too'
     )
+    start_p.add_argument('--port', type=int, default=launcher.DEFAULT_PORT, help='Dashboard port (default 8765)')
+    start_p.add_argument('--no-browser', action='store_true', help='Do not open a browser tab')
     sub.add_parser('status', help='Show current game, stream state, SABnzbd state')
     sub.add_parser('dashboard', help='Open the live reassurance dashboard in your browser')
+
+    launch_p = sub.add_parser('launch', help='Replace any running instance (by port owner) and start a detached windowless one')
+    launch_p.add_argument('--no-browser', action='store_true', help='Do not open a browser tab')
+    launch_p.add_argument('--no-watch', action='store_true', help='Start without hot reload')
+    sub.add_parser('stop', help='Stop the dashboard process only (never ends the stream)')
+    sub.add_parser('check', help='Print URL, pid, boot id, sha, status (exit 0 running, 1 not running, 2 port held by another program)')
+    sub.add_parser('preflight', help='Print every reason a start would fail (exit 1 if any)')
+    for name in ('launch', 'stop', 'check', 'preflight'):
+        sub.choices[name].add_argument('--port', type=int, default=launcher.DEFAULT_PORT, help='Dashboard port (default 8765)')
 
     config_p = sub.add_parser('config', help='Config management')
     config_sub = config_p.add_subparsers(dest='config_command', required=True)
     config_sub.add_parser('add-game', help='Wizard: detect running game and add to config')
+    return parser
 
-    args = parser.parse_args()
+
+def run_lifecycle(args) -> int:
+    """Run launch/stop/check/preflight and return the process exit code."""
+    port = args.port
+    if args.command == 'preflight':
+        problems = launcher.preflight(port)
+        for p in problems:
+            print(f"[FAILED] {p}")
+        return 1 if problems else 0
+    if args.command == 'launch':
+        argv = launcher.child_argv(launcher.pythonw_for(sys.executable), launcher.ENTRY, port,
+                                   no_browser=args.no_browser, no_watch=args.no_watch)
+        code, msg = launcher.launch(port, argv=argv)
+    elif args.command == 'stop':
+        code, msg = launcher.stop(port)
+    else:
+        code, msg = launcher.check(port)
+    print(msg)
+    return code
+
+
+def main():
+    args = build_parser().parse_args()
 
     if args.command == 'start':
         cmd_start(args)
+    elif args.command in ('launch', 'stop', 'check', 'preflight'):
+        sys.exit(run_lifecycle(args))
     elif args.command == 'status':
         cmd_status(args)
     elif args.command == 'dashboard':
