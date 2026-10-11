@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import sys
+import unicodedata
 from datetime import datetime
 
 # Ensure src/ is on path when run directly
@@ -22,6 +23,13 @@ from daemon import Daemon
 import window_safety
 
 LOG_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'logs')
+def _clean_title(title):
+    """Display-only: games like ARC Raiders pad titles with zero-width chars (anti-scrape)."""
+    out = "".join(" " if unicodedata.category(c) == "Zs" else c
+                  for c in title if unicodedata.category(c) != "Cf")
+    return " ".join(out.split())
+
+
 WINDOW_LIST_LIMIT = 40  # add-game window picker cap - was 20, silently dropped windows on a busy desktop
 
 _LOG_FMT = '[%(asctime)s] [%(levelname)s] %(name)s: %(message)s'
@@ -157,7 +165,7 @@ def cmd_add_game(args):
         print("If your game isn't listed, close some other windows and try again.\n")
 
     choices = [
-        questionary.Choice(f"{exe}  |  {title[:55]}  |  {cls}", value=i)
+        questionary.Choice(f"{exe}  |  {_clean_title(title)[:55]}  |  {cls}", value=i)
         for i, (title, cls, exe) in enumerate(windows[:WINDOW_LIST_LIMIT])
     ]
     choice = questionary.select("Select your game window:", choices=choices).ask()
@@ -169,7 +177,7 @@ def cmd_add_game(args):
 
     game_name = questionary.text(
         "Display name in StreamPilot dashboard:",
-        default=title.strip(),
+        default=_clean_title(title),
     ).ask()
     if not game_name:
         return
