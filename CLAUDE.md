@@ -271,6 +271,8 @@ once a second (`snapshot()`/`watch_loop()`, stdlib only).
   is the exact failure this two-path design avoids (raised by David 2026-07-19, twice -
   first the 2s-only version, then again when 30s turned out to still be too short).
 
+**Busy-aware (WS-014, 2026-10-12):** a reload never restarts the process while a game session is live or a stream restart is in progress. `hot_reload.add_before_restart_hook(fn)` registers a hook returning None (safe) or a reason string; `streampilot.cmd_start` registers `Daemon.restart_busy_reason`. While busy the reload is deferred, not dropped: the trigger file stays on disk and fires on the next idle poll, and the reason is logged once. To override deliberately, write the word `force` into `data/state/reload.trigger`. A hook that raises counts as busy. Tests: `tests/test_hot_reload_busy.py`, `tests/test_daemon_busy.py`. Consequence: edits made during a live session take effect when the game closes (or with `force`).
+
 Either path is gated by a **syntax check** (`check_syntax()`, in-memory `compile()`, no
 bytecode-cache side effect) before actually restarting - if anything doesn't parse, the
 watcher logs a warning and keeps the old (working) process running, re-checking every

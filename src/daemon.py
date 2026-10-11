@@ -99,7 +99,7 @@ class Daemon:
         log.info("OBS not running - launching OBS...")
         log.info(f"Launching OBS: {exe_path}")
         obs_dir = os.path.dirname(os.path.abspath(exe_path))
-        subprocess.Popen([exe_path], cwd=obs_dir)
+        subprocess.Popen([exe_path], cwd=obs_dir)  # window-ok: GUI app, one-shot launch
 
         # Wait up to 30s for WebSocket to become available
         for attempt in range(15):
@@ -127,7 +127,7 @@ class Daemon:
 
         log.info(f"Steam not running - launching: {exe_path}")
         steam_dir = os.path.dirname(os.path.abspath(exe_path))
-        subprocess.Popen([exe_path], cwd=steam_dir)
+        subprocess.Popen([exe_path], cwd=steam_dir)  # window-ok: GUI app, one-shot launch
 
     def _load_sab_auto_manage(self) -> bool:
         """Read the persisted dashboard toggle. Defaults to True (normal
@@ -788,6 +788,18 @@ class Daemon:
             return True
         log.error("Restart stream requested but audio safety check failed - stream not restarted")
         return False
+
+    def restart_busy_reason(self):
+        """Why a process restart (hot reload) must wait, or None if safe.
+        Cheap and thread-safe: reads daemon fields only, no OBS call, so the
+        watcher thread can poll it every second. Registered with
+        hot_reload.add_before_restart_hook in streampilot.cmd_start (WS-014)."""
+        if self._manual_restart_pending:
+            return "stream restart in progress"
+        if self._active_game_exe:
+            name = self.games.get(self._active_game_exe, {}).get("name", self._active_game_exe)
+            return f"game session live: {name}"
+        return None
 
     def get_status(self) -> dict:
         streaming = self.obs.is_streaming() if self.obs._client else False

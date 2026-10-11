@@ -104,6 +104,52 @@ def check_syntax(watch_dir: str) -> tuple:
     return True, None
 
 
+# --- busy-aware restart (WS-014) ---------------------------------------
+# A hook returns None when a restart is safe, or a short reason string when it
+# is not (e.g. "streaming Dead by Daylight"). While any hook reports busy, a
+# reload is deferred, never dropped: the trigger file stays in place and fires
+# the moment the app is idle. Write "force" into the trigger file to override.
+_before_restart_hooks = []
+_last_deferred_reason = None
+
+
+def add_before_restart_hook(fn) -> None:
+    _before_restart_hooks.append(fn)
+
+
+def clear_before_restart_hooks() -> None:
+    global _last_deferred_reason
+    _before_restart_hooks.clear()
+    _last_deferred_reason = None
+
+
+def busy_reason():
+    """First reason a restart must wait, or None. A hook that raises counts as
+    busy (fail safe: never restart a live stream on an unknown state)."""
+    for fn in list(_before_restart_hooks):
+        try:
+            reason = fn()
+        except Exception as e:  # noqa: BLE001
+            return f"before-restart hook failed: {e}"
+        if reason:
+            return str(reason)
+    return None
+
+
+def _defer_if_busy() -> bool:
+    """True (and log once per distinct reason) if the restart must wait."""
+    global _last_deferred_reason
+    reason = busy_reason()
+    if reason is None:
+        _last_deferred_reason = None
+        return False
+    if reason != _last_deferred_reason:
+        log.warning("Reload deferred, app is busy (%s). It will restart when idle; "
+                    "write 'force' in the trigger file to override.", reason)
+        _last_deferred_reason = reason
+    return True
+
+
 def _restart():
     os.environ[RESTART_ENV_VAR] = "1"
     os.execv(sys.executable, [sys.executable] + sys.argv)
@@ -116,6 +162,13 @@ def _check_trigger(watch_dir: str, trigger_path: str) -> bool:
     caller can skip the normal debounce logic for this poll."""
     if not os.path.exists(trigger_path):
         return False
+    try:
+        with open(trigger_path, "r", encoding="utf-8") as f:
+            forced = f.read().strip().lower() == "force"
+    except OSError:
+        forced = False
+    if not forced and _defer_if_busy():
+        return True  # trigger kept on disk; retried every poll until idle
     try:
         os.remove(trigger_path)
     except OSError:
@@ -164,6 +217,9 @@ def watch_loop(
             continue
 
         if stable_since is None or (time.time() - stable_since) < debounce_seconds:
+            continue
+
+        if _defer_if_busy():
             continue
 
         ok, error = check_syntax(watch_dir)
