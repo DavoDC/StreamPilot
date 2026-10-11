@@ -11,7 +11,7 @@ This script NEVER calls any Set* request - it is strictly read-only, safe to
 run against a real streaming setup at any time.
 
 Usage:
-    python scripts/check_audio_safety.py
+    python scripts/dev/check_audio_safety.py
 """
 
 import sys
@@ -20,7 +20,7 @@ from pathlib import Path
 
 import psutil
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
 sys.path.insert(0, str(SRC_DIR))
 

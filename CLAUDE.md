@@ -357,7 +357,7 @@ StreamPilot/
 │   └── References/DevContext.md
 ├── scripts/
 │   ├── run.bat              # desktop shortcut target - launches with --watch by default
-│   ├── run-tests.bat
+│   ├── dev/                 # check_audio_safety, preview_dashboard, probe_audio_source, run-tests.bat
 │   └── setup/
 │       ├── add-game.bat
 │       ├── install-dependencies.bat

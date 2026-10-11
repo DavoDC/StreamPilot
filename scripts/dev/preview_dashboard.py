@@ -10,8 +10,8 @@ data/state/preview_status.json so the live dashboard's status.json is never
 touched.
 
 Usage:
-    python scripts/preview_dashboard.py            # healthy streaming case
-    python scripts/preview_dashboard.py --unsafe    # audio violation case
+    python scripts/dev/preview_dashboard.py            # healthy streaming case
+    python scripts/dev/preview_dashboard.py --unsafe    # audio violation case
 """
 
 import argparse
@@ -20,7 +20,7 @@ import sys
 import threading
 import time
 
-SRC_DIR = os.path.join(os.path.dirname(__file__), '..', 'src')
+SRC_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'src')
 sys.path.insert(0, SRC_DIR)
 
 import audio_safety  # noqa: E402
@@ -31,7 +31,7 @@ PREVIEW_PORT = 8766
 LIVE_PORT_DO_NOT_TOUCH = 8765  # live StreamPilot instance - never bind, never kill
 
 PREVIEW_STATUS_PATH = os.path.join(
-    os.path.dirname(__file__), '..', 'data', 'state', 'preview_status.json'
+    os.path.dirname(__file__), '..', '..', 'data', 'state', 'preview_status.json'
 )
 
 # Realistic healthy tag list - Twitch tags for the Palworld category, copied

@@ -14,7 +14,7 @@ the live OBS instance. Full raw output is also written to
 data/logs/probe-audio-source.log.
 
 Usage:
-    python scripts/probe_audio_source.py
+    python scripts/dev/probe_audio_source.py
 """
 
 import json
@@ -22,7 +22,7 @@ import sys
 import time
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = REPO_ROOT / "config" / "config.json"
 LOG_PATH = REPO_ROOT / "data" / "logs" / "probe-audio-source.log"
 
