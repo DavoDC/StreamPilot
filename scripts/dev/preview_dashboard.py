@@ -146,11 +146,18 @@ def main():
     dashboard_server.STATUS_PATH = PREVIEW_STATUS_PATH
     dashboard_server.status_json_bytes.__defaults__ = (PREVIEW_STATUS_PATH,)
 
-    url = f"http://localhost:{PREVIEW_PORT}/"
-    print(f"[preview_dashboard] serving at {url}")
+    # Port 0: the OS picks a free port, so the preview never collides with
+    # the live instance or another app's dashboard (webapp standard D14).
+    server = dashboard_server.make_server(0)
+    url = f"http://localhost:{server.server_address[1]}/"
+    print(f"[preview_dashboard] serving at {url}", flush=True)
     print("[preview_dashboard] Press Ctrl+C to stop.")
-
-    dashboard_server.run(port=PREVIEW_PORT, open_browser=False)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.shutdown()
 
 
 if __name__ == "__main__":

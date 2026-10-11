@@ -13,15 +13,34 @@ on localhost. Do not switch this to SimpleHTTPRequestHandler.
 
 import http.server
 import json
+import hmac
 import os
+import secrets
 import threading
 import time
 import webbrowser
+from urllib.parse import urlsplit
 
 import status_file
 
 STATUS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'state', 'status.json')
 PORT = 8765
+BIND_HOST = "127.0.0.1"  # loopback only (WS-020); never all interfaces
+
+# Per-launch secret embedded in the served page and required on every POST
+# (WS-022). A page on another origin cannot read it (no CORS), so it cannot
+# forge a state-changing request even if the browser sends one.
+TOKEN = secrets.token_urlsafe(24)
+TOKEN_HEADER = "X-StreamPilot-Token"
+_ALLOWED_HOSTNAMES = ("localhost", "127.0.0.1")
+
+SECURITY_HEADERS = (
+    ("Cache-Control", "no-store"),
+    ("X-Content-Type-Options", "nosniff"),
+    ("Content-Security-Policy",
+     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+     "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"),
+)
 POLL_MS = 1000  # how often the page re-fetches status.json
 
 # Set by run() before the server starts; called from the request-handling
@@ -332,14 +351,19 @@ const sabToggle = document.getElementById("sabToggle");
 // next poll (with the daemon's actual new state) snaps it forward again.
 // Keeping this set until a poll's value matches what we asked for closes
 // that window, instead of clearing it as soon as the POST round-trip ends.
+// All state-changing requests carry the per-launch token (server rejects without it).
+const SP_TOKEN = "__STREAMPILOT_TOKEN__";
+function postAction(path, payload) {
+  return fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-StreamPilot-Token": SP_TOKEN },
+    body: JSON.stringify(payload),
+  });
+}
 let sabToggleDesired = null;
 sabToggle.addEventListener("change", () => {
   sabToggleDesired = sabToggle.checked;
-  fetch("/sab_toggle", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ enabled: sabToggle.checked }),
-  }).catch(() => {});
+  postAction("/sab_toggle", { enabled: sabToggle.checked }).catch(() => {});
 });
 
 async function tick() {
@@ -442,11 +466,7 @@ function confirmQuit(endStream, inProgressMessage) {
   quitKeepStream.disabled = true;
   quitEndStream.disabled = true;
   quitDesc.textContent = inProgressMessage;
-  fetch("/quit", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ end_stream: endStream }),
-  }).catch(() => {});
+  postAction("/quit", { end_stream: endStream }).catch(() => {});
 }
 
 quitBtn.addEventListener("click", openQuitDialog);
@@ -490,7 +510,7 @@ restartOverlay.addEventListener("click", (e) => {
 restartConfirm.addEventListener("click", () => {
   restartCancel.disabled = true;
   restartConfirm.disabled = true;
-  fetch("/restart_stream", { method: "POST" })
+  postAction("/restart_stream", {})
     .catch(() => {})
     .finally(closeRestartDialog);
 });
@@ -512,7 +532,7 @@ def _twitch_link_html(channel: str | None) -> str:
 
 def index_html_bytes() -> bytes:
     """Render INDEX_HTML with the current Twitch channel link substituted in."""
-    html = INDEX_HTML.replace("__TWITCH_LINK_HTML__", _twitch_link_html(_twitch_channel))
+    html = INDEX_HTML.replace("__TWITCH_LINK_HTML__", _twitch_link_html(_twitch_channel)).replace("__STREAMPILOT_TOKEN__", TOKEN)
     return html.encode("utf-8")
 
 
@@ -529,25 +549,73 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass  # keep the terminal quiet; this is a status page, not a debug tool
 
+    # --- guard (WS-021, WS-022) -------------------------------------------
+    def _own_port(self) -> int:
+        return self.server.server_address[1]
+
+    def _origin_ok(self, value: str) -> bool:
+        """True if value (an Origin or Referer URL) is this server's own origin."""
+        try:
+            u = urlsplit(value)
+            return (u.scheme == "http" and u.hostname in _ALLOWED_HOSTNAMES
+                    and u.port == self._own_port())
+        except ValueError:
+            return False
+
+    def _host_ok(self) -> bool:
+        try:
+            u = urlsplit("//" + self.headers.get("Host", ""))
+            return u.hostname in _ALLOWED_HOSTNAMES and u.port == self._own_port()
+        except ValueError:
+            return False
+
+    def _send(self, status: int, ctype: str, body: bytes) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        for k, v in SECURITY_HEADERS:
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _deny(self, why: str) -> None:
+        self._send(403, "application/json", json.dumps({"ok": False, "error": why}).encode("utf-8"))
+
+    def _guard(self, state_changing: bool) -> bool:
+        """Return True if the request may proceed; otherwise a 403 was sent."""
+        if not self._host_ok():
+            self._deny("bad host")
+            return False
+        if state_changing:
+            origin = self.headers.get("Origin")
+            source = origin if origin is not None else self.headers.get("Referer")
+            if source is None or not self._origin_ok(source):
+                self._deny("bad origin")
+                return False
+            sent = self.headers.get(TOKEN_HEADER, "")
+            if not hmac.compare_digest(sent.encode("utf-8"), TOKEN.encode("utf-8")):
+                self._deny("bad token")
+                return False
+        return True
+
+    def do_OPTIONS(self):
+        # No CORS: preflights get the Host guard, then a plain 405.
+        if self._guard(False):
+            self.send_error(405)
+
     def do_GET(self):
+        if not self._guard(False):
+            return
         if self.path in ("/", "/index.html"):
-            body = index_html_bytes()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._send(200, "text/html; charset=utf-8", index_html_bytes())
         elif self.path == "/status.json":
-            body = status_json_bytes()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._send(200, "application/json", status_json_bytes())
         else:
             self.send_error(404)
 
     def do_POST(self):
+        if not self._guard(True):
+            return
         if self.path == "/quit":
             end_stream = True
             length = int(self.headers.get("Content-Length", 0) or 0)
@@ -559,12 +627,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     pass
             if _on_quit_callback:
                 _on_quit_callback(end_stream=end_stream)
-            body = b'{"ok": true}'
-            self.send_response(202)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._send(202, "application/json", b'{"ok": true}')
         elif self.path == "/sab_toggle":
             length = int(self.headers.get("Content-Length", 0) or 0)
             enabled = None
@@ -579,23 +642,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             if _on_sab_toggle_callback:
                 _on_sab_toggle_callback(enabled=enabled)
-            body = b'{"ok": true}'
-            self.send_response(202)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._send(202, "application/json", b'{"ok": true}')
         elif self.path == "/restart_stream":
             if _on_restart_stream_callback:
                 _on_restart_stream_callback()
-            body = b'{"ok": true}'
-            self.send_response(202)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._send(202, "application/json", b'{"ok": true}')
         else:
             self.send_error(404)
+
+
+def make_server(port: int = PORT, host: str = BIND_HOST) -> http.server.ThreadingHTTPServer:
+    """Create the dashboard server. Refuses any non-loopback host (WS-020)."""
+    if host != BIND_HOST:
+        raise ValueError(f"dashboard must bind {BIND_HOST} only, got {host!r}")
+    return http.server.ThreadingHTTPServer((host, port), Handler)
 
 
 def run(port: int = PORT, open_browser: bool = True, on_quit=None, twitch_channel: str = None, on_sab_toggle=None, on_restart_stream=None):
@@ -604,7 +664,7 @@ def run(port: int = PORT, open_browser: bool = True, on_quit=None, twitch_channe
     _twitch_channel = twitch_channel
     _on_sab_toggle_callback = on_sab_toggle
     _on_restart_stream_callback = on_restart_stream
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = make_server(port)
     url = f"http://localhost:{port}/"
     print(f"[StreamPilot Dashboard] Serving at {url}")
     print("Press Ctrl+C to stop.")

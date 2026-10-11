@@ -147,12 +147,27 @@ def _run_server():
     return server, port
 
 
+class _GuardedConn(http.client.HTTPConnection):
+    """Connection that sends what the real page sends (same-origin Origin plus
+    the per-launch token), so these tests exercise route behaviour; the guard
+    itself is covered in test_dashboard_guard.py."""
+
+    def request(self, method, url, body=None, headers=None, **kw):
+        h = {"Origin": f"http://127.0.0.1:{self.port}", dashboard_server.TOKEN_HEADER: dashboard_server.TOKEN}
+        h.update(headers or {})
+        return super().request(method, url, body=body, headers=h, **kw)
+
+
+def _conn(port):
+    return _GuardedConn("127.0.0.1", port, timeout=2)
+
+
 def test_post_quit_invokes_callback_and_returns_202():
     calls = []
     dashboard_server._on_quit_callback = lambda **kwargs: calls.append(kwargs)
     server, port = _run_server()
     try:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn = _conn(port)
         conn.request("POST", "/quit")
         resp = conn.getresponse()
         resp.read()
@@ -167,7 +182,7 @@ def test_post_quit_with_no_callback_registered_still_returns_202():
     dashboard_server._on_quit_callback = None
     server, port = _run_server()
     try:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn = _conn(port)
         conn.request("POST", "/quit")
         resp = conn.getresponse()
         resp.read()
@@ -181,7 +196,7 @@ def test_post_quit_defaults_to_end_stream_true_with_no_body():
     dashboard_server._on_quit_callback = lambda **kwargs: calls.append(kwargs)
     server, port = _run_server()
     try:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn = _conn(port)
         conn.request("POST", "/quit")
         resp = conn.getresponse()
         resp.read()
@@ -196,7 +211,7 @@ def test_post_quit_reads_end_stream_false_from_body():
     dashboard_server._on_quit_callback = lambda **kwargs: calls.append(kwargs)
     server, port = _run_server()
     try:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn = _conn(port)
         body = json.dumps({"end_stream": False}).encode("utf-8")
         conn.request("POST", "/quit", body=body, headers={"Content-Type": "application/json"})
         resp = conn.getresponse()
@@ -212,7 +227,7 @@ def test_post_quit_malformed_body_defaults_to_end_stream_true():
     dashboard_server._on_quit_callback = lambda **kwargs: calls.append(kwargs)
     server, port = _run_server()
     try:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn = _conn(port)
         body = b"not json"
         conn.request("POST", "/quit", body=body, headers={"Content-Type": "application/json"})
         resp = conn.getresponse()
@@ -227,7 +242,7 @@ def test_post_quit_malformed_body_defaults_to_end_stream_true():
 def test_post_unknown_route_returns_404():
     server, port = _run_server()
     try:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn = _conn(port)
         conn.request("POST", "/nope")
         resp = conn.getresponse()
         assert resp.status == 404
@@ -416,7 +431,7 @@ def test_post_restart_stream_invokes_callback_and_returns_202():
     dashboard_server._on_restart_stream_callback = lambda: calls.append(True)
     server, port = _run_server()
     try:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn = _conn(port)
         conn.request("POST", "/restart_stream")
         resp = conn.getresponse()
         resp.read()
@@ -431,7 +446,7 @@ def test_post_restart_stream_no_callback_registered_still_returns_202():
     dashboard_server._on_restart_stream_callback = None
     server, port = _run_server()
     try:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn = _conn(port)
         conn.request("POST", "/restart_stream")
         resp = conn.getresponse()
         resp.read()
@@ -445,7 +460,7 @@ def test_post_sab_toggle_invokes_callback_and_returns_202():
     dashboard_server._on_sab_toggle_callback = lambda **kwargs: calls.append(kwargs)
     server, port = _run_server()
     try:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn = _conn(port)
         body = json.dumps({"enabled": False}).encode("utf-8")
         conn.request("POST", "/sab_toggle", body=body, headers={"Content-Type": "application/json"})
         resp = conn.getresponse()
@@ -462,7 +477,7 @@ def test_post_sab_toggle_enabled_true():
     dashboard_server._on_sab_toggle_callback = lambda **kwargs: calls.append(kwargs)
     server, port = _run_server()
     try:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn = _conn(port)
         body = json.dumps({"enabled": True}).encode("utf-8")
         conn.request("POST", "/sab_toggle", body=body, headers={"Content-Type": "application/json"})
         resp = conn.getresponse()
@@ -478,7 +493,7 @@ def test_post_sab_toggle_malformed_body_returns_400_and_skips_callback():
     dashboard_server._on_sab_toggle_callback = lambda **kwargs: calls.append(kwargs)
     server, port = _run_server()
     try:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn = _conn(port)
         body = b"not json"
         conn.request("POST", "/sab_toggle", body=body, headers={"Content-Type": "application/json"})
         resp = conn.getresponse()
@@ -494,7 +509,7 @@ def test_post_sab_toggle_no_callback_registered_still_returns_202():
     dashboard_server._on_sab_toggle_callback = None
     server, port = _run_server()
     try:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        conn = _conn(port)
         body = json.dumps({"enabled": False}).encode("utf-8")
         conn.request("POST", "/sab_toggle", body=body, headers={"Content-Type": "application/json"})
         resp = conn.getresponse()
