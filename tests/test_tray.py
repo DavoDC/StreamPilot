@@ -1,4 +1,4 @@
-"""Tray (step 3): state from the one verdict, Stop dashboard stops ONLY the dashboard (D7). No real icon is created."""
+"""Tray (step 3): state from the one verdict, Quit dashboard stops ONLY the dashboard (D7). No real icon is created."""
 
 import os
 

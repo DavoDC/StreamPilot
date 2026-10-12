@@ -2,8 +2,8 @@
 
 Menu: "Open dashboard" (left-click default), "Reload dashboard" (touches the hot-reload trigger; a live session still defers it),
 a status line from the one health verdict (health.verdict, the same state the badge and favicon show; read from the dashboard's own
-/status.json over loopback, so a hung server shows "Dashboard not answering") and "Stop dashboard".
-Stop dashboard stops ONLY the dashboard process: it calls daemon.stop(end_stream=False), leaving the OBS stream and SABnzbd untouched.
+/status.json over loopback, so a hung server shows "Dashboard not answering") and "Quit dashboard".
+Quit dashboard stops ONLY the dashboard process: it calls daemon.stop(end_stream=False), leaving the OBS stream and SABnzbd untouched.
 Stopping the stream stays a confirmed UI action (decision D7), so the tray has no such item.
 pystray and Pillow are optional, imported lazily: without them the dashboard runs with no icon.
 STREAMPILOT_NO_TRAY=1 opts out (the test suite sets it); only the live port gets a tray; a named mutex allows one tray per session.
@@ -23,7 +23,7 @@ REFRESH_SECONDS = 5
 NO_TRAY_ENV = "STREAMPILOT_NO_TRAY"
 LIVE_PORT = 8765
 NOT_ANSWERING = "Dashboard not answering"
-STOP_LABEL = "Stop dashboard"
+STOP_LABEL = "Quit dashboard"
 RELOAD_LABEL = "Reload dashboard"
 MUTEX_NAME = "Local\\StreamPilotTray"
 BADGE = "#1f2937"
