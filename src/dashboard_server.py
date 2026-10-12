@@ -14,6 +14,7 @@ on localhost. Do not switch this to SimpleHTTPRequestHandler.
 import http.server
 import json
 import hmac
+import html as html_lib
 import os
 import secrets
 import socket
@@ -23,6 +24,8 @@ import webbrowser
 from urllib.parse import urlsplit
 
 import build
+import fixtures
+import health
 import status_file
 
 STATUS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'state', 'status.json')
@@ -43,6 +46,12 @@ SECURITY_HEADERS = (
      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
      "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"),
 )
+STATUS_SCHEMA = 1  # bump when /status.json changes shape (docs/References/state-contract.md)
+UI_LOG_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'logs', 'ui.log')
+LOG_MAX_LINES = 200  # per process: a looping page error must not fill the disk
+LOG_LINE_MAX = 1000
+_log_count = 0
+_fixture = None  # scenario name when serving fixtures (WS-093); never touches the live status file
 POLL_MS = 1000  # how often the page re-fetches status.json
 
 # Set by run() before the server starts; called from the request-handling
@@ -71,7 +80,7 @@ INDEX_HTML = """<!doctype html>
 <style>
   :root { color-scheme: dark; }
   body {
-    margin: 0; height: 100vh; display: flex; flex-direction: column;
+    margin: 0; min-height: 100vh; padding: 16px 0; box-sizing: border-box; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 14px;
     background: #12151a; color: #c9d1d9;
     font-family: "Segoe UI", system-ui, sans-serif;
@@ -134,6 +143,10 @@ INDEX_HTML = """<!doctype html>
     padding: 3px 9px; border-radius: 999px; line-height: 1.4;
   }
   #footer { font-size: 11px; color: #6b7280; }
+  #build { font-size: 10px; color: #4b5563; }
+  #error-banner { background: #3a1418; border: 1px solid #6b2530; color: #ff8787; font-size: 12px; padding: 6px 12px; border-radius: 6px; max-width: 340px; word-break: break-word; }
+  #error-banner[hidden] { display: none; }
+  #fixture-banner { background: #3a2f10; border: 1px solid #6b5520; color: #f0c860; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 6px; letter-spacing: 0.5px; }
 
   .switch { position: relative; display: inline-block; width: 34px; height: 20px; flex-shrink: 0; }
   .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
@@ -206,67 +219,88 @@ INDEX_HTML = """<!doctype html>
 </style>
 </head>
 <body>
-  <div id="dot"></div>
-  <div id="badge">OFFLINE</div>
-  <div id="cards">
-    <div class="card card-obs">
+  <div id="dot" data-testid="dot" aria-hidden="true"></div>
+  __FIXTURE_BANNER__
+  <div id="error-banner" data-testid="error-banner" role="alert" hidden></div>
+  <div id="badge" data-testid="badge" role="status" aria-live="polite">OFFLINE</div>
+  <div id="cards" data-testid="cards">
+    <div class="card card-obs" data-testid="card-obs" role="group" aria-label="OBS">
       <div class="card-header">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-4v12l-6-4"/></svg>
         OBS
       </div>
-      <div class="row"><span class="label">Video</span><span class="value" id="video">-</span></div>
-      <div class="row" id="audioRow"><span class="label">Audio</span><span class="value" id="audio">-</span></div>
+      <div class="row"><span class="label">Video</span><span class="value" id="video" data-testid="video">-</span></div>
+      <div class="row" id="audioRow"><span class="label">Audio</span><span class="value" id="audio" data-testid="audio">-</span></div>
     </div>
-    <div class="card card-twitch">
+    <div class="card card-twitch" data-testid="card-twitch" role="group" aria-label="Twitch">
       <div class="card-header">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a8 8 0 0 1 16 0"/><path d="M8 13a4 4 0 0 1 8 0"/><circle cx="12" cy="17" r="1.4" fill="currentColor" stroke="none"/></svg>
         Twitch
       </div>
-      <div class="row"><span class="label">Category</span><span class="value" id="category">-</span></div>
-      <div class="row"><span class="label">Live for</span><span class="value" id="uptime">-</span></div>
-      <div class="row"><span class="label">Title</span><span class="value" id="title">-</span></div>
-      <div class="row" id="tagsRow"><span class="label">Tags</span><span class="value" id="tags"></span></div>
+      <div class="row"><span class="label">Category</span><span class="value" id="category" data-testid="category">-</span></div>
+      <div class="row"><span class="label">Live for</span><span class="value" id="uptime" data-testid="uptime">-</span></div>
+      <div class="row"><span class="label">Title</span><span class="value" id="title" data-testid="title">-</span></div>
+      <div class="row" id="tagsRow"><span class="label">Tags</span><span class="value" id="tags" data-testid="tags"></span></div>
       __TWITCH_LINK_HTML__
     </div>
-    <div class="card card-sab">
+    <div class="card card-sab" data-testid="card-sab" role="group" aria-label="SABnzbd">
       <div class="card-header">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v10"/><path d="M8 9l4 4 4-4"/><path d="M4 17h16v3H4z"/></svg>
         SABnzbd
       </div>
-      <div class="row"><span class="label">Status</span><span class="value" id="sabnzbd">-</span></div>
-      <div class="row"><span class="label">Activity</span><span class="value" id="sabActivity">-</span></div>
-      <div class="row"><span class="label" title="ON: StreamPilot pauses SABnzbd when a game starts, re-pauses it if it drifts, and resumes it when the game exits. When no game is running (idle), SABnzbd runs freely. OFF: StreamPilot never touches SABnzbd (resumes it immediately).">Keep SAB paused while gaming</span><span class="value"><label class="switch"><input type="checkbox" id="sabToggle" checked><span class="slider"></span></label></span></div>
+      <div class="row"><span class="label">Status</span><span class="value" id="sabnzbd" data-testid="sabnzbd">-</span></div>
+      <div class="row"><span class="label">Activity</span><span class="value" id="sabActivity" data-testid="sab-activity">-</span></div>
+      <div class="row"><span class="label" title="ON: StreamPilot pauses SABnzbd when a game starts, re-pauses it if it drifts, and resumes it when the game exits. When no game is running (idle), SABnzbd runs freely. OFF: StreamPilot never touches SABnzbd (resumes it immediately).">Keep SAB paused while gaming</span><span class="value"><label class="switch"><input type="checkbox" id="sabToggle" data-testid="sab-toggle" aria-label="Keep SABnzbd paused while gaming" checked><span class="slider"></span></label></span></div>
     </div>
   </div>
-  <div id="footer">waiting for daemon...</div>
+  <div id="footer" data-testid="footer">waiting for daemon...</div>
+  <div id="build" data-testid="build">__BUILD_LINE__</div>
   <div id="actions">
-    <button id="restartBtn" class="footerBtn accent-blue" type="button">Restart Stream</button>
-    <button id="quitBtn" class="footerBtn" type="button">Quit</button>
+    <button id="restartBtn" data-testid="restart-btn" class="footerBtn accent-blue" type="button">Restart Stream</button>
+    <button id="quitBtn" data-testid="quit-btn" class="footerBtn" type="button">Quit</button>
   </div>
 
-  <div id="quitOverlay" class="overlay" hidden>
+  <div id="quitOverlay" data-testid="quit-overlay" class="overlay" hidden>
     <div id="quitDialog" class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="quitTitle" aria-describedby="quitDesc" tabindex="-1">
       <div id="quitTitle" class="dialogTitle">Quit StreamPilot?</div>
       <div id="quitDesc" class="dialogDesc">Choose what happens to your stream.</div>
       <div class="dialogActions">
-        <button id="quitCancel" type="button">Cancel</button>
-        <button id="quitKeepStream" type="button">Keep streaming</button>
-        <button id="quitEndStream" type="button">End stream</button>
+        <button id="quitCancel" data-testid="quit-cancel" type="button">Cancel</button>
+        <button id="quitKeepStream" data-testid="quit-keep-stream" type="button">Keep streaming</button>
+        <button id="quitEndStream" data-testid="quit-end-stream" type="button">End stream</button>
       </div>
     </div>
   </div>
 
-  <div id="restartOverlay" class="overlay" hidden>
+  <div id="restartOverlay" data-testid="restart-overlay" class="overlay" hidden>
     <div id="restartDialog" class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="restartTitle" aria-describedby="restartDesc" tabindex="-1">
       <div id="restartTitle" class="dialogTitle">Restart Stream?</div>
       <div id="restartDesc" class="dialogDesc">Ends the current VOD and starts a new one for the same game. StreamPilot keeps running.</div>
       <div class="dialogActions">
-        <button id="restartCancel" type="button">Cancel</button>
-        <button id="restartConfirm" type="button">Restart Stream</button>
+        <button id="restartCancel" data-testid="restart-cancel" type="button">Cancel</button>
+        <button id="restartConfirm" data-testid="restart-confirm" type="button">Restart Stream</button>
       </div>
     </div>
   </div>
 <script>
+// Any uncaught error or rejected promise becomes a visible banner, a console line and a server log line (WS-100).
+function reportAppError(what) {
+  const text = "[app-error] " + what;
+  console.error(text);
+  const banner = document.getElementById("error-banner");
+  if (banner) { banner.textContent = text; banner.hidden = false; }
+  try {
+    fetch("/__log", { method: "POST", headers: { "Content-Type": "application/json", "X-StreamPilot-Token": "__STREAMPILOT_TOKEN__" },
+                      body: JSON.stringify({ msg: text }) }).catch(() => {});
+  } catch (e) { /* logging must never raise */ }
+}
+window.addEventListener("error", (e) => reportAppError((e.message || "error") + " (" + (e.filename || "").split("/").pop() + ":" + (e.lineno || 0) + ")"));
+window.addEventListener("unhandledrejection", (e) => reportAppError("unhandled rejection: " + ((e.reason && e.reason.message) || e.reason)));
+window.__debug = {
+  last: null,
+  state() { return this.last; },
+  help() { return "window.__debug.state() returns the last /status.json and the badge state; the page polls /status.json every " + __POLL_MS__ + " ms"; },
+};
 const COLORS = { OK: "#3fd67a", ISSUE: "#ff5d5d", IDLE: "#6b7280", OFFLINE: "#4b5563" };
 const TITLE_DOTS = { OK: "🟢", ISSUE: "🔴", IDLE: "⚪", OFFLINE: "⚫" };
 const STALE_MULT = 4, STALE_FLOOR = 8;
@@ -392,6 +426,7 @@ async function tick() {
   }
 
   const state = stale ? "OFFLINE" : (s.status || "IDLE");
+  window.__debug.last = { state, stale, status: s };
   const color = COLORS[state] || "#f5a623";
 
   document.getElementById("badge").textContent = state;
@@ -532,9 +567,27 @@ def _twitch_link_html(channel: str | None) -> str:
     return f'<a id="twitchLink" href="{url}" target="_blank" rel="noopener noreferrer">Watch on Twitch ↗</a>'
 
 
+def set_fixture(name) -> None:
+    """Serve a fixtures.SCENARIOS scenario instead of the live status file; None returns to live. POST actions
+    do nothing in fixture mode (the daemon callbacks are bypassed)."""
+    global _fixture
+    if name is not None and name not in fixtures.SCENARIOS:
+        raise ValueError(f"unknown scenario {name!r}; choose one of: {', '.join(fixtures.SCENARIOS)}")
+    _fixture = name
+
+
+def _fixture_banner_html() -> str:
+    if _fixture is None:
+        return ""
+    return f'<div id="fixture-banner" data-testid="fixture-banner">FIXTURE: {html_lib.escape(_fixture)} (not live data)</div>'
+
+
 def index_html_bytes() -> bytes:
-    """Render INDEX_HTML with the current Twitch channel link substituted in."""
-    html = INDEX_HTML.replace("__TWITCH_LINK_HTML__", _twitch_link_html(_twitch_channel)).replace("__STREAMPILOT_TOKEN__", TOKEN)
+    """Render INDEX_HTML with the current Twitch channel link, fixture banner and build line substituted in."""
+    html = (INDEX_HTML.replace("__TWITCH_LINK_HTML__", _twitch_link_html(_twitch_channel))
+            .replace("__FIXTURE_BANNER__", _fixture_banner_html())
+            .replace("__BUILD_LINE__", html_lib.escape(build.info()["line"]))
+            .replace("__STREAMPILOT_TOKEN__", TOKEN))
     return html.encode("utf-8")
 
 
@@ -542,9 +595,30 @@ def status_json_bytes(status_path=STATUS_PATH) -> bytes:
     """Return the current status as JSON bytes, or an OFFLINE-shaped default
     if the daemon hasn't written anything yet."""
     data = status_file.read_status(status_path)
+    if _fixture is not None:
+        data = fixtures.status(_fixture)
     if data is None:
         data = {"timestamp": 0, "status": "IDLE", "game": None, "category": None, "title": None, "tags": None, "sabnzbd": None, "poll_interval": 2, "build_id": None, "audio_ok": None, "audio_violations": None, "captured_window_exe": None, "audio_exes": None, "blacklisted_window": None, "stream_started_at": None}
+    now = time.time()
+    data = dict(data, schema=STATUS_SCHEMA, generated_at=now, stale=health.verdict(data, now) == "OFFLINE")
+    data.setdefault("poll_interval", 2)
     return json.dumps(data).encode("utf-8")
+
+
+def _write_ui_log(msg: str) -> bool:
+    """Append one page-reported line to the UI log; False once the per-process cap is reached."""
+    global _log_count
+    if _log_count >= LOG_MAX_LINES:
+        return False
+    _log_count += 1
+    line = time.strftime("%Y-%m-%d %H:%M:%S ") + " ".join(str(msg).split())[:LOG_LINE_MAX]
+    try:
+        os.makedirs(os.path.dirname(UI_LOG_PATH), exist_ok=True)
+        with open(UI_LOG_PATH, "a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    except OSError:
+        return False
+    return True
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -608,11 +682,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if not self._guard(False):
             return
-        if self.path in ("/", "/index.html"):
+        route = urlsplit(self.path).path  # a query string (the capture's ?scenario=) never changes the route
+        if route in ("/", "/index.html"):
             self._send(200, "text/html; charset=utf-8", index_html_bytes())
-        elif self.path == "/status.json":
+        elif route == "/status.json":
             self._send(200, "application/json", status_json_bytes())
-        elif self.path == "/api/build":
+        elif route == "/api/build":
             self._send(200, "application/json", json.dumps(build.info()).encode("utf-8"))
         else:
             self.send_error(404)
@@ -620,7 +695,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._guard(True):
             return
-        if self.path == "/quit":
+        if self.path == "/__log":
+            length = min(int(self.headers.get("Content-Length", 0) or 0), 8192)
+            try:
+                msg = json.loads(self.rfile.read(length)).get("msg", "") if length else ""
+            except (json.JSONDecodeError, ValueError, AttributeError):
+                msg = ""
+            _write_ui_log(msg)
+            self.send_response(204)
+            self.end_headers()
+        elif self.path == "/quit":
             end_stream = True
             length = int(self.headers.get("Content-Length", 0) or 0)
             if length:
@@ -629,7 +713,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     end_stream = bool(payload.get("end_stream", True))
                 except (json.JSONDecodeError, ValueError):
                     pass
-            if _on_quit_callback:
+            if _on_quit_callback and _fixture is None:
                 _on_quit_callback(end_stream=end_stream)
             self._send(202, "application/json", b'{"ok": true}')
         elif self.path == "/sab_toggle":
@@ -644,11 +728,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not isinstance(enabled, bool):
                 self.send_error(400, "Missing or invalid 'enabled' boolean")
                 return
-            if _on_sab_toggle_callback:
+            if _on_sab_toggle_callback and _fixture is None:
                 _on_sab_toggle_callback(enabled=enabled)
             self._send(202, "application/json", b'{"ok": true}')
         elif self.path == "/restart_stream":
-            if _on_restart_stream_callback:
+            if _on_restart_stream_callback and _fixture is None:
                 _on_restart_stream_callback()
             self._send(202, "application/json", b'{"ok": true}')
         else:

@@ -20,6 +20,7 @@ if sys.stderr is None:
 
 import config as cfg_module
 from daemon import Daemon
+import fixtures
 import launcher
 import window_safety
 
@@ -243,6 +244,11 @@ def build_parser():
     for name in ('launch', 'stop', 'check', 'preflight'):
         sub.choices[name].add_argument('--port', type=int, default=launcher.DEFAULT_PORT, help='Dashboard port (default 8765)')
 
+    fixture_p = sub.add_parser('fixture', help='Serve a fixture scenario on a spare port (never live data, never the daemon)')
+    fixture_p.add_argument('--scenario', default='live', choices=list(fixtures.SCENARIOS), help='Scenario to show (default live)')
+    fixture_p.add_argument('--port', type=int, default=0, help='Port (default 0 = the OS picks a free one; the live port is refused)')
+    fixture_p.add_argument('--no-browser', action='store_true', help='Do not open a browser tab')
+
     config_p = sub.add_parser('config', help='Config management')
     config_sub = config_p.add_subparsers(dest='config_command', required=True)
     config_sub.add_parser('add-game', help='Wizard: detect running game and add to config')
@@ -269,11 +275,38 @@ def run_lifecycle(args) -> int:
     return code
 
 
+def run_fixture(args, serve=None) -> int:
+    """Serve one fixtures scenario for looking at or driving the page. Read-only and daemonless: POSTs do nothing."""
+    import dashboard_server
+    if args.port == launcher.DEFAULT_PORT:
+        print(f"[FAILED] port {launcher.DEFAULT_PORT} is the live dashboard; fixture mode needs a spare port (use the default, 0).")
+        return 2
+    dashboard_server.set_fixture(args.scenario)
+    server = (serve or dashboard_server.make_server)(args.port)
+    url = f"http://localhost:{server.server_address[1]}/"
+    print(f"[StreamPilot Fixture] scenario {args.scenario} at {url} (not live data; Ctrl+C to stop)", flush=True)
+    if not args.no_browser:
+        import threading
+        import webbrowser
+        threading.Timer(0.4, lambda: webbrowser.open(url)).start()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.shutdown()
+        server.server_close()
+        dashboard_server.set_fixture(None)
+    return 0
+
+
 def main():
     args = build_parser().parse_args()
 
     if args.command == 'start':
         cmd_start(args)
+    elif args.command == 'fixture':
+        sys.exit(run_fixture(args))
     elif args.command in ('launch', 'stop', 'check', 'preflight'):
         sys.exit(run_lifecycle(args))
     elif args.command == 'status':
