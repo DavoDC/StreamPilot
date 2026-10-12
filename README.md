@@ -11,7 +11,7 @@ https://github.com/user-attachments/assets/f252d147-f5b1-4a5c-a0dd-580a6ae9bed9
 - **One click, then forget it.** Start it once; every game after that is automatic.
 - **Everything handled for you.** Right window captured, right Twitch category, a fresh title and tags for each game, stream started, SABnzbd paused so downloads never slow your stream.
 - **It keeps fixing itself.** Every couple of seconds it checks that OBS is connected, the right window is captured, the stream is up and downloads are still paused, and puts anything that drifted back.
-- **Know it is all good at a glance.** A live dashboard on your second screen shows OBS, Twitch and SABnzbd in one place, and the browser tab title and icon change colour with the status.
+- **Know it is all good at a glance.** A live dashboard on your second screen shows OBS, Twitch and SABnzbd in one place, and the browser tab title changes with the status and the tab and tray icon show the app icon with a small status badge.
 - **Safe to stream.** It never broadcasts a non-game window, and private audio can never reach the stream.
 - **Light and local.** It runs entirely on your own PC, with no cloud service of its own and no heavy dependencies.
 

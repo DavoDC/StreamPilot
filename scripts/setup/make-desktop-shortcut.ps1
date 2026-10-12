@@ -10,8 +10,11 @@
 # Explorer's cache after deletion once; a plain desktop refresh (F5) clears
 # that if it ever recurs.
 #
+# -DryRun lists what it would remove and create and touches nothing; -Desktop <dir> targets another folder. The .ico is the one app icon (src/app_icon.py, WS-130; rebuild with scripts/dev/build-icons.py).
 # Run: powershell -ExecutionPolicy Bypass -File "...\scripts\setup\make-desktop-shortcut.ps1"
 # Verify: powershell -ExecutionPolicy Bypass -File "...\tests\test-desktop-shortcut.ps1"
+
+param([switch]$DryRun, [string]$Desktop = "$env:USERPROFILE\Desktop")
 
 $repoDir      = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $scriptsDir   = "$repoDir\scripts"
@@ -29,7 +32,8 @@ if (-not (Test-Path $icoPath)) {
 }
 
 # --- Remove any existing StreamPilot shortcuts on the Desktop (incl. stray duplicates) ---
-Get-ChildItem "$env:USERPROFILE\Desktop" -Filter "StreamPilot*.lnk" -ErrorAction SilentlyContinue | ForEach-Object {
+Get-ChildItem $Desktop -Filter "StreamPilot*.lnk" -ErrorAction SilentlyContinue | ForEach-Object {
+    if ($DryRun) { Write-Host "DRY RUN would remove: $($_.FullName)"; return }
     Remove-Item $_.FullName -Force
     Write-Host "Removed: $($_.FullName)"
 }
@@ -40,7 +44,8 @@ Get-ChildItem "$env:USERPROFILE\Desktop" -Filter "StreamPilot*.lnk" -ErrorAction
 # point at it, so updating run.bat is enough to change what they launch.
 $shell = New-Object -ComObject WScript.Shell
 foreach ($name in $shortcutNames) {
-    $path = "$env:USERPROFILE\Desktop\$name"
+    $path = "$Desktop\$name"
+    if ($DryRun) { Write-Host "DRY RUN would create: $path (icon $icoPath,0)"; continue }
     $s = $shell.CreateShortcut($path)
     $s.TargetPath       = $runBat
     $s.WorkingDirectory = $scriptsDir

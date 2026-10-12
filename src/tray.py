@@ -15,6 +15,7 @@ import urllib.request
 import webbrowser
 from typing import Callable, List, Optional
 
+import app_icon
 import health
 import hot_reload
 
@@ -102,17 +103,8 @@ def _load_backend():
 
 
 def render_icon(backend, name: str, size: int = 64):
-    """Dark rounded badge (never changes) with a state-coloured disc and a play triangle in the badge colour."""
-    _, Image, ImageDraw = backend
-    big = size * 4
-    img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    d.rounded_rectangle((0, 0, big - 1, big - 1), radius=big * 0.19, fill=BADGE)
-    m = big * 0.16
-    d.ellipse((m, m, big - m, big - m), fill=health.COLOURS[name])
-    cx, cy, r = big * 0.53, big * 0.5, big * 0.2
-    d.polygon([(cx - r * 0.7, cy - r), (cx - r * 0.7, cy + r), (cx + r, cy)], fill=BADGE)
-    return img.resize((size, size), Image.LANCZOS)
+    """The one app icon (app_icon.render, WS-130) with only a small state badge in the corner."""
+    return app_icon.render(name, size)
 
 
 def start(port: int, on_stop: Callable, log: Callable[[str], None] = print, fetch: Callable = fetch_status) -> bool:

@@ -23,6 +23,7 @@ import time
 import webbrowser
 from urllib.parse import urlsplit
 
+import app_icon
 import build
 import fixtures
 import health
@@ -76,7 +77,7 @@ INDEX_HTML = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <title>StreamPilot</title>
-<link rel="icon" id="favicon" type="image/svg+xml" href="">
+<link rel="icon" id="favicon" type="image/png" href="">
 <style>
   :root { color-scheme: dark; }
   body {
@@ -219,6 +220,7 @@ INDEX_HTML = """<!doctype html>
 </style>
 </head>
 <body>
+  <img id="appmark" data-testid="appmark" width="40" height="40" alt="StreamPilot" src="">
   <div id="dot" data-testid="dot" aria-hidden="true"></div>
   __FIXTURE_BANNER__
   <div id="error-banner" data-testid="error-banner" role="alert" hidden></div>
@@ -305,10 +307,12 @@ const COLORS = { OK: "#3fd67a", ISSUE: "#ff5d5d", IDLE: "#6b7280", OFFLINE: "#4b
 const TITLE_DOTS = { OK: "🟢", ISSUE: "🔴", IDLE: "⚪", OFFLINE: "⚫" };
 const STALE_MULT = 4, STALE_FLOOR = 8;
 
-function setFavicon(color) {
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>` +
-              `<circle cx='16' cy='16' r='13' fill='${color}'/></svg>`;
-  document.getElementById("favicon").href = "data:image/svg+xml," + encodeURIComponent(svg);
+const ICONS = __ICONS_JSON__;
+
+function setFavicon(state) {
+  const uri = ICONS[state] || ICONS.OFFLINE;  // the one app icon with a state badge (WS-130), same as the tray
+  document.getElementById("favicon").href = uri;
+  document.getElementById("appmark").src = uri;
 }
 
 function formatUptime(startedAt) {
@@ -432,7 +436,7 @@ async function tick() {
   document.getElementById("badge").textContent = state;
   document.getElementById("badge").style.color = color;
   document.getElementById("dot").style.background = color;
-  setFavicon(color);
+  setFavicon(state);
 
   if (stale) {
     setVideoRow(false, null, null);
@@ -587,6 +591,7 @@ def index_html_bytes() -> bytes:
     html = (INDEX_HTML.replace("__TWITCH_LINK_HTML__", _twitch_link_html(_twitch_channel))
             .replace("__FIXTURE_BANNER__", _fixture_banner_html())
             .replace("__BUILD_LINE__", html_lib.escape(build.info()["line"]))
+            .replace("__ICONS_JSON__", json.dumps({s: app_icon.data_uri(s) for s in app_icon.STATES}))
             .replace("__STREAMPILOT_TOKEN__", TOKEN))
     return html.encode("utf-8")
 
