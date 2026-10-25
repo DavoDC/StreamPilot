@@ -8,6 +8,10 @@ log = logging.getLogger(__name__)
 
 HELIX_BASE = "https://api.twitch.tv/helix"
 
+# The only scope any StreamPilot call needs: PATCH /channels (set_channel_info).
+# GET /channels, GET /streams and GET /search/categories need no scope.
+REQUIRED_SCOPES = frozenset({"channel:manage:broadcast"})
+
 # Warn when the token has this long left (seconds), once per calendar day each.
 EXPIRY_WARN_THRESHOLDS = (7 * 86400, 86400)
 
@@ -47,6 +51,12 @@ class TwitchClient:
             else:
                 self._expires_at = None
             log.info(f"Twitch token valid. User ID: {self._broadcaster_id}")
+            extra = sorted(set(data.get("scopes") or []) - REQUIRED_SCOPES)
+            if extra:
+                log.warning(
+                    f"Twitch token has scopes StreamPilot does not use: {', '.join(extra)}. "
+                    "Generate a token with only channel:manage:broadcast (docs/SETUP.md, Step 4)."
+                )
             return True
         except Exception as e:
             log.warning(f"Twitch validate failed: {e}")

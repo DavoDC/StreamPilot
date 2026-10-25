@@ -277,3 +277,35 @@ def test_validate_failure_logs_status_not_raw_body(client, caplog):
     assert "token rejected" in errors[0].getMessage()
     assert secret not in caplog.text
     assert "invalid access token" not in caplog.text
+
+
+def _scope_warnings(caplog):
+    return [r for r in caplog.records if r.levelno == logging.WARNING and "scope" in r.getMessage()]
+
+
+def test_extra_scopes_log_one_warning_and_still_validate(client, caplog):
+    payload = {"user_id": "1", "scopes": ["channel:manage:broadcast", "moderator:manage:banned_users", "channel:read:subscriptions"]}
+    mock_resp = MagicMock(status_code=200)
+    mock_resp.json.return_value = payload
+    with patch("twitch_client.requests.get", return_value=mock_resp):
+        assert client.validate() is True
+    warnings = _scope_warnings(caplog)
+    assert len(warnings) == 1
+    assert "moderator:manage:banned_users" in warnings[0].getMessage()
+    assert "channel:read:subscriptions" in warnings[0].getMessage()
+
+
+def test_required_scope_only_is_silent(client, caplog):
+    mock_resp = MagicMock(status_code=200)
+    mock_resp.json.return_value = {"user_id": "1", "scopes": ["channel:manage:broadcast"]}
+    with patch("twitch_client.requests.get", return_value=mock_resp):
+        assert client.validate() is True
+    assert _scope_warnings(caplog) == []
+
+
+def test_missing_scopes_key_is_silent(client, caplog):
+    mock_resp = MagicMock(status_code=200)
+    mock_resp.json.return_value = {"user_id": "1"}
+    with patch("twitch_client.requests.get", return_value=mock_resp):
+        assert client.validate() is True
+    assert _scope_warnings(caplog) == []
