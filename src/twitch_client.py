@@ -1,11 +1,15 @@
 """Twitch API client for setting stream category."""
 
 import logging
+import time
 import requests
 
 log = logging.getLogger(__name__)
 
 HELIX_BASE = "https://api.twitch.tv/helix"
+
+# Warn when the token has this long left (seconds), once per calendar day each.
+EXPIRY_WARN_THRESHOLDS = (7 * 86400, 86400)
 
 
 class TwitchClient:
@@ -13,6 +17,8 @@ class TwitchClient:
         self.client_id = client_id
         self.oauth_token = oauth_token.replace("oauth:", "")
         self._broadcaster_id = None
+        self._expires_at = None  # epoch seconds from the validate response; None = unknown
+        self._expiry_warned = set()  # (threshold, local date) already logged
 
     def _headers(self) -> dict:
         return {
@@ -33,11 +39,37 @@ class TwitchClient:
                 return False
             data = resp.json()
             self._broadcaster_id = data.get("user_id")
+            expires_in = data.get("expires_in")
+            if isinstance(expires_in, (int, float)) and expires_in > 0:
+                self._expires_at = time.time() + expires_in
+            else:
+                self._expires_at = None
             log.info(f"Twitch token valid. User ID: {self._broadcaster_id}")
             return True
         except Exception as e:
             log.warning(f"Twitch validate failed: {e}")
             return False
+
+    def warn_if_expiring(self, now: float = None) -> bool:
+        """Log a WARNING when the token (per the last validate) is within a
+        threshold of expiry, once per day per threshold. Makes no API call;
+        returns True if a warning was logged. Unknown expiry is silent."""
+        if self._expires_at is None:
+            return False
+        now = time.time() if now is None else now
+        remaining = self._expires_at - now
+        hit = [t for t in EXPIRY_WARN_THRESHOLDS if remaining <= t]
+        if not hit:
+            return False
+        key = (min(hit), time.strftime("%Y-%m-%d", time.localtime(now)))
+        if key in self._expiry_warned:
+            return False
+        self._expiry_warned.add(key)
+        if remaining <= 0:
+            log.warning("Twitch token has expired - generate a new one (docs/SETUP.md, Step 4)")
+        else:
+            log.warning(f"Twitch token expires in {remaining / 86400:.1f} day(s) - generate a new one soon (docs/SETUP.md, Step 4)")
+        return True
 
     def set_channel_info(self, game_id: str = None, title: str = None, tags: list = None):
         """Set category, title, and/or tags in a single PATCH to /channels.

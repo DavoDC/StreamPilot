@@ -2273,3 +2273,14 @@ def test_heartbeat_makes_one_sabnzbd_http_call(daemon):
     with patch("sabnzbd_client.requests.get", return_value=resp) as get:
         daemon._print_heartbeat()
     assert get.call_count == 1
+
+
+def test_print_heartbeat_checks_twitch_token_expiry(daemon):
+    daemon.obs = _safe_obs_mock()
+    daemon.twitch = MagicMock()
+    daemon.twitch.get_stream_started_at.return_value = None
+    daemon.sab = _sab_mock()
+    daemon.sab_enabled = True
+    with patch("daemon.log"), patch("daemon.status_file.write_status"):
+        daemon._print_heartbeat()
+    daemon.twitch.warn_if_expiring.assert_called()

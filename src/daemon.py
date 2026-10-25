@@ -405,6 +405,7 @@ class Daemon:
         return bool(connected)
 
     def _print_heartbeat(self):
+        self.twitch.warn_if_expiring()
         game_name = self.games.get(self._active_game_exe, {}).get("name") if self._active_game_exe else None
         # Only fetch/show the Twitch category while a game is active - otherwise
         # it's whatever was last set, stale and misleading next to "Idle" (also
