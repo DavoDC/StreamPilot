@@ -21,10 +21,10 @@ https://github.com/user-attachments/assets/f252d147-f5b1-4a5c-a0dd-580a6ae9bed9
 
 ## How it works
 
-Start it once and it works in the background. Double-click `scriptsun.bat`: it starts StreamPilot, launches OBS if needed and opens the live dashboard in your browser. From then on it watches for your games.
+Double-click `scripts\run.bat`: it starts StreamPilot, launches OBS if needed and opens the live dashboard in your browser.
 
 - **When you launch a game:** it sets the OBS capture, the Twitch category, title and tags, and starts the stream. Each game gets its own stream, so the next game starts a fresh one.
-- **While you play:** SABnzbd stays paused so downloads do not hurt your connection mid-game. This is not a setup step. It happens on its own for every session, and if something drifts (OBS drops, the wrong window, downloads resumed) it is put back within seconds. With no game running, SABnzbd runs freely.
+- **While you play:** SABnzbd stays paused so downloads do not hurt your connection mid-game. It is not a setup step: if something drifts (OBS drops, the wrong window, downloads resumed) it is put back within seconds. With no game running, SABnzbd runs freely.
 - **When you close the game:** the stream ends and SABnzbd resumes.
 - **Done for the night?** Click **Quit** on the dashboard and confirm. It stops the stream, resumes SABnzbd and closes itself. `run.bat` has no console window, so this is the only way to shut it down other than Task Manager.
 
@@ -44,4 +44,4 @@ StreamPilot owns OBS's "Application Audio Output Capture" source directly: when 
 
 ## Get started
 
-One-time setup takes five short steps: see [docs/SETUP.md](docs/SETUP.md). After that, double-click `scriptsun.bat` and launch your game.
+One-time setup takes five short steps: see [docs/SETUP.md](docs/SETUP.md).

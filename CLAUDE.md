@@ -1,12 +1,12 @@
 # StreamPilot - Claude Context
 
-Python CLI daemon that auto-manages OBS streaming + SABnzbd when launching a known game. This file is orientation, safety rules and commands only. Implementation detail (architecture, config reference, hot-reload, incident history, repo layout) is in `docs/References/DevContext.md`; read its relevant section before touching `daemon.py`, `dashboard_server.py` or `hot_reload.py`. User docs: `README.md`, `docs/SETUP.md`.
+Python CLI daemon that auto-manages OBS streaming + SABnzbd when launching a known game. Orientation, safety rules and commands only; implementation detail, config reference, hot-reload and history are in `docs/References/DevContext.md` (read the relevant section before touching `daemon.py`, `dashboard_server.py` or `hot_reload.py`).
 
 ## Key Paths
 
 - OBS executable: `C:\Program Files\obs-studio\bin\64bit\obs64.exe`
 - Dashboard visual consistency rules (palette, typography, buttons, toggles): `docs/DESIGN.md` - read before editing `dashboard_server.py`'s `INDEX_HTML`.
-- Implementation detail and history: `docs/References/DevContext.md`. Setup steps: `docs/SETUP.md`. Status contract: `docs/References/state-contract.md`.
+- Setup steps: `docs/SETUP.md`. Status contract: `docs/References/state-contract.md`.
 
 ## Safety: never stream a non-game window (rule, added 2026-07-19)
 
@@ -18,7 +18,7 @@ Default blacklist: common browsers (chrome/edge/firefox/brave/opera/iexplore), r
 
 ## Safety: audio privacy guard (rule, added 2026-07-28)
 
-**A leaked private audio source (Discord, a second monitor's game audio, a browser tab) is invisible and unrecoverable once streamed.** The audio side uses an allow-list (only known-safe exes may be present in the OBS "Application Audio Output Capture" source), the inverse of the video guard's blacklist. It is enforced by `src/audio_safety.py`, config validation, a preflight before every `start_stream()`, a live heartbeat check that force-stops the stream on any violation, auto-add of the active game, a Desktop Audio / Mic mute check and exclusive-mode convergence of the capture list. Full enforcement detail (all 7 points) is in `docs/References/DevContext.md`, "Audio privacy guard: full enforcement detail". Surfaced on the dashboard per the rule below.
+**A leaked private audio source (Discord, a second monitor's game audio, a browser tab) is invisible and unrecoverable once streamed.** The audio side uses an allow-list (only known-safe exes may be present in the OBS "Application Audio Output Capture" source), the inverse of the video guard's blacklist. Enforcement (all 7 points) is in `docs/References/DevContext.md`, "Audio privacy guard: full enforcement detail". Surfaced on the dashboard per the rule below.
 
 ## Dashboard is the source of truth (rule)
 
@@ -30,11 +30,12 @@ Default blacklist: common browsers (chrome/edge/firefox/brave/opera/iexplore), r
 
 ## Always specify encoding='utf-8' on file I/O (rule, added 2026-07-21)
 
-**Every `open()` call touching `config.json`, `status.json`, or any file that could ever hold non-ASCII text (emoji, names, etc.) must pass `encoding='utf-8'` explicitly.** Windows' default text encoding is cp1252, not UTF-8. Incident and regression test: DevContext.md, "utf-8 incident".
+**Every `open()` call touching `config.json`, `status.json`, or any file that could ever hold non-ASCII text (emoji, names, etc.) must pass `encoding='utf-8'` explicitly.** Windows' default text encoding is the system codepage (cp1252 here), not UTF-8. Without the explicit arg, reading a file containing literal UTF-8 multi-byte sequences (not `\uXXXX`-escaped) raises `UnicodeDecodeError`. **Incident (2026-07-21):** adding a per-game `emoji` field to `config.json` crashed the live daemon on the very next hot-reload - `config.py::load()`'s `open(path, 'r')` had no encoding, so `json.load()` blew up on the emoji bytes. Invisible under `pythonw` (stderr to devnull) - the process just silently died, same failure shape as the 2026-07-19 psutil incident below. Fixed in `config.py` and `status_file.py`; regression test in `tests/test_config.py::test_load_handles_non_ascii_unicode_in_config`. `hot_reload.py` already did this correctly (`open(path, "r", encoding="utf-8")`)
+- match that pattern in any new file I/O.
 
 ## Status/state field design (rule, added 2026-07-25)
 
-**A status field shown on the dashboard must only ever encode current physical truth, never a transient "an action was just taken" event.** Put correction events in the log line, not the polled state field. Incident and detail: DevContext.md, "Status/state field design: detail".
+**A status field shown on the dashboard must only ever encode current physical truth, never a transient "an action was just taken" event.** A polled UI (the dashboard reads `status.json` once a poll cycle) can only show a label for as long as it survives to the next poll - a one-cycle "I just corrected this" annotation is either invisible (overwritten before anyone looks) or, worse, asymmetric if only one direction of the correction gets a label and the other doesn't. **Incident:** SABnzbd's status field showed `"REPAUSED"` for exactly one heartbeat after the daemon auto-paused a drifted SABnzbd, but there was no matching `"UNPAUSED"` for the resume direction (resume happens synchronously on toggle-off, not via a heartbeat correction) - David never saw the label he expected and the asymmetry itself was the tell that the design was wrong, not just the wording. Fixed by collapsing `sab_str` in `daemon.py::_classify()` to plain physical states only (`Running`/`Paused`, `Disabled`/`Unreachable` for connectivity, `(manual)` suffix for mode) - correction *events* stay in the log line that triggers them (`log.warning(...)` in `_print_heartbeat`), never the polled state field. **Applies to any future dashboard row:** if you're about to add a value like `"JUST DID X"` to a `_classify()`-style status string, put it in the log instead and keep the field itself to states that are true for as long as they're displayed.
 
 ## CLI Commands
 

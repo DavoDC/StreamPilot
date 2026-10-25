@@ -1,6 +1,6 @@
 # Dev Context
 
-Implementation-level notes for working in this codebase. Demand-loaded (not auto-read every session) - read this before touching `daemon.py`'s state/classification logic.
+Implementation-level notes, demand-loaded (not auto-read). Read before touching `daemon.py`'s state/classification logic.
 
 ## Consume-once suppression flags in `_classify()`
 
@@ -11,8 +11,6 @@ Implementation-level notes for working in this codebase. Demand-loaded (not auto
 David manually changes two OBS settings each time he starts a game:
 1. **Game Capture source** - change target exe to the current game
 2. **Twitch category** - change to the matching game on Twitch
-
-Primary use case: **Fresh start** - launch a game, stream not running - StreamPilot starts the stream, sets Game Capture + category, pauses SABnzbd
 
 **The real purpose - psychological reassurance while gaming:** David uses a two-screen setup (game on primary/left, StreamPilot's browser dashboard on secondary/right). `run.bat` launches the daemon with no terminal window at all (via `pythonw.exe`) and opens the dashboard tab automatically - while in-game he should be able to glance right and confirm everything is handled correctly without alt-tabbing or interrupting gameplay. The goal is "I can see from one place it's all good" - stream is live, right category set, SABnzbd is paused. This is the core UX, not just automation.
 
@@ -122,11 +120,6 @@ Python version: docs say Python 3.11+. The code minimum is 3.10, because runtime
 7. **Exclusive-mode convergence** (`daemon.py::_converge_audio_capture_list`, default on via `audio.exclusive_mode`) - on game launch (first action in `_on_game_launch`, before even the game-capture window is set) and every heartbeat cycle, writes the OBS `executable_list` to exactly `[current_game_exe] + audio.extra_allowed` (`OBSClient.set_audio_capture_exes(..., exact=True)`, which reuses each retained entry's `uuid`/`hidden`/`selected` and skips the write entirely when already converged); on game exit and whenever idle with no stream running, clears it to empty. This is the ONE sanctioned removal path and it deliberately inverts the "never auto-remove" bias elsewhere in this guard - but only for converging onto the single known-correct value, never to clear a flagged violation. The heartbeat only calls it on cycles that did NOT just force-stop for an audio violation (`not audio_blocked`), so a flagged violation always force-stops first and is never silently "cleaned up" by the same cycle that caught it.
 Surfaced on the dashboard per the rule below (green "safe" / red "UNSAFE: <reasons>").
 
-### utf-8 incident
-
-**Every `open()` call touching `config.json`, `status.json`, or any file that could ever hold non-ASCII text (emoji, names, etc.) must pass `encoding='utf-8'` explicitly.** Windows' default text encoding is the system codepage (cp1252 here), not UTF-8. Without the explicit arg, reading a file containing literal UTF-8 multi-byte sequences (not `\uXXXX`-escaped) raises `UnicodeDecodeError`. **Incident (2026-07-21):** adding a per-game `emoji` field to `config.json` crashed the live daemon on the very next hot-reload - `config.py::load()`'s `open(path, 'r')` had no encoding, so `json.load()` blew up on the emoji bytes. Invisible under `pythonw` (stderr to devnull) - the process just silently died, same failure shape as the 2026-07-19 psutil incident below. Fixed in `config.py` and `status_file.py`; regression test in `tests/test_config.py::test_load_handles_non_ascii_unicode_in_config`. `hot_reload.py` already did this correctly (`open(path, "r", encoding="utf-8")`)
-- match that pattern in any new file I/O.
-
 ### Dev mode: hot-reload (`--watch`) - on by default via `run.bat`
 
 **On by default, not opt-in** - `run.bat` (and therefore the desktop shortcut) always passes `--watch`, so David can edit source while actively streaming and see the change land within ~1-2s, without a separate dev-mode launch step. `scripts/setup/make-desktop-shortcut.ps1` regenerates the Desktop shortcut (removes any existing `StreamPilot*.lnk` first, then creates one clean one pointing at `run.bat`) - re-run it any time the shortcut goes missing or gets manually duplicated; verify with `tests/test-desktop-shortcut.ps1`. The shortcut itself carries no launch args - `run.bat` is the single source of truth, so changing hot-reload behaviour means editing `run.bat`, not the shortcut. `src/hot_reload.py` polls every `.py` file under `src/` (plus `config.json` via `extra_files=` - not a `.py` file and not under `src/`, but still worth reacting to) once a second (`snapshot()`/`watch_loop()`, stdlib only).
@@ -148,10 +141,6 @@ Either path is gated by a **syntax check** (`check_syntax()`, in-memory `compile
 ### Polling cadence has no external cost (clarification, added 2026-07-27)
 
 **"Updated Ns ago | polling every 2s" on the dashboard is NOT hitting any external API.** It's the browser tab fetching `/status.json` from the local `http.server` on `localhost:8765`, which just reads a small JSON file off disk - pure loopback, negligible even faster. The daemon's own `poll_interval` (same config value, separate loop) is what touches real services, and only while a game/stream is active: OBS WebSocket calls (local, no network cost) and a local SABnzbd HTTP call, both cheap. The only genuinely external, rate-limited call is Twitch's `get_current_game_name` (daemon.py `_print_heartbeat`) - skipped entirely while idle - costing ~1 point per call against Twitch's 800 pts/min Helix budget, so 2s cadence (30 calls/min) uses under 4%. Slowing `poll_interval` would also delay the safety corrections sharing that same loop (window-mismatch fix, stream-restart-if-dropped, SABnzbd re-pause), which is the actual reason it's 2s - not the Twitch call. Conclusion: no strain at current cadence, leave as is.
-
-### Status/state field design: detail
-
-**A status field shown on the dashboard must only ever encode current physical truth, never a transient "an action was just taken" event.** A polled UI (the dashboard reads `status.json` once a poll cycle) can only show a label for as long as it survives to the next poll - a one-cycle "I just corrected this" annotation is either invisible (overwritten before anyone looks) or, worse, asymmetric if only one direction of the correction gets a label and the other doesn't. **Incident:** SABnzbd's status field showed `"REPAUSED"` for exactly one heartbeat after the daemon auto-paused a drifted SABnzbd, but there was no matching `"UNPAUSED"` for the resume direction (resume happens synchronously on toggle-off, not via a heartbeat correction) - David never saw the label he expected and the asymmetry itself was the tell that the design was wrong, not just the wording. Fixed by collapsing `sab_str` in `daemon.py::_classify()` to plain physical states only (`Running`/`Paused`, `Disabled`/`Unreachable` for connectivity, `(manual)` suffix for mode) - correction *events* stay in the log line that triggers them (`log.warning(...)` in `_print_heartbeat`), never the polled state field. **Applies to any future dashboard row:** if you're about to add a value like `"JUST DID X"` to a `_classify()`-style status string, put it in the log instead and keep the field itself to states that are true for as long as they're displayed.
 
 ### Repo Structure
 
