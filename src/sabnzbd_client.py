@@ -1,6 +1,7 @@
 """SABnzbd API client for pause/resume."""
 
 import logging
+import psutil
 import requests
 
 log = logging.getLogger(__name__)
@@ -8,6 +9,7 @@ log = logging.getLogger(__name__)
 
 class SABnzbdClient:
     def __init__(self, host: str, port: int, api_key: str):
+        self.host = host
         self.base_url = f"http://{host}:{port}/api"
         self.api_key = api_key
 
@@ -24,7 +26,29 @@ class SABnzbdClient:
             log.warning(f"SABnzbd {mode} failed: {e}")
         return None
 
+    def _is_local(self) -> bool:
+        return self.host.lower() in ("localhost", "127.0.0.1", "::1")
+
+    def _process_running(self) -> bool:
+        """True if a SABnzbd process is in the process list."""
+        for p in psutil.process_iter(["name"]):
+            name = p.info.get("name")
+            if name and name.lower().startswith("sabnzbd"):
+                return True
+        return False
+
+    def _preflight(self, action: str) -> bool:
+        """Fail fast when a local SABnzbd is not running, instead of waiting
+        out the connection retries. A remote host cannot be checked by process
+        list, so it always proceeds."""
+        if self._is_local() and not self._process_running():
+            log.warning(f"SABnzbd not running - skipping {action}")
+            return False
+        return True
+
     def pause(self):
+        if not self._preflight("pause"):
+            return
         result = self._get("pause")
         if result and result.get("status"):
             log.info("SABnzbd paused")
@@ -32,6 +56,8 @@ class SABnzbdClient:
             log.warning("SABnzbd pause failed or unreachable - pause manually if needed")
 
     def resume(self):
+        if not self._preflight("resume"):
+            return
         result = self._get("resume")
         if result and result.get("status"):
             log.info("SABnzbd resumed")

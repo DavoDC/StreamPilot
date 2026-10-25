@@ -10,6 +10,45 @@ def client():
     return SABnzbdClient("localhost", 8080, "myapikey")
 
 
+@pytest.fixture(autouse=True)
+def _sab_process_running():
+    """Default: SABnzbd's process is present. Tests of the absent case override."""
+    with patch("sabnzbd_client.psutil.process_iter",
+               return_value=[MagicMock(info={"name": "SABnzbd.exe"})]):
+        yield
+
+
+@pytest.mark.parametrize("action", ["pause", "resume"])
+def test_preflight_sab_not_running_warns_and_skips(client, caplog, action):
+    import logging
+    with patch("sabnzbd_client.psutil.process_iter", return_value=[]), \
+         patch("sabnzbd_client.requests.get") as get:
+        with caplog.at_level(logging.WARNING):
+            getattr(client, action)()  # must not raise
+    get.assert_not_called()
+    assert "SABnzbd not running" in caplog.text
+
+
+def test_preflight_skipped_for_remote_host():
+    remote = SABnzbdClient("192.168.1.50", 8080, "k")
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"status": True}
+    with patch("sabnzbd_client.psutil.process_iter", return_value=[]), \
+         patch("sabnzbd_client.requests.get", return_value=mock_resp) as get:
+        remote.pause()
+    get.assert_called_once()
+
+
+def test_process_running_matches_sabnzbd_names():
+    fake = [MagicMock(info={"name": "SABnzbd.exe"})]
+    with patch("sabnzbd_client.psutil.process_iter", return_value=fake):
+        assert SABnzbdClient("localhost", 8080, "k")._process_running() is True
+    fake = [MagicMock(info={"name": "notepad.exe"}), MagicMock(info={"name": None})]
+    with patch("sabnzbd_client.psutil.process_iter", return_value=fake):
+        assert SABnzbdClient("localhost", 8080, "k")._process_running() is False
+
+
 def test_pause_success(client, capsys):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
