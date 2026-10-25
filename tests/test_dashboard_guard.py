@@ -219,3 +219,21 @@ def test_bind_host_is_loopback_constant():
 def test_non_loopback_bind_is_refused():
     with pytest.raises(ValueError):
         dashboard_server.make_server(0, host="0.0.0.0")
+
+
+def test_a_refused_post_whose_body_arrives_late_still_gets_its_status_not_a_reset(served):
+    """Regression (flake): refusing with the body unread made Windows reset the connection under load.
+
+    Deterministic: headers go first, the body 0.3s later, so the server has already decided to refuse."""
+    import socket
+    import time
+    port, calls = served
+    body = b'{"enabled": true, "pad": "' + b"x" * 3000 + b'"}'
+    head = (f"POST /sab_toggle HTTP/1.1\r\nHost: localhost:{port}\r\nOrigin: http://localhost:{port}\r\n"
+            f"Content-Type: application/json\r\nX-StreamPilot-Token: wrong\r\nContent-Length: {len(body)}\r\n\r\n").encode()
+    with socket.create_connection(("127.0.0.1", port), timeout=10) as sock:
+        sock.sendall(head)
+        time.sleep(0.3)
+        sock.sendall(body)
+        assert b" 403 " in sock.recv(200)
+    assert calls == []

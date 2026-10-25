@@ -626,6 +626,10 @@ def _write_ui_log(msg: str) -> bool:
     return True
 
 
+DRAIN_MAX = 65536  # most of a refused request's body that is read before the refusal is sent
+DRAIN_TIMEOUT = 2.0
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass  # keep the terminal quiet; this is a status page, not a debug tool
@@ -659,7 +663,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _drain_refused_body(self) -> None:
+        """Read (a bounded amount of) a refused POST's body before answering. Closing with the body unread makes
+        Windows reset the connection, so a client still sending got a socket abort instead of the 403 (flaky under
+        load). shortcut: reads at most DRAIN_MAX bytes with a short timeout; a bigger or slower body is cut off."""
+        length = self.headers.get("Content-Length", "")
+        if self.command != "POST" or not length.isdigit():
+            return
+        try:
+            self.connection.settimeout(DRAIN_TIMEOUT)
+            self.rfile.read(min(int(length), DRAIN_MAX))
+        except OSError:
+            pass
+
     def _deny(self, why: str) -> None:
+        self._drain_refused_body()
         self._send(403, "application/json", json.dumps({"ok": False, "error": why}).encode("utf-8"))
 
     def _guard(self, state_changing: bool) -> bool:
@@ -698,10 +716,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
+        self._body_read = False  # per request: a kept-alive connection reuses this handler
+        try:
+            self._do_post()
+        finally:
+            if not self._body_read:
+                self._drain_refused_body()  # any route that answered without reading its body
+
+    def _do_post(self):
         if not self._guard(True):
             return
         if self.path == "/__log":
             length = min(int(self.headers.get("Content-Length", 0) or 0), 8192)
+            self._body_read = True
             try:
                 msg = json.loads(self.rfile.read(length)).get("msg", "") if length else ""
             except (json.JSONDecodeError, ValueError, AttributeError):
@@ -713,6 +740,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             end_stream = True
             length = int(self.headers.get("Content-Length", 0) or 0)
             if length:
+                self._body_read = True
                 try:
                     payload = json.loads(self.rfile.read(length))
                     end_stream = bool(payload.get("end_stream", True))
@@ -725,6 +753,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0) or 0)
             enabled = None
             if length:
+                self._body_read = True
                 try:
                     payload = json.loads(self.rfile.read(length))
                     enabled = payload.get("enabled")
