@@ -6,7 +6,7 @@ Python CLI daemon that auto-manages OBS streaming + SABnzbd when launching a kno
 
 - OBS executable: `C:\Program Files\obs-studio\bin\64bit\obs64.exe`
 - Dashboard visual consistency rules (palette, typography, buttons, toggles): `docs/DESIGN.md` - read before editing `dashboard_server.py`'s `INDEX_HTML`.
-- Setup steps: `docs/SETUP.md`. Status contract: `docs/References/state-contract.md`.
+- Setup steps: `docs/SETUP.md`. Status contract: `docs/References/state-contract.md`. Security review: `docs/References/SecurityReview.md`.
 
 ## Safety: never stream a non-game window (rule, added 2026-07-19)
 
