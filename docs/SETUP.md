@@ -30,7 +30,7 @@ Copy `config\config.example.json` to `config\config.json`, then open it and fill
 |---|---|---|
 | `obs.password` | OBS WebSocket password | The password you set in Step 2 |
 | `obs.game_capture_source` | Exact name of your Game Capture source in OBS | Check your OBS Sources panel |
-| `obs.exe_path` | Path to obs64.exe | Usually `C:\Program Files\obs-studio\bin\64bit\obs64.exe` |
+| `obs.exe_path` | Path to obs64.exe | See Step 2 |
 | `twitch.client_id` | Client ID paired with your OAuth token | See Step 4 below |
 | `twitch.oauth_token` | Token proving you can edit your channel | See Step 4 below |
 | `sabnzbd.api_key` | SABnzbd API key | SABnzbd > Config > General > API Key |

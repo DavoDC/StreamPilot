@@ -21,11 +21,12 @@ https://github.com/user-attachments/assets/f252d147-f5b1-4a5c-a0dd-580a6ae9bed9
 
 ## How it works
 
-1. Run `scripts\run.bat`. It starts StreamPilot, launches OBS if needed, and opens the live dashboard in your browser.
-2. Launch your game. StreamPilot sets the OBS capture, the Twitch category, title and tags, and starts the stream.
-3. It pauses SABnzbd for the session so downloads do not hurt your connection mid-game.
-4. Close the game. The stream ends and SABnzbd resumes. Each game gets its own stream, so the next game starts a fresh one.
-5. Done for the night? Click **Quit** on the dashboard and confirm. It stops the stream, resumes SABnzbd and closes itself. `run.bat` has no console window, so this is the only way to shut it down other than Task Manager.
+Start it once and it works in the background. Double-click `scriptsun.bat`: it starts StreamPilot, launches OBS if needed and opens the live dashboard in your browser. From then on it watches for your games.
+
+- **When you launch a game:** it sets the OBS capture, the Twitch category, title and tags, and starts the stream. Each game gets its own stream, so the next game starts a fresh one.
+- **While you play:** SABnzbd stays paused so downloads do not hurt your connection mid-game. This is not a setup step. It happens on its own for every session, and if something drifts (OBS drops, the wrong window, downloads resumed) it is put back within seconds. With no game running, SABnzbd runs freely.
+- **When you close the game:** the stream ends and SABnzbd resumes.
+- **Done for the night?** Click **Quit** on the dashboard and confirm. It stops the stream, resumes SABnzbd and closes itself. `run.bat` has no console window, so this is the only way to shut it down other than Task Manager.
 
 ## Private audio can never reach the stream
 
@@ -38,15 +39,9 @@ StreamPilot owns OBS's "Application Audio Output Capture" source directly: when 
 ## Prerequisites
 
 - A Twitch account with **Two-Factor Authentication (2FA) enabled** - required by Twitch when authorising StreamPilot to manage your channel. Enable it at [twitch.tv/settings/security](https://www.twitch.tv/settings/security) under "Two-Factor Authentication"
-- [Python 3.8+](https://www.python.org/downloads/)
+- [Python 3.11+](https://www.python.org/downloads/)
 - [OBS Studio](https://obsproject.com/download)
 
 ## Get started
 
-One-time setup takes five short steps: see [docs/SETUP.md](docs/SETUP.md).
-
----
-
-## Usage
-
-Double-click `scripts\run.bat`. Then just launch your game - everything else is automatic.
+One-time setup takes five short steps: see [docs/SETUP.md](docs/SETUP.md). After that, double-click `scriptsun.bat` and launch your game.
