@@ -41,6 +41,18 @@ def daemon(tmp_path, monkeypatch):
     return Daemon(copy.deepcopy(SAMPLE_CFG))
 
 
+def _sab_mock():
+    """MagicMock SABnzbd client whose queue_state() mirrors the per-test
+    is_paused / is_downloading return values, so tests keep setting those."""
+    m = MagicMock()
+
+    def _state():
+        return m.is_paused(), m.is_downloading()
+
+    m.queue_state.side_effect = _state
+    return m
+
+
 def _safe_obs_mock():
     """A MagicMock() for daemon.obs pre-configured with safe defaults for the
     audio privacy guard: SAMPLE_CFG's one game ('game.exe') is already in the
@@ -94,7 +106,7 @@ def test_on_game_launch_starts_stream_when_not_live(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = False
 
@@ -118,7 +130,7 @@ def test_on_game_launch_sets_dynamic_title_and_tags_from_config(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = False
 
@@ -136,7 +148,7 @@ def test_on_game_launch_per_game_title_override(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = False
 
@@ -154,7 +166,7 @@ def test_on_game_launch_records_title_and_tags_for_dashboard(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = False
 
@@ -168,7 +180,7 @@ def test_on_no_game_clears_dashboard_title_and_tags(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
     daemon._current_title = "Davo plays My Game!"
@@ -186,7 +198,7 @@ def test_on_game_launch_stops_then_starts_stream_on_switch(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = True
 
@@ -202,7 +214,7 @@ def test_on_game_launch_stops_then_starts_stream_on_switch(daemon):
 
 def test_on_no_game_stops_stream(daemon):
     daemon.obs = _safe_obs_mock()
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = True
     daemon._active_game_exe = "game.exe"
@@ -224,7 +236,7 @@ def test_on_no_game_skips_if_no_active_game(daemon):
 
 def test_on_no_game_skips_stop_if_not_streaming(daemon):
     daemon.obs = _safe_obs_mock()
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = False
     daemon._active_game_exe = "game.exe"
@@ -290,7 +302,7 @@ def test_sab_disabled_does_not_call_sab(daemon):
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
     daemon.sab_enabled = False
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.obs.is_streaming.return_value = False
 
     daemon._on_game_launch("game.exe")
@@ -476,7 +488,7 @@ def test_print_heartbeat_calls_live_sources(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -503,7 +515,7 @@ def test_print_heartbeat_writes_title_and_tags_to_status_file(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
     daemon._current_title = "Davo plays My Game!"
@@ -529,7 +541,7 @@ def test_print_heartbeat_writes_build_id_to_status_file(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = None
     daemon.obs.is_streaming.return_value = False
@@ -545,7 +557,7 @@ def test_print_heartbeat_fetches_uptime_lazily_when_missing(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
     daemon._stream_started_at = None
@@ -570,7 +582,7 @@ def test_print_heartbeat_does_not_refetch_uptime_once_cached(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
     daemon._stream_started_at = "2026-08-16T05:23:45Z"
@@ -595,7 +607,7 @@ def test_print_heartbeat_clears_uptime_on_stream_restart(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
     daemon._stream_started_at = "2026-08-16T05:23:45Z"
@@ -617,7 +629,7 @@ def test_on_game_launch_clears_uptime_when_ending_previous_vod(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = True
     daemon._stream_started_at = "2026-08-16T05:23:45Z"
@@ -631,7 +643,7 @@ def test_on_no_game_clears_uptime(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = False
     daemon._active_game_exe = "game.exe"
@@ -682,7 +694,7 @@ def test_print_heartbeat_rejects_stale_started_at_after_manual_restart(daemon):
     self._stream_started_at must stay None so the next heartbeat retries."""
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
     daemon._stream_started_at = None
@@ -708,7 +720,7 @@ def test_print_heartbeat_accepts_fresh_started_at_after_manual_restart(daemon):
     restart request, it must be accepted and the staleness guard cleared."""
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
     daemon._stream_started_at = None
@@ -893,7 +905,7 @@ def test_reconcile_does_nothing_when_game_detected_but_not_streaming(daemon):
 def test_start_calls_reconcile_before_loop(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.obs.is_connected.return_value = True
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon._end_stream_on_stop = True
 
     with patch.object(daemon, "_ensure_steam_running"), \
@@ -911,7 +923,7 @@ def test_start_skips_on_no_game_when_keeping_stream(daemon):
     be left untouched - only the daemon loop and OBS websocket disconnect."""
     daemon.obs = _safe_obs_mock()
     daemon.obs.is_connected.return_value = True
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon._end_stream_on_stop = False
 
     with patch.object(daemon, "_ensure_steam_running"), \
@@ -927,7 +939,7 @@ def test_start_skips_on_no_game_when_keeping_stream(daemon):
 def test_start_calls_on_no_game_when_ending_stream(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.obs.is_connected.return_value = True
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon._end_stream_on_stop = True
 
     with patch.object(daemon, "_ensure_steam_running"), \
@@ -945,7 +957,7 @@ def test_print_heartbeat_reapplies_window_on_mismatch(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -971,7 +983,7 @@ def test_print_heartbeat_force_stops_blacklisted_window(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -998,7 +1010,7 @@ def test_print_heartbeat_reapplies_safe_window_after_blacklist_block(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -1018,7 +1030,7 @@ def test_print_heartbeat_no_blacklist_action_for_a_safe_game_window(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -1039,7 +1051,7 @@ def test_print_heartbeat_no_window_check_when_idle(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = None
 
@@ -1059,7 +1071,7 @@ def test_print_heartbeat_does_not_show_stale_category_when_idle(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = None
 
@@ -1104,7 +1116,7 @@ def test_print_heartbeat_restarts_stream_when_stopped_during_game(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -1128,7 +1140,7 @@ def test_print_heartbeat_no_stream_restart_when_obs_disconnected(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -1149,7 +1161,7 @@ def test_print_heartbeat_attempts_reconnect_when_obs_disconnected(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -1226,7 +1238,7 @@ def test_print_heartbeat_repauses_sab_when_running_during_game(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -1262,14 +1274,14 @@ def test_format_heartbeat_sab_corrected_suppressed_shows_ok(daemon):
 
 
 def test_set_sab_auto_manage_true_sets_just_enabled_flag(daemon):
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     with patch.object(daemon, "_save_sab_auto_manage"):
         daemon.set_sab_auto_manage(True)
     assert daemon._sab_just_enabled is True
 
 
 def test_set_sab_auto_manage_false_does_not_set_just_enabled_flag(daemon):
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     with patch.object(daemon, "_save_sab_auto_manage"):
         daemon.set_sab_auto_manage(False)
     assert daemon._sab_just_enabled is False
@@ -1282,7 +1294,7 @@ def test_print_heartbeat_suppresses_issue_right_after_toggle_enabled(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
     daemon._sab_just_enabled = True
@@ -1308,7 +1320,7 @@ def test_print_heartbeat_no_sab_correction_when_idle(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = None
 
@@ -1326,7 +1338,7 @@ def test_print_heartbeat_no_sab_correction_when_already_paused(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -1375,7 +1387,7 @@ def test_sab_auto_manage_defaults_true_on_corrupt_settings_file(tmp_path):
 
 def test_set_sab_auto_manage_persists_to_file(tmp_path):
     d, settings_path = _make_daemon_with_settings_path(tmp_path)
-    d.sab = MagicMock()
+    d.sab = _sab_mock()
     with patch("daemon.SAB_SETTINGS_PATH", str(settings_path)):
         d.set_sab_auto_manage(False)
     assert json.loads(settings_path.read_text(encoding="utf-8"))["auto_manage"] is False
@@ -1384,7 +1396,7 @@ def test_set_sab_auto_manage_persists_to_file(tmp_path):
 def test_set_sab_auto_manage_false_resumes_sab_immediately(daemon):
     """Confirmed behaviour: flipping OFF resumes SABnzbd right away instead
     of waiting for David to do it manually in SABnzbd's own UI."""
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     with patch.object(daemon, "_save_sab_auto_manage"):
         daemon.set_sab_auto_manage(False)
@@ -1392,7 +1404,7 @@ def test_set_sab_auto_manage_false_resumes_sab_immediately(daemon):
 
 
 def test_set_sab_auto_manage_true_does_not_call_resume(daemon):
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     with patch.object(daemon, "_save_sab_auto_manage"):
         daemon.set_sab_auto_manage(True)
@@ -1403,7 +1415,7 @@ def test_on_game_launch_skips_pause_when_auto_manage_disabled(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.sab_auto_manage = False
     daemon.obs.is_streaming.return_value = False
@@ -1415,7 +1427,7 @@ def test_on_game_launch_skips_pause_when_auto_manage_disabled(daemon):
 
 def test_on_no_game_skips_resume_when_auto_manage_disabled(daemon):
     daemon.obs = _safe_obs_mock()
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.sab_auto_manage = False
     daemon.obs.is_streaming.return_value = True
@@ -1431,7 +1443,7 @@ def test_print_heartbeat_no_sab_correction_when_auto_manage_disabled(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.sab_auto_manage = False
     daemon._active_game_exe = "game.exe"
@@ -1454,7 +1466,7 @@ def test_print_heartbeat_writes_sab_auto_manage_to_status_file(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.sab_auto_manage = False
     daemon._active_game_exe = None
@@ -1546,7 +1558,7 @@ def test_get_status_idle_no_connection(daemon):
     """No game, OBS not connected: active_game=None, streaming=False."""
     daemon.obs = _safe_obs_mock()
     daemon.obs._client = None        # not connected -> streaming skipped
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.sab.is_paused.return_value = False
     daemon._active_game_exe = None
@@ -1562,7 +1574,7 @@ def test_get_status_game_active_streaming(daemon):
     """Game running, OBS connected and streaming, SABnzbd paused."""
     daemon.obs = _safe_obs_mock()
     daemon.obs.is_streaming.return_value = True
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab.is_paused.return_value = True
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
@@ -1577,7 +1589,7 @@ def test_get_status_game_active_streaming(daemon):
 def test_get_status_sab_disabled_returns_none(daemon):
     """sab_enabled=False -> sabnzbd_paused is None regardless of SABnzbd state."""
     daemon.obs = _safe_obs_mock()
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = False
     daemon._active_game_exe = None
 
@@ -1591,7 +1603,7 @@ def test_get_status_obs_not_connected_returns_false_streaming(daemon):
     """OBS _client is None (not connected) -> streaming=False even with active game."""
     daemon.obs = _safe_obs_mock()
     daemon.obs._client = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab.is_paused.return_value = True
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
@@ -1608,7 +1620,7 @@ def test_loop_fires_heartbeat_every_poll(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
 
     call_count = [0]
@@ -1733,7 +1745,7 @@ def test_on_game_launch_preflight_blocks_start_stream_on_violation(daemon):
     }
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = False
 
@@ -1752,7 +1764,7 @@ def test_on_game_launch_preflight_allows_start_stream_when_enforce_disabled(daem
     }
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = False
 
@@ -1772,7 +1784,7 @@ def test_print_heartbeat_force_stops_audio_violation(daemon):
     }
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -1801,7 +1813,7 @@ def test_print_heartbeat_no_force_stop_when_audio_enforce_disabled(daemon):
     }
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -1823,7 +1835,7 @@ def test_print_heartbeat_audio_ok_shows_in_status_line(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -1848,7 +1860,7 @@ def test_print_heartbeat_writes_audio_fields_to_status_file(daemon):
     }
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -1871,7 +1883,7 @@ def test_print_heartbeat_no_audio_check_when_idle(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = None
 
@@ -1907,7 +1919,7 @@ def test_print_heartbeat_writes_captured_window_exe_and_audio_exes(daemon):
     }
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -1930,7 +1942,7 @@ def test_print_heartbeat_captured_window_exe_resolves_from_bare_exe(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -1952,7 +1964,7 @@ def test_print_heartbeat_captured_window_exe_none_when_no_window(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -2027,7 +2039,7 @@ def test_on_game_launch_converges_audio_list_to_current_game(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = False
 
@@ -2041,7 +2053,7 @@ def test_on_game_launch_converges_audio_list_with_extra_allowed(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = False
 
@@ -2055,7 +2067,7 @@ def test_on_game_launch_does_not_converge_when_exclusive_mode_false(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = False
 
@@ -2066,7 +2078,7 @@ def test_on_game_launch_does_not_converge_when_exclusive_mode_false(daemon):
 
 def test_on_no_game_clears_audio_capture_list(daemon):
     daemon.obs = _safe_obs_mock()
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = True
     daemon._active_game_exe = "game.exe"
@@ -2079,7 +2091,7 @@ def test_on_no_game_clears_audio_capture_list(daemon):
 def test_on_no_game_does_not_clear_when_exclusive_mode_false(daemon):
     daemon.audio_cfg["exclusive_mode"] = False
     daemon.obs = _safe_obs_mock()
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = True
     daemon._active_game_exe = "game.exe"
@@ -2093,7 +2105,7 @@ def test_print_heartbeat_converges_audio_list_every_cycle_when_game_active(daemo
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -2113,7 +2125,7 @@ def test_print_heartbeat_converges_audio_list_to_empty_when_idle_and_not_streami
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = None
     daemon.obs.is_streaming.return_value = False
@@ -2130,7 +2142,7 @@ def test_print_heartbeat_does_not_clear_audio_list_when_idle_but_still_streaming
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = None
     daemon.obs.is_streaming.return_value = True
@@ -2154,7 +2166,7 @@ def test_print_heartbeat_does_not_converge_audio_list_when_force_stopped_this_cy
     }
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
 
@@ -2176,7 +2188,7 @@ def _hb_daemon(daemon, actual_window):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon._active_game_exe = "game.exe"
     daemon.obs.is_connected.return_value = True
@@ -2225,7 +2237,7 @@ def test_on_game_launch_sends_live_window(daemon, monkeypatch):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = False
     daemon._on_game_launch("game.exe")
@@ -2236,8 +2248,28 @@ def test_on_game_launch_falls_back_to_stored_window_when_not_live(daemon):
     daemon.obs = _safe_obs_mock()
     daemon.twitch = MagicMock()
     daemon.twitch.get_stream_started_at.return_value = None
-    daemon.sab = MagicMock()
+    daemon.sab = _sab_mock()
     daemon.sab_enabled = True
     daemon.obs.is_streaming.return_value = False
     daemon._on_game_launch("game.exe")
     daemon.obs.set_game_capture_window.assert_called_once_with("My Game:GameClass:game.exe")
+
+
+def test_heartbeat_makes_one_sabnzbd_http_call(daemon):
+    from sabnzbd_client import SABnzbdClient
+    daemon.sab = SABnzbdClient("localhost", 8080, "k")
+    daemon.sab_enabled = True
+    daemon.obs = _safe_obs_mock()
+    daemon.obs.is_connected.return_value = True
+    daemon.obs.is_streaming.return_value = True
+    daemon.obs.get_game_capture_window.return_value = "My Game:GameClass:game.exe"
+    daemon.twitch = MagicMock()
+    daemon.twitch.get_current_game_name.return_value = "My Game"
+    daemon.twitch.get_stream_started_at.return_value = None
+    daemon._active_game_exe = "game.exe"
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.json.return_value = {"queue": {"paused": True, "status": "Paused"}}
+    with patch("sabnzbd_client.requests.get", return_value=resp) as get:
+        daemon._print_heartbeat()
+    assert get.call_count == 1

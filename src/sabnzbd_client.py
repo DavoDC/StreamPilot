@@ -64,21 +64,34 @@ class SABnzbdClient:
         else:
             log.warning("SABnzbd resume failed or unreachable")
 
-    def is_paused(self):
-        result = self._get("queue")
+    @staticmethod
+    def _paused_of(result):
         if result:
             return result.get("queue", {}).get("paused", False)
         return None
 
-    def is_downloading(self):
-        """True if the queue is actively working through a download (any busy
-        sub-state - Downloading, Propagating, Fetching, Checking, etc.), False if
-        Idle or Paused, None if the status field is missing/unreachable. Never
-        infers activity from anything but SABnzbd's own reported status string."""
-        result = self._get("queue")
+    @staticmethod
+    def _downloading_of(result):
         if result:
             status = result.get("queue", {}).get("status")
             if status is None:
                 return None
             return status not in ("Idle", "Paused")
         return None
+
+    def queue_state(self):
+        """(paused, downloading) from ONE mode=queue request. Each half has the
+        same meaning as is_paused() / is_downloading() (None when unreachable;
+        downloading is also None if the status field is missing)."""
+        result = self._get("queue")
+        return self._paused_of(result), self._downloading_of(result)
+
+    def is_paused(self):
+        return self._paused_of(self._get("queue"))
+
+    def is_downloading(self):
+        """True if the queue is actively working through a download (any busy
+        sub-state - Downloading, Propagating, Fetching, Checking, etc.), False if
+        Idle or Paused, None if the status field is missing/unreachable. Never
+        infers activity from anything but SABnzbd's own reported status string."""
+        return self._downloading_of(self._get("queue"))

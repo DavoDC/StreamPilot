@@ -382,8 +382,10 @@ class Daemon:
         # it's whatever was last set, stale and misleading next to "Idle" (also
         # skips a pointless API call while idle).
         twitch_category = self.twitch.get_current_game_name() if self._active_game_exe else None
-        sab_paused = self.sab.is_paused() if (self.sab_enabled and self.sab) else None
-        sab_downloading = self.sab.is_downloading() if (self.sab_enabled and self.sab) else None
+        if self.sab_enabled and self.sab:
+            sab_paused, sab_downloading = self.sab.queue_state()
+        else:
+            sab_paused, sab_downloading = None, None
 
         obs_window_ok = True
         sab_corrected = False

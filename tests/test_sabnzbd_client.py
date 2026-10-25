@@ -141,3 +141,25 @@ def test_is_downloading_missing_status_field(client):
     mock_resp.json.return_value = {"queue": {}}
     with patch("sabnzbd_client.requests.get", return_value=mock_resp):
         assert client.is_downloading() is None
+
+
+def test_queue_state_makes_one_http_call(client):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"queue": {"paused": False, "status": "Downloading"}}
+    with patch("sabnzbd_client.requests.get", return_value=mock_resp) as get:
+        assert client.queue_state() == (False, True)
+    assert get.call_count == 1
+
+
+def test_queue_state_unreachable(client):
+    with patch("sabnzbd_client.requests.get", side_effect=Exception("refused")):
+        assert client.queue_state() == (None, None)
+
+
+def test_queue_state_missing_status_keeps_paused(client):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"queue": {"paused": True}}
+    with patch("sabnzbd_client.requests.get", return_value=mock_resp):
+        assert client.queue_state() == (True, None)
