@@ -56,6 +56,7 @@ class Daemon:
         ) if self.sab_enabled else None
 
         self._active_game_exe = None
+        self._obs_lost = False  # True while the OBS WebSocket is down (log-once flag)
         self._running = False
         self._current_title = None
         self._current_tags = None
@@ -376,6 +377,33 @@ class Daemon:
             line += f" | SAFETY: BLOCKED non-game window '{c['blacklisted_window']}' - stream force-stopped"
         return line
 
+    def _check_obs_connection(self) -> bool:
+        """True if the OBS WebSocket is alive, reconnecting if it dropped.
+        The loss is logged once per outage (not every heartbeat) and the
+        recovery once when it ends; nothing here raises."""
+        try:
+            live = self.obs.is_connected()
+        except Exception as e:
+            log.warning(f"OBS connectivity check failed: {e}")
+            live = False
+        if live:
+            if self._obs_lost:
+                log.info("OBS WebSocket reconnected")
+                self._obs_lost = False
+            return True
+        if not self._obs_lost:
+            log.warning("OBS WebSocket disconnected - attempting reconnect")
+            self._obs_lost = True
+        try:
+            connected = self.obs.connect()
+        except Exception as e:
+            log.warning(f"OBS reconnect failed: {e}")
+            connected = False
+        if connected:
+            log.info("OBS WebSocket reconnected")
+            self._obs_lost = False
+        return bool(connected)
+
     def _print_heartbeat(self):
         game_name = self.games.get(self._active_game_exe, {}).get("name") if self._active_game_exe else None
         # Only fetch/show the Twitch category while a game is active - otherwise
@@ -402,15 +430,11 @@ class Daemon:
         restart_suppress_issue = self._manual_restart_pending
         self._manual_restart_pending = False
 
-        if self._active_game_exe:
-            # OBS connectivity - attempt reconnect before other OBS calls
-            obs_live = self.obs.is_connected()
-            if not obs_live:
-                log.warning("OBS WebSocket disconnected - attempting reconnect")
-                if self.obs.connect():
-                    obs_live = True
-                    log.info("OBS WebSocket reconnected")
+        # OBS connectivity - attempt reconnect before any other OBS call, in
+        # game and idle alike (OBS closed, crashed or restarted externally).
+        obs_live = self._check_obs_connection()
 
+        if self._active_game_exe:
             obs_streaming = self.obs.is_streaming()
 
             # OBS window verification + correction
