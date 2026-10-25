@@ -1,5 +1,6 @@
 """Tests for twitch_client.py"""
 
+import logging
 import pytest
 from unittest.mock import MagicMock, patch
 from twitch_client import TwitchClient
@@ -260,3 +261,19 @@ def test_set_game_delegates_to_set_channel_info(client):
     with patch.object(client, "set_channel_info") as mock_sci:
         client.set_game("17074")
     mock_sci.assert_called_once_with(game_id="17074")
+
+
+def test_validate_failure_logs_status_not_raw_body(client, caplog):
+    secret = "tokenlike_sk_live_9f8e7d6c5b4a3210"
+    mock_resp = MagicMock()
+    mock_resp.status_code = 401
+    mock_resp.text = f'{{"status":401,"message":"invalid access token {secret}"}}'
+    caplog.set_level(logging.DEBUG, logger="twitch_client")
+    with patch("twitch_client.requests.get", return_value=mock_resp):
+        assert client.validate() is False
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert "401" in errors[0].getMessage()
+    assert "token rejected" in errors[0].getMessage()
+    assert secret not in caplog.text
+    assert "invalid access token" not in caplog.text

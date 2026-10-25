@@ -35,7 +35,9 @@ class TwitchClient:
                 timeout=5,
             )
             if resp.status_code != 200:
-                log.error(f"Twitch token invalid: {resp.text}")
+                # Log the status and a fixed reason only: the error body can echo token material.
+                reason = "token rejected" if resp.status_code == 401 else "unexpected response"
+                log.error(f"Twitch token invalid (HTTP {resp.status_code}): {reason}")
                 return False
             data = resp.json()
             self._broadcaster_id = data.get("user_id")
