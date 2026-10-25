@@ -1,10 +1,19 @@
 """SABnzbd API client for pause/resume."""
 
 import logging
+import re
 import psutil
 import requests
 
 log = logging.getLogger(__name__)
+
+_APIKEY_RE = re.compile(r"(apikey=)[^&\s'\"]+")
+
+
+def redact_apikey(text) -> str:
+    """Return text with any apikey=<value> query parameter masked, so a
+    request error that embeds the SABnzbd URL never writes the key to a log."""
+    return _APIKEY_RE.sub(r"\1***", str(text))
 
 
 class SABnzbdClient:
@@ -23,7 +32,7 @@ class SABnzbdClient:
             if resp.status_code == 200:
                 return resp.json()
         except Exception as e:
-            log.warning(f"SABnzbd {mode} failed: {e}")
+            log.warning(f"SABnzbd {mode} failed: {redact_apikey(e)}")
         return None
 
     def _is_local(self) -> bool:

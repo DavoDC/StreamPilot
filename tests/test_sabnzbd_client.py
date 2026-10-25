@@ -163,3 +163,17 @@ def test_queue_state_missing_status_keeps_paused(client):
     mock_resp.json.return_value = {"queue": {"paused": True}}
     with patch("sabnzbd_client.requests.get", return_value=mock_resp):
         assert client.queue_state() == (True, None)
+
+
+def test_request_error_log_redacts_apikey(caplog):
+    """A request exception whose text carries the query-string key must not
+    write the key to the log; the value is replaced, the rest kept."""
+    import logging
+    key_client = SABnzbdClient("localhost", 8080, "SECRET123")
+    err = Exception("HTTPConnectionPool(host='localhost', port=8080): Max retries "
+                    "exceeded with url: /api?apikey=SECRET123&output=json&mode=pause")
+    with patch("sabnzbd_client.requests.get", side_effect=err):
+        with caplog.at_level(logging.WARNING):
+            assert key_client.pause() is None
+    assert "SECRET123" not in caplog.text
+    assert "apikey=***&output=json&mode=pause" in caplog.text
