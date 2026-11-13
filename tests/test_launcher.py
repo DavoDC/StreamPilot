@@ -55,6 +55,81 @@ def test_kill_port_owner_with_no_listener_kills_nothing():
     assert all(c[0] != "taskkill" for c in run.calls)
 
 
+# --- describe_holders: name the process holding a foreign port ---
+
+NETSTAT_OWNER_ZERO = """
+  Proto  Local Address          Foreign Address        State           PID
+  TCP    127.0.0.1:8765         0.0.0.0:0              LISTENING       0
+"""
+
+
+class HolderRun:
+    """Fake run: netstat returns netstat text; powershell (the CIM fallback) returns cim text, or raises."""
+
+    def __init__(self, netstat, cim="", cim_raises=False):
+        self.netstat = netstat
+        self.cim = cim
+        self.cim_raises = cim_raises
+        self.calls = []
+
+    def __call__(self, args, timeout=20):
+        self.calls.append(list(args))
+        if args[0] == "netstat":
+            return launcher.ProcResult(0, self.netstat)
+        if self.cim_raises:
+            raise OSError("powershell missing")
+        return launcher.ProcResult(0, self.cim)
+
+
+def test_describe_holders_owner_zero_falls_back_to_cim_and_names_http_server():
+    run = HolderRun(NETSTAT_OWNER_ZERO, cim="15596 python.exe python.exe -m http.server 8765\n")
+    assert launcher.describe_holders(8765, run=run) == ["pid 15596 python.exe -m http.server 8765"]
+    ps = [c for c in run.calls if c[0] == "powershell"]
+    assert len(ps) == 1 and isinstance(ps[0], list)  # list form, never a shell string
+    assert "http\\.server" in ps[0][-1] and "8765" in ps[0][-1]
+    assert all(c[0] != "taskkill" for c in run.calls)  # naming never kills anything
+
+
+def test_describe_holders_known_pid_names_pid_and_command_line():
+    run = HolderRun(NETSTAT, cim="4242 python.exe python.exe -m streampilot\n")
+    assert launcher.describe_holders(8765, run=run) == ["pid 4242 python.exe -m streampilot", "pid 5555"]
+    ps = [c for c in run.calls if c[0] == "powershell"]
+    assert "-in @(4242,5555)" in ps[0][-1]  # known pids are looked up by id, not by command-line guess
+    assert "http" not in ps[0][-1]
+
+
+def test_both_netstat_and_cim_fail_gives_old_message_without_crash():
+    run = HolderRun(NETSTAT_OWNER_ZERO, cim_raises=True)
+    assert launcher.describe_holders(8765, run=run) == []
+    probs = launcher.preflight(8765, state=lambda p: "other", config_problem=_ok_config,
+                               module_problems=lambda: [], python_version=(3, 11, 0),
+                               describe=lambda p: launcher.describe_holders(p, run=run))
+    assert probs == ["port 8765 is held by something that is not StreamPilot; "
+                     "close it or pick another port with --port N"]
+
+
+def test_preflight_message_names_the_http_server_holder():
+    run = HolderRun(NETSTAT_OWNER_ZERO, cim="15596 python.exe python.exe -m http.server 8765\n")
+    probs = launcher.preflight(8765, state=lambda p: "other", config_problem=_ok_config,
+                               module_problems=lambda: [], python_version=(3, 11, 0),
+                               describe=lambda p: launcher.describe_holders(p, run=run))
+    assert probs == ["port 8765 is held by something that is not StreamPilot "
+                     "(pid 15596 python.exe -m http.server 8765); close it or pick another port with --port N"]
+
+
+def test_launch_message_names_holder_and_falls_back_to_pid_unknown():
+    run = HolderRun(NETSTAT_OWNER_ZERO, cim="15596 python.exe python.exe -m http.server 8765\n")
+    code, msg = launcher.launch(8765, state=lambda p: "other", kill=lambda p: pytest.fail("never kill foreign"),
+                                spawn=lambda a: pytest.fail("never spawn over foreign"), argv=[],
+                                describe=lambda p: launcher.describe_holders(p, run=run))
+    assert code == 2 and "(pid 15596 python.exe -m http.server 8765)" in msg
+    run_none = HolderRun(NETSTAT_OWNER_ZERO, cim_raises=True)
+    code, msg = launcher.launch(8765, state=lambda p: "other", kill=lambda p: pytest.fail("never kill foreign"),
+                                spawn=lambda a: pytest.fail("never spawn over foreign"), argv=[],
+                                describe=lambda p: launcher.describe_holders(p, run=run_none))
+    assert code == 2 and "(pid unknown)" in msg
+
+
 # --- port_state ---
 
 def _fetch_build(data):
@@ -102,7 +177,7 @@ def test_preflight_ours_is_fine_it_will_be_replaced():
 def test_preflight_port_held_by_other_names_pid_and_how_to_fix():
     probs = launcher.preflight(8765, state=lambda p: "other", config_problem=_ok_config,
                                module_problems=lambda: [], python_version=(3, 11, 0),
-                               holders=lambda p: [1234])
+                               describe=lambda p: ["pid 1234"])
     assert len(probs) == 1
     assert "8765" in probs[0] and "1234" in probs[0] and "--port" in probs[0]
 
@@ -181,11 +256,11 @@ def test_launch_refuses_when_port_held_by_something_else():
     code, msg = launcher.launch(
         8765, state=lambda p: "other", kill=lambda p: events.append("kill") or [],
         spawn=lambda a: events.append("spawn"), wait=lambda *a: (True, ""), argv=[],
-        holders=lambda p: [31337],
+        describe=lambda p: ["pid 31337 python.exe -m http.server 8765"],
     )
     assert code == 2
     assert events == []  # never kills or spawns over a foreign process
-    assert "31337" in msg
+    assert "pid 31337 python.exe -m http.server 8765" in msg
 
 
 def test_launch_reports_failure_when_child_never_answers():

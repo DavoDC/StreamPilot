@@ -89,6 +89,40 @@ def kill_port_owner(port: int, own_pid: Optional[int] = None, run=run) -> List[i
     return targets
 
 
+def _process_rows(where: str, run=run) -> List[tuple]:
+    """(pid, name, command line) of Win32_Process rows matching a PowerShell condition; empty on any failure."""
+    script = ("Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and " + where + " } | "
+              "ForEach-Object { ($_.ProcessId, $_.Name, $_.CommandLine) -join ' ' }")
+    result = run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script])
+    rows: List[tuple] = []
+    if not result.ok:
+        return rows
+    for line in result.stdout.splitlines():
+        parts = line.strip().split(" ", 2)
+        if len(parts) >= 2 and parts[0].isdigit():
+            rows.append((int(parts[0]), parts[1], parts[2].strip() if len(parts) > 2 else ""))
+    return rows
+
+
+def describe_holders(port: int, run=run) -> List[str]:
+    """Names for whatever holds port, as "pid N command line". netstat owner 0 (or none) falls back to an http.server scan."""
+    try:
+        pids = [p for p in listeners(port, run) if p != 0]
+        if pids:
+            rows = _process_rows("$_.ProcessId -in @(" + ",".join(str(p) for p in pids) + ")", run)
+            known = {pid: (name, cmd) for pid, name, cmd in rows}
+            return [_holder_text(p, *known.get(p, ("", ""))) for p in pids]
+        rows = _process_rows("$_.Name -match '^pythonw?\\.exe$' -and $_.CommandLine -match 'http\\.server|SimpleHTTPServer' -and $_.CommandLine -match '"
+                             + str(int(port)) + "'", run)
+        return [_holder_text(pid, name, cmd) for pid, name, cmd in rows]
+    except Exception:  # noqa: BLE001  (naming the holder is best effort; it must never break the message)
+        return []
+
+
+def _holder_text(pid: int, name: str, cmd: str) -> str:
+    return f"pid {pid} {cmd or name}".rstrip()
+
+
 def _tcp_connect(host: str, port: int, timeout: float) -> bool:
     with socket.create_connection((host, port), timeout=timeout):
         return True
@@ -150,10 +184,10 @@ def module_problems(modules=MODULES) -> List[str]:
 
 
 def preflight(port: int, state=None, config_problem=config_problem, module_problems=module_problems,
-              python_version=None, holders=None) -> List[str]:
+              python_version=None, describe=None) -> List[str]:
     """Every problem that would stop a start, as short sentences; empty means go."""
     state = state or port_state
-    holders = holders or listeners
+    describe = describe or describe_holders
     problems: List[str] = []
     version = tuple(python_version) if python_version is not None else tuple(sys.version_info[:3])
     if version < MIN_PYTHON:
@@ -163,9 +197,9 @@ def preflight(port: int, state=None, config_problem=config_problem, module_probl
     if cp:
         problems.append(cp)
     if state(port) == "other":
-        pids = holders(port)
-        named = f" (pid {', '.join(map(str, pids))})" if pids else ""
-        problems.append(f"port {port} is held by something that is not StreamPilot{named}; "
+        named = describe(port)
+        clause = f" ({', '.join(named)})" if named else ""
+        problems.append(f"port {port} is held by something that is not StreamPilot{clause}; "
                         f"close it or pick another port with --port N")
     return problems
 
@@ -217,18 +251,18 @@ def _wait_free(port: int, state: Callable, sleep: Callable, timeout: float = 10.
         sleep(0.25)
 
 
-def launch(port: int, state=None, kill=None, spawn=None, wait=None, argv=None, holders=None, sleep=time.sleep,
+def launch(port: int, state=None, kill=None, spawn=None, wait=None, argv=None, describe=None, sleep=time.sleep,
            ready_timeout: float = 30.0):
     """Replace any StreamPilot on the port and start a fresh detached one. Returns (exit code, message)."""
     state = state or port_state
     kill = kill or kill_port_owner
     spawn = spawn or globals()["spawn"]
     wait = wait or (lambda proc, p: wait_ready(proc, p, ready_timeout))
-    holders = holders or listeners
+    describe = describe or describe_holders
     s = state(port)
     if s == "other":
-        pids = holders(port)
-        return 2, f"port {port} is held by something that is not StreamPilot (pid {', '.join(map(str, pids)) or 'unknown'}); not touching it. Use --port N."
+        named = describe(port)
+        return 2, f"port {port} is held by something that is not StreamPilot ({', '.join(named) or 'pid unknown'}); not touching it. Use --port N."
     if s == "ours":
         kill(port)
         if not _wait_free(port, state, sleep):
